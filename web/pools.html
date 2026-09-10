@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>keel · Pools</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <aside>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3 14.5 12 5l9 9.5-9 4.5-9-4.5z" />
+        <path fill="none" stroke="currentColor" stroke-width="1.6" d="M12 5v14" />
+      </svg>
+      <span>keel</span>
+    </div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/catalog.html">Catalog</a>
+      <a href="/repair.html">Repair</a>
+      <a href="/sleep.html">Idle</a>
+      <a href="/guide.html">Guide</a>
+      <a href="/notes.html">Notes</a>
+      <a class="active" href="/pools.html">Pools</a>
+      <a href="/shares.html">Shares</a>
+    </nav>
+  </aside>
+  <main>
+    <header>
+      <h1>Pools</h1>
+    </header>
+    <p class="lede">A pool is the bucket the files live in. One bucket now. You pick whose disks hold it.</p>
+    <details class="why">
+      <summary>What is a pool?</summary>
+      <p>Think of a big box of files. keel does not care yet <em>which brand</em> of box — only <em>where</em> the box is.</p>
+      <p><strong>On another computer</strong> means: your Proxmox or TrueNAS machine already has the files. keel just uses that folder. Nothing is copied. Nothing is wiped. Pick this while rok stays as it is.</p>
+      <p><strong>Disks in this machine</strong> means: keel would use hard drives plugged into the keel box. We are not doing that on this Windows PC. You can still name the intent.</p>
+      <p>The address is “how to find that folder on the other computer.” You will get that from the other machine’s share settings. You do not need to know the short names for those sharing methods.</p>
+    </details>
+    <details class="why">
+      <summary>Did I reach Proxmox?</summary>
+      <p>Look around + Sign in on the left is how keel talks to Proxmox. Success looks like: status says “signed in to proxmox”, and a list appears (Node rok, local, vm-data, …). The password is not kept, so you sign in again next time. Remembered names (below Look around) mean we have seen that computer before.</p>
+          <p>A row in the table on the right is a <strong>plan</strong> of which bucket keel should use. It now survives a restart. This Windows copy still does not mount the disk as a drive letter. To actually see names of files, Sign in on the left, then List files. Family files are in OpenCloud, not on Proxmox local.</p>
+          <p>You still open Proxmox in the browser the usual way. keel does not replace that screen.</p>
+    </details>
+    <div class="work-split">
+      <div class="work-col">
+        <div class="pane">
+          <form class="form look" id="lookform">
+            <label class="wide">Look around (type a name or number, not a whole-house scan)
+              <input name="host" id="host" placeholder="name or number of that computer" />
+            </label>
+            <button type="submit">Look around</button>
+          </form>
+          <div class="recents" id="recents" hidden></div>
+          <div class="found" id="found" hidden></div>
+          <form class="form" id="signinform">
+            <label>Name on that computer <input id="user" name="username" autocomplete="username" placeholder="root@pam" /></label>
+            <label>Password <input id="pass" name="password" type="password" autocomplete="current-password" /></label>
+            <label>Realm (Proxmox)
+              <select id="realm">
+                <option value="pam">pam</option>
+                <option value="pve">pve</option>
+              </select>
+            </label>
+            <label class="check"><input type="checkbox" id="insecure" /> Homemade certificate (only if the lock is red)</label>
+            <button type="submit">Sign in</button>
+          </form>
+          <p class="meta" id="signinwhy">Sign in on this page. Do not paste the password into chat. keel keeps the name, not the password. The Proxmox session stays in memory so you can list files until keel restarts.</p>
+          <div class="found" id="places" hidden></div>
+          <form class="form" id="filesform" hidden>
+            <p class="meta">Check files — OpenCloud name and password, not Proxmox. Paste the files website if List files did not find a door.</p>
+            <label class="wide">Files app address <input id="filesurl" placeholder="https://… the site you already open for files" /></label>
+            <label>Name on the files app <input id="filesuser" autocomplete="username" /></label>
+            <label>Password <input id="filespass" type="password" autocomplete="current-password" /></label>
+            <label class="check"><input type="checkbox" id="filesinsecure" /> Homemade certificate</label>
+            <button type="submit">List files</button>
+          </form>
+          <div class="found" id="listing" hidden></div>
+        </div>
+      </div>
+      <div class="work-col">
+        <form class="form" id="form">
+          <label>Name for this bucket <input name="name" required placeholder="files" /></label>
+          <label>Where are the files?
+            <select name="kind">
+              <option value="foreign">On another computer (keep Proxmox / TrueNAS)</option>
+              <option value="local">Disks in this machine (later)</option>
+            </select>
+          </label>
+          <label class="wide">Address of that folder
+            <input name="source" placeholder="ask the other machine; paste what it gives you" />
+          </label>
+          <button type="submit">Add pool</button>
+        </form>
+        <p class="meta" id="status"></p>
+        <div class="table-wrap scroll">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Where</th><th>Address</th></tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="/pools.js"></script>
+</body>
+</html>

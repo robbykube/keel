@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>keel · Notes</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <aside>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3 14.5 12 5l9 9.5-9 4.5-9-4.5z" />
+        <path fill="none" stroke="currentColor" stroke-width="1.6" d="M12 5v14" />
+      </svg>
+      <span>keel</span>
+    </div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/catalog.html">Catalog</a>
+      <a href="/repair.html">Repair</a>
+      <a href="/sleep.html">Idle</a>
+      <a href="/guide.html">Guide</a>
+      <a class="active" href="/notes.html">Notes</a>
+      <a href="/pools.html">Pools</a>
+      <a href="/shares.html">Shares</a>
+    </nav>
+  </aside>
+  <main>
+    <header>
+      <h1>Notes</h1>
+      <div class="meta" id="status"></div>
+    </header>
+    <p class="lede">Scratch pad for keel. Ideas, later, do-not-forget. Survives a restart. Not the family files.</p>
+    <details class="why">
+      <summary>Why notes live here</summary>
+      <p>Same idea as Notes in the AI Suite: a named page, not a sticky on every screen. Use it for things you want to add to keel. It is not a wiki (that is Guide) and not Repair.</p>
+    </details>
+    <div class="notes-split">
+      <div class="roster-col">
+        <p class="actions">
+          <button type="button" id="new">New</button>
+          <button type="button" id="remove">Delete</button>
+        </p>
+        <div class="roster scroll" id="roster"></div>
+      </div>
+      <div class="editor">
+        <label class="wide">Title <input id="title" placeholder="something to add" /></label>
+        <textarea id="body" placeholder="What you want, why, and any constraint (do not wipe rok, idle must keep Tailscale, …)"></textarea>
+      </div>
+    </div>
+  </main>
+  <script src="/notes.js"></script>
+</body>
+</html>

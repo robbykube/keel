@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>keel · Catalog</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <aside>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3 14.5 12 5l9 9.5-9 4.5-9-4.5z" />
+        <path fill="none" stroke="currentColor" stroke-width="1.6" d="M12 5v14" />
+      </svg>
+      <span>keel</span>
+    </div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a class="active" href="/catalog.html">Catalog</a>
+      <a href="/repair.html">Repair</a>
+      <a href="/sleep.html">Idle</a>
+      <a href="/guide.html">Guide</a>
+      <a href="/notes.html">Notes</a>
+      <a href="/pools.html">Pools</a>
+      <a href="/shares.html">Shares</a>
+    </nav>
+  </aside>
+  <main>
+    <header>
+      <h1>Catalog</h1>
+      <div class="meta" id="mode"></div>
+    </header>
+    <p class="lede">Installed is not running. Open an app when you need it.</p>
+    <details class="why">
+      <summary>Why this list</summary>
+      <p>keel works like an OS: the programs are on the disk. You open one when you need it. Nothing has to be on all the time. Idle keeps Tailscale so files and the GUI still work when you are not at home. Active can start the usual files/DNS/vault/proxy set and still leave the quiet ones closed until something asks. These become units on keel Linux, not Proxmox LXCs.</p>
+    </details>
+    <div class="table-wrap scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Unit</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Why</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    </div>
+  </main>
+  <script src="/terms.js"></script>
+  <script src="/catalog.js"></script>
+</body>
+</html>

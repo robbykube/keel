@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>keel · Repair</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <aside>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3 14.5 12 5l9 9.5-9 4.5-9-4.5z" />
+        <path fill="none" stroke="currentColor" stroke-width="1.6" d="M12 5v14" />
+      </svg>
+      <span>keel</span>
+    </div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/catalog.html">Catalog</a>
+      <a class="active" href="/repair.html">Repair</a>
+      <a href="/sleep.html">Idle</a>
+      <a href="/guide.html">Guide</a>
+      <a href="/notes.html">Notes</a>
+      <a href="/pools.html">Pools</a>
+      <a href="/shares.html">Shares</a>
+    </nav>
+    <div class="aside-foot" id="health"></div>
+  </aside>
+  <main>
+    <header>
+      <h1>Repair</h1>
+      <div class="meta" id="banner"></div>
+    </header>
+    <p class="lede">One sentence. Evidence. Fix if it is safe.</p>
+    <details class="why">
+      <summary>Why Repair, not Settings</summary>
+      <p>Find the failure, read the sentence, press Fix if it is safe. Do not hunt knobs.</p>
+    </details>
+    <div class="work-split">
+      <div class="work-col">
+        <h2>Issues</h2>
+        <div class="scroll opps-grid" id="items"></div>
+      </div>
+      <div class="work-col">
+        <div class="dock">
+          <h2>Playbook</h2>
+          <p class="prose">Safe one-clicks. Grey means not on this Windows host yet (needs Linux <a class="term" href="/guide.html#systemctl">systemctl</a> / <a class="term" href="/guide.html#nft">nft</a>).</p>
+          <p id="playbook"></p>
+          <p class="meta" id="status"></p>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="/terms.js"></script>
+  <script src="/repair.js"></script>
+</body>
+</html>

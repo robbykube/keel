@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>keel · Shares</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <aside>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3 14.5 12 5l9 9.5-9 4.5-9-4.5z" />
+        <path fill="none" stroke="currentColor" stroke-width="1.6" d="M12 5v14" />
+      </svg>
+      <span>keel</span>
+    </div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/catalog.html">Catalog</a>
+      <a href="/repair.html">Repair</a>
+      <a href="/sleep.html">Idle</a>
+      <a href="/guide.html">Guide</a>
+      <a href="/notes.html">Notes</a>
+      <a href="/pools.html">Pools</a>
+      <a class="active" href="/shares.html">Shares</a>
+    </nav>
+  </aside>
+  <main>
+    <header>
+      <h1>Shares</h1>
+    </header>
+    <p class="lede">A share is a name your PC uses to open the bucket. Same door at home and <a class="term" href="/guide.html#away">away</a> (via <a class="term" href="/guide.html#tailscale">Tailscale</a>).</p>
+    <details class="why">
+      <summary>What is a share?</summary>
+      <p>The pool is the box of files. A share is the name you type on a laptop to open it — the same idea as a network drive letter. You need a pool first. At home that is the house address. When you are not on the house network, <a class="term" href="/guide.html#tailscale">Tailscale</a> (or the overlay we ship) is the road to the same name. We do not make a second cloud copy.</p>
+    </details>
+    <div class="work-split">
+      <div class="work-col">
+        <form class="form" id="form">
+          <label>Name people will see <input name="name" required placeholder="photos" /></label>
+          <label>Which pool <select name="pool" id="pool"></select></label>
+          <label class="wide">Folder inside the pool <input name="path" placeholder="leave blank for the whole pool" /></label>
+          <button type="submit">Add share</button>
+        </form>
+        <p class="meta" id="status"></p>
+      </div>
+      <div class="work-col">
+        <div class="table-wrap scroll">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Pool</th><th>Folder</th></tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="/terms.js"></script>
+  <script src="/shares.js"></script>
+</body>
+</html>

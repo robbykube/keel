@@ -1,0 +1,16 @@
+# keel
+
+NAS appliance. Web GUI. Speed and low overhead beat feature count.
+
+- Do not add Electron, TUI admin, or a plugin marketplace without an explicit ask.
+- Keep the daemon one process. Measure RSS and API latency when changing the hot path.
+- Linux is the real NAS storage stack. Windows mock inventory is for developing the GUI on this PC; a Windows NAS host is a separate backend, not ZFS-on-Linux.
+- Install onto an existing OS over SSH/WinRM. Do not assume mDNS or same-subnet magic.
+- Short forms in the UI (`lsblk`, RSS) are Guide links (terms.js), not unexplained jargon.
+- The window is the frame: do not make the page scroll. One `.scroll` region per view; Why boxes start closed. Notes is a list + pad split.
+- Notes persist under `data/` (gitignored). Do not treat Notes as family file storage.
+- Never put remote passwords in chat transcripts you control, memory-bank, or git. Sign-in is the Pools page.
+- Ship the rok-inspired service catalog (including guests that were stopped on rok). Do not add a third-party plugin bazaar.
+- Catalog is native systemd units. Do not add containers to save idle CPU; stop the unit instead. Installed ≠ running: open an app when you need it.
+- Overlay (Tailscale today; swap the brand, not the job) stays up so files and the GUI work away from home. Never stop it to save watts.
+- Proxmox/TrueNAS passwords stay in the GUI. Tickets for listing files stay in daemon memory only, never in data/ or git.

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>keel</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <aside>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3 14.5 12 5l9 9.5-9 4.5-9-4.5z" />
+        <path fill="none" stroke="currentColor" stroke-width="1.6" d="M12 5v14" />
+      </svg>
+      <span>keel</span>
+    </div>
+    <nav>
+      <a class="active" href="/">Dashboard</a>
+      <a href="/catalog.html">Catalog</a>
+      <a href="/repair.html">Repair</a>
+      <a href="/sleep.html">Idle</a>
+      <a href="/guide.html">Guide</a>
+      <a href="/notes.html">Notes</a>
+      <a href="/pools.html">Pools</a>
+      <a href="/shares.html">Shares</a>
+    </nav>
+    <div class="aside-foot" id="health"></div>
+  </aside>
+  <main>
+    <header>
+      <h1 id="title">Dashboard</h1>
+      <div class="meta" id="timing"></div>
+    </header>
+    <p class="lede">Health of this control panel. Disks below are this machine’s inventory — not a second page.</p>
+    <p class="glance" id="glance"></p>
+    <section class="cards" id="cards"></section>
+    <details class="why">
+      <summary>What to do on this Windows copy</summary>
+      <p>Click around. Put ideas in <a href="/notes.html">Notes</a>. Add a pool only as a plan (files stay on the other computer). Do not wipe <a class="term" href="/guide.html#proxmox">Proxmox</a> on rok. Real disks and shares wait for a Linux keel box.</p>
+    </details>
+    <h2>Disks in this machine</h2>
+    <div class="table-wrap scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Model</th>
+            <th>Size</th>
+            <th>Bus</th>
+            <th>Media</th>
+            <th>Mount</th>
+          </tr>
+        </thead>
+        <tbody id="disks"></tbody>
+      </table>
+    </div>
+  </main>
+  <script src="/terms.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
