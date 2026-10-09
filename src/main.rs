@@ -14,6 +14,7 @@ mod remote;
 mod services;
 mod smb;
 mod store;
+mod updates;
 
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -60,6 +61,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/health", get(health))
+        .route("/api/updates", get(updates_status))
         .route("/api/auth/login", post(auth_login))
         .route("/api/system", get(system))
         .route("/api/disks", get(disks))
@@ -340,6 +342,10 @@ async fn repair_run(Json(req): Json<RepairRequest>) -> Json<RepairResult> {
 
 async fn installer_status(State(state): State<AppState>) -> Json<crate::model::InstallerStatus> {
     Json(crate::installer::status(state.inventory.disks().await))
+}
+
+async fn updates_status() -> Json<crate::updates::UpdateStatus> {
+    Json(crate::updates::check().await)
 }
 
 async fn installer_plan(

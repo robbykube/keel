@@ -65,7 +65,7 @@ function showReach(s) {
 }
 
 async function load() {
-  const [sys, disks, health, issues, power, pools, shares, overlay] = await Promise.all([
+  const [sys, disks, health, issues, power, pools, shares, overlay, updates] = await Promise.all([
     get("/api/system"),
     get("/api/disks"),
     get("/api/health"),
@@ -74,6 +74,7 @@ async function load() {
     get("/api/pools"),
     get("/api/shares"),
     get("/api/overlay"),
+    get("/api/updates"),
   ]);
 
   $("health").textContent = issues.data.red
@@ -106,6 +107,10 @@ async function load() {
     `<a href="/notes.html">Notes</a>`,
   ];
   $("glance").innerHTML = glance.join(" · ");
+  const update = updates.data;
+  $("updates").innerHTML = update.release_url && update.update_available
+    ? `<a href="${update.release_url}" target="_blank" rel="noreferrer">${update.message}</a>`
+    : update.message;
 
   $("disks").innerHTML = disks.data
     .map((d) => {
