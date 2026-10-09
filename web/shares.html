@@ -30,11 +30,12 @@
     <header>
       <h1>Shares</h1>
     </header>
-    <p class="lede">A share is a name your PC uses to open the bucket. Same door at home and <a class="term" href="/guide.html#away">away</a> (via <a class="term" href="/guide.html#tailscale">Tailscale</a>).</p>
+    <p class="lede">A share is the name File Explorer uses to open the files. Same name at home and <a class="term" href="/guide.html#away">away</a>.</p>
     <details class="why">
-      <summary>What is a share?</summary>
-      <p>The pool is the box of files. A share is the name you type on a laptop to open it — the same idea as a network drive letter. You need a pool first. At home that is the house address. When you are not on the house network, <a class="term" href="/guide.html#tailscale">Tailscale</a> (or the overlay we ship) is the road to the same name. We do not make a second cloud copy.</p>
+      <summary>How do I open this from Windows?</summary>
+      <p>On the Keel computer, File Explorer can open the folder like a network drive. Paste the address (it starts with two backslashes). For this house network the name is <code>keel</code> and the password is <code>keel</code>. That is open on purpose until Keel has real sign-in. Do not put this on the public internet.</p>
     </details>
+    <p class="meta" id="access"></p>
     <div class="work-split">
       <div class="work-col">
         <form class="form" id="form">
@@ -49,7 +50,7 @@
         <div class="table-wrap scroll">
           <table>
             <thead>
-              <tr><th>Name</th><th>Pool</th><th>Folder</th></tr>
+              <tr><th>Name</th><th>Address</th><th>Ready</th></tr>
             </thead>
             <tbody id="rows"></tbody>
           </table>
@@ -57,6 +58,7 @@
       </div>
     </div>
   </main>
+  <script src="/platform.js"></script>
   <script src="/terms.js"></script>
   <script src="/shares.js"></script>
 </body>

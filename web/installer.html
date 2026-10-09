@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>keel · Try or install</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <aside>
+    <div class="brand"><span>keel</span></div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a class="active" href="/installer.html">Try or install</a>
+      <a href="/guide.html#usb-test">Guide</a>
+    </nav>
+  </aside>
+  <main>
+    <header><h1>Try or install Keel</h1></header>
+    <p class="lede">You are in Try mode. Nothing has been changed on an internal disk.</p>
+    <section class="card">
+      <h2>What would you like to do?</h2>
+      <p><strong>Try Keel</strong> is safe for testing the screen, network, and hardware. Choose <strong>Install Keel</strong> only when you are ready to use a whole computer as your Keel appliance.</p>
+      <div id="installer-status" aria-live="polite">Checking this computer…</div>
+    </section>
+    <section class="card">
+      <h2>Install safety</h2>
+      <p>Keel will show the disk name, model, and size. You must choose the disk yourself and type <code>INSTALL KEEL</code>. This screen currently creates and checks an installation plan only; it does not write a disk.</p>
+      <p><a href="/guide.html#usb-test">Read the simple USB testing guide</a></p>
+    </section>
+  </main>
+  <script src="/installer.js"></script>
+</body>
+</html>

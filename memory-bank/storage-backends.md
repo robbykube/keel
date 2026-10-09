@@ -16,6 +16,8 @@ If keel **imports** the pool, TrueNAS must export it first — that *is* replaci
 
 Good for: reticence about touching rok, gradual cutover, family files that already live on OpenCloud’s disk.
 
+Look around / sign-in is how keel **learns names it did not invent**: it reads storage and app names from that computer, then proposes Use this / Leave this. This house needs that while rok still holds the files. A typical keel install only needs it once (“keep the files that are already there”), then people use a share name — not Proxmox disk names.
+
 **Checking those files from this Windows copy:** Sign in to Proxmox on Pools, then List files / OpenCloud (files-app password). That is read-only listing, not a mount. Snapshots/SMART stay on rok.
 
 ## Mode: native pool (keel is the NAS)

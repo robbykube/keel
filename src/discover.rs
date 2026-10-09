@@ -48,31 +48,31 @@ const PROBES: &[Probe] = &[
     Probe {
         port: 8006,
         name: "Proxmox",
-        hint_open: "This looks like the Proxmox web door. It is not a file folder. Sign in there to see disks; paste an SMB or NFS path if a guest already shares files.",
+        hint_open: "This looks like the Proxmox website. It is not a folder of files. Sign in below to see what is on that computer.",
         fill: fill_none,
     },
     Probe {
         port: 443,
-        name: "Website (https)",
-        hint_open: "A locked website. Could be Proxmox behind a front door, or TrueNAS. Sign in below if you have an account there.",
+        name: "Website (locked)",
+        hint_open: "A locked website. Could be Proxmox or another file system. Sign in below if you have an account there.",
         fill: fill_none,
     },
     Probe {
         port: 80,
         name: "Website",
-        hint_open: "A website without the lock. Could be TrueNAS or a files app.",
+        hint_open: "A website without the lock. Could be a files app or another admin page.",
         fill: fill_none,
     },
     Probe {
         port: 445,
-        name: "Windows folders",
-        hint_open: "This machine can share folders. The address is \\\\host\\sharename — the share name is still on that machine.",
+        name: "Shared folders (Windows)",
+        hint_open: "This computer can share folders with a PC. The share name is still set on that machine.",
         fill: fill_smb,
     },
     Probe {
         port: 2049,
-        name: "NFS",
-        hint_open: "Unix-style folder share. Address looks like host:/path.",
+        name: "Shared folders (Linux)",
+        hint_open: "This computer can share folders the Linux way. You still need the folder path from that machine.",
         fill: fill_nfs,
     },
 ];
@@ -111,7 +111,9 @@ pub fn normalize_host(raw: &str) -> Result<String, String> {
     if s.is_empty() {
         return Err("type a computer name or number".into());
     }
-    if s.chars().any(|c| !(c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_')) {
+    if s.chars()
+        .any(|c| !(c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_'))
+    {
         return Err("that does not look like a computer name".into());
     }
     Ok(s)
@@ -131,12 +133,22 @@ pub async fn look(host: &str) -> Result<LookReport, String> {
             } else {
                 format!("Nothing on port {}.", spec.port)
             },
-            fill: if open { (spec.fill)(&host) } else { String::new() },
+            fill: if open {
+                (spec.fill)(&host)
+            } else {
+                String::new()
+            },
         });
     }
-    if hits.iter().any(|h| h.open && (h.port == 443 || h.port == 8006 || h.port == 80)) {
+    if hits
+        .iter()
+        .any(|h| h.open && (h.port == 443 || h.port == 8006 || h.port == 80))
+    {
         if let Some(hint) = crate::remote::https_hint(&host).await {
-            if let Some(h) = hits.iter_mut().find(|h| h.open && (h.port == 443 || h.port == 8006)) {
+            if let Some(h) = hits
+                .iter_mut()
+                .find(|h| h.open && (h.port == 443 || h.port == 8006))
+            {
                 h.hint = hint;
             } else if let Some(h) = hits.iter_mut().find(|h| h.open && h.port == 80) {
                 h.hint = hint;
@@ -146,7 +158,7 @@ pub async fn look(host: &str) -> Result<LookReport, String> {
     Ok(LookReport {
         host,
         hits,
-        why: "We only knock on the address you typed. We do not scan the whole house. Open doors are not the same as a pool — you still paste the folder path, or we fill a starting address when Windows folders or NFS answer.".into(),
+        why: "We only check the computer you typed. We do not search every machine on the house network. An open website is not yet a folder of files. Sign in, or paste a shared folder path if you already have one.".into(),
     })
 }
 

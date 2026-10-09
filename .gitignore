@@ -1,4 +1,5 @@
 /target
+/dist
 /data
 *.pdb
 .DS_Store

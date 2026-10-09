@@ -18,6 +18,10 @@ pub struct FileEntry {
     pub open_url: String,
     pub browse: String,
     pub address: String,
+    #[serde(default)]
+    pub proposal: String,
+    #[serde(default)]
+    pub their_name: String,
 }
 
 #[derive(Serialize)]
@@ -67,6 +71,61 @@ const FILE_PORTS: &[(u16, &str)] = &[
     (8443, "https-alt"),
 ];
 
+/// Plain heading from what the other computer already named.
+/// Shared-folder types (smb/nfs) are Use this. `local` is installer files.
+/// Anything else is disks for other programs. We do not learn `vm-data` as a
+/// special word — Proxmox sends that name; we only hide it from the heading.
+pub fn describe_storage(name: &str, kind: &str) -> (String, String, String) {
+    let n = name.to_ascii_lowercase();
+    match kind {
+        "cifs" | "smb" | "nfs" => (
+            "Shared folder".into(),
+            "use".into(),
+            format!("This computer already shares a folder a PC can open. Use this. Name on that machine: {name}."),
+        ),
+        _ if n == "local" => (
+            "Installer files on that computer".into(),
+            "leave".into(),
+            format!("Installers and templates for that system. Not family photos. You can list them to check. Name on that machine: {name}."),
+        ),
+        _ => (
+            "Disks for other programs".into(),
+            "leave".into(),
+            format!("These disks belong to other programs on that computer. A laptop cannot open them as a folder. Family files are in the files app. Name on that machine: {name}."),
+        ),
+    }
+}
+
+/// Guess the files app from the name that computer already uses.
+/// Guest 104 is this lab’s OpenCloud only — not a rule for other installs.
+pub fn files_app_title(name: &str, vmid: u64) -> String {
+    let n = name.to_ascii_lowercase();
+    if n.contains("immich") {
+        "Photos".into()
+    } else if n.contains("papra") {
+        "Documents".into()
+    } else if n.contains("samba") {
+        "Shared folders".into()
+    } else if vmid == 104
+        || n.contains("opencloud")
+        || n.contains("nextcloud")
+        || n.contains("owncloud")
+        || n.contains("files")
+    {
+        "Family files".into()
+    } else {
+        "Files app".into()
+    }
+}
+
+pub fn sort_key(proposal: &str) -> u8 {
+    match proposal {
+        "use" => 0,
+        "list" => 1,
+        _ => 2,
+    }
+}
+
 pub fn session_status(live: Option<&AuthSession>) -> SessionStatus {
     match live {
         Some(s) => SessionStatus {
@@ -108,25 +167,22 @@ pub async fn guest_file_places(
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        let status = item
-            .get("status")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let status = item.get("status").and_then(|v| v.as_str()).unwrap_or("");
         if !looks_like_files_app(&name, vmid) {
             continue;
         }
         let ips = guest_ips(client, headers, base, node, vmid).await;
-        let mut doors = Vec::new();
+        let mut reached = Vec::new();
         let mut open_url = String::new();
         let mut browse = String::new();
         let mut address = String::new();
         for ip in &ips {
-            for (port, label) in FILE_PORTS {
+            for (port, _label) in FILE_PORTS {
                 if port_open(ip, *port).await {
-                    doors.push(format!("{label} on {ip}:{port}"));
                     if *port == 445 && address.is_empty() {
                         address = format!(r"\\{ip}\");
                         browse = format!("smb:{address}");
+                        reached.push(format!("shared folder at {ip}"));
                     }
                     if open_url.is_empty() && matches!(*port, 443 | 80 | 9200 | 8080 | 8443) {
                         let scheme = if *port == 80 || *port == 8080 {
@@ -143,34 +199,33 @@ pub async fn guest_file_places(
                         if browse.is_empty() {
                             browse = format!("webdav:{url}");
                         }
+                        reached.push(format!("website at {ip}"));
                     }
                 }
             }
         }
+        let title = files_app_title(&name, vmid);
         let why = if status != "running" {
-            format!("{name} is the files app, but it is stopped. Start it in Proxmox if you need to check files.")
-        } else if doors.is_empty() {
+            format!("{title}: this app is installed but not running. Start it on that computer if you need to see files. That computer calls it {name}.")
+        } else if reached.is_empty() {
             format!(
-                "Family files live in {name}, not on Proxmox local. No file door answered on {}. Try the name you already use in the browser, or start the guest.",
-                if ips.is_empty() {
-                    "its network".into()
-                } else {
-                    ips.join(", ")
-                }
+                "{title}: keel could not reach this app from here (it is called {name}). Paste the files website you already open, below."
             )
         } else {
             format!(
-                "Family files live in {name}, not on Proxmox’s own disks. Open that in a browser, or List files here (files-app password — not the Proxmox one). {}",
-                doors.join("; ")
+                "{title} — this app is called {name}. Not the disks that belong to other programs. Open it in a browser, or list files here with the files-app password, not the Proxmox one. {}.",
+                reached.join("; ")
             )
         };
         out.push(Place {
-            title: name,
+            title,
             kind: "files-app".into(),
             address,
             why,
             browse,
             open_url,
+            proposal: "use".into(),
+            their_name: name,
         });
     }
     out
@@ -251,7 +306,10 @@ fn ips_from_cidr(s: &str) -> Vec<String> {
 
 pub async fn inventory(session: &AuthSession) -> Result<FilesReport, String> {
     if session.product != "proxmox" {
-        return Err("Check files after a Proxmox sign-in. TrueNAS folders already have a Use button.".into());
+        return Err(
+            "Check files after a Proxmox sign-in. TrueNAS folders already have a Use button."
+                .into(),
+        );
     }
     let client = crate::remote::http_client(session.insecure)?;
     let headers = pve_headers(session)?;
@@ -268,6 +326,8 @@ pub async fn inventory(session: &AuthSession) -> Result<FilesReport, String> {
                 open_url: place.open_url.clone(),
                 browse: place.browse.clone(),
                 address: place.address.clone(),
+                proposal: place.proposal.clone(),
+                their_name: place.their_name.clone(),
             });
         }
         let stor_url = format!("{}/api2/json/nodes/{node}/storage", session.base);
@@ -284,36 +344,32 @@ pub async fn inventory(session: &AuthSession) -> Result<FilesReport, String> {
                     }
                     let kind = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
                     let used = item.get("used").and_then(|v| v.as_u64()).unwrap_or(0);
-                    let why = match kind {
-                        "dir" | "nfs" | "cifs" | "smb" if name == "local" => {
-                            "Proxmox’s own folder (ISOs, templates). You can list it. It is not the family library."
-                                .into()
-                        }
-                        "dir" | "nfs" | "cifs" | "smb" => {
-                            format!("Proxmox storage ({kind}). List to see what is on it. Family photos are usually in the files app, not here.")
-                        }
-                        _ => format!(
-                            "Proxmox storage ({kind}). Listing shows disk images for guests, not a laptop folder."
-                        ),
-                    };
+                    let (title, proposal, why) = describe_storage(&name, kind);
                     entries.push(FileEntry {
-                        name: format!("{node}/{name}"),
-                        kind: format!("proxmox-{kind}"),
+                        name: title,
+                        kind: if proposal == "use" {
+                            "shared-folder".into()
+                        } else {
+                            "leave".into()
+                        },
                         size: used,
                         path: format!("storage:{node}:{name}"),
                         why,
                         open_url: String::new(),
                         browse: format!("storage:{node}:{name}"),
                         address: String::new(),
+                        proposal,
+                        their_name: name,
                     });
                 }
             }
         }
     }
+    entries.sort_by_key(|e| sort_key(&e.proposal));
     Ok(FilesReport {
         product: session.product.clone(),
         who: session.who.clone(),
-        why: "Family files are in the files app (OpenCloud on rok). Proxmox local/vm-data are disks for guests. List a row to check. The Proxmox session stays in memory until keel restarts — password is not written to disk.".into(),
+        why: "Family files are in the files app. Do not use disks that belong to other programs on that computer. Shared folders have Use this. The sign-in stays in memory until keel restarts. The password is not saved to disk.".into(),
         entries,
     })
 }
@@ -327,16 +383,24 @@ async fn first_nodes(client: &reqwest::Client, headers: &HeaderMap, base: &str) 
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
-                .filter_map(|n| n.get("node").and_then(|v| v.as_str()).map(|s| s.to_string()))
+                .filter_map(|n| {
+                    n.get("node")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
+                })
                 .collect()
         })
         .unwrap_or_default()
 }
 
-pub async fn browse(session: Option<&AuthSession>, req: &BrowseRequest) -> Result<BrowseReport, String> {
+pub async fn browse(
+    session: Option<&AuthSession>,
+    req: &BrowseRequest,
+) -> Result<BrowseReport, String> {
     match req.via.as_str() {
         "storage" => {
-            let session = session.ok_or_else(|| "sign in to Proxmox on this page first".to_string())?;
+            let session =
+                session.ok_or_else(|| "sign in to Proxmox on this page first".to_string())?;
             browse_storage(session, &req.target).await
         }
         "webdav" => browse_webdav(req).await,
@@ -371,31 +435,57 @@ async fn browse_storage(session: &AuthSession, target: &str) -> Result<BrowseRep
                 .unwrap_or("file")
                 .to_string();
             let size = item.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
-            let name = volid.rsplit('/').next().unwrap_or(&volid).to_string();
-            let why = match content.as_str() {
-                "iso" => "An installer image on Proxmox. Not a family photo.".into(),
-                "vztmpl" => "A container template. Not a shared folder.".into(),
-                "backup" => "A backup file on this storage.".into(),
-                "images" | "rootdir" => "A disk for a guest. You cannot open this as a folder on a laptop.".into(),
-                "snippets" => "A small config file on Proxmox.".into(),
-                _ => format!("Proxmox content ({content})."),
+            let vol_name = volid.rsplit('/').next().unwrap_or(&volid).to_string();
+            let (title, proposal, why) = match content.as_str() {
+                "iso" => (
+                    vol_name.clone(),
+                    "list".to_string(),
+                    format!("An installer file on that computer. Not a family photo. Name: {vol_name}."),
+                ),
+                "vztmpl" => (
+                    "Program template".into(),
+                    "leave".into(),
+                    format!("A template for another program. Not a shared folder. Name: {vol_name}."),
+                ),
+                "backup" => (
+                    vol_name.clone(),
+                    "list".to_string(),
+                    format!("A backup file. Name: {vol_name}."),
+                ),
+                "images" | "rootdir" => (
+                    "Disk for another program".into(),
+                    "leave".into(),
+                    format!("A disk used by another program on that computer. A laptop cannot open this as a folder. Name: {vol_name}."),
+                ),
+                "snippets" => (
+                    vol_name.clone(),
+                    "list".to_string(),
+                    format!("A small config file. Name: {vol_name}."),
+                ),
+                _ => (
+                    vol_name.clone(),
+                    "list".to_string(),
+                    format!("A file on that computer. Name: {vol_name}."),
+                ),
             };
             entries.push(FileEntry {
-                name,
-                kind: content,
+                name: title,
+                kind: proposal.clone(),
                 size,
                 path: volid,
                 why,
                 open_url: String::new(),
                 browse: String::new(),
                 address: String::new(),
+                proposal,
+                their_name: vol_name,
             });
         }
     }
     let why = if entries.is_empty() {
-        "Nothing listed on that storage (empty, or this kind of disk does not expose files).".into()
+        "Nothing listed here (empty, or this kind of disk does not show files).".into()
     } else {
-        format!("{} items. These are what Proxmox keeps on that storage — usually guest disks or ISOs, not the OpenCloud library.", entries.len())
+        format!("{} items. These are not family photos. They are what that computer keeps for its own programs.", entries.len())
     };
     Ok(BrowseReport {
         via: "storage".into(),
@@ -416,7 +506,9 @@ async fn browse_webdav(req: &BrowseRequest) -> Result<BrowseReport, String> {
         return Err("no files-app address".into());
     }
     if req.username.trim().is_empty() || req.password.is_empty() {
-        return Err("sign in to the files app (OpenCloud) — that is not the Proxmox password".into());
+        return Err(
+            "sign in to the files app (OpenCloud) — that is not the Proxmox password".into(),
+        );
     }
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(12))
@@ -491,10 +583,16 @@ fn parse_dav(xml: &str, parent: &str) -> Vec<FileEntry> {
     let lower = xml.to_ascii_lowercase();
     let mut entries = Vec::new();
     let mut from = 0;
-    while let Some(start) = lower[from..].find("<d:href>").or_else(|| lower[from..].find("<href>")) {
+    while let Some(start) = lower[from..]
+        .find("<d:href>")
+        .or_else(|| lower[from..].find("<href>"))
+    {
         let abs = from + start;
         let tag_end = lower[abs..].find('>').map(|i| abs + i + 1).unwrap_or(abs);
-        let Some(end_rel) = lower[tag_end..].find("</d:href>").or_else(|| lower[tag_end..].find("</href>")) else {
+        let Some(end_rel) = lower[tag_end..]
+            .find("</d:href>")
+            .or_else(|| lower[tag_end..].find("</href>"))
+        else {
             break;
         };
         let href = xml[tag_end..tag_end + end_rel].trim();
@@ -519,7 +617,11 @@ fn parse_dav(xml: &str, parent: &str) -> Vec<FileEntry> {
         }
         entries.push(FileEntry {
             name: urlencoding_decode(&name),
-            kind: if folder { "folder".into() } else { "file".into() },
+            kind: if folder {
+                "folder".into()
+            } else {
+                "file".into()
+            },
             size,
             path: href.clone(),
             why: if folder {
@@ -534,6 +636,8 @@ fn parse_dav(xml: &str, parent: &str) -> Vec<FileEntry> {
                 String::new()
             },
             address: String::new(),
+            proposal: if folder { "use".into() } else { "list".into() },
+            their_name: urlencoding_decode(&name),
         });
         if entries.len() >= 200 {
             break;
@@ -566,7 +670,9 @@ fn urlencoding_decode(s: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Ok(v) = u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""), 16) {
+            if let Ok(v) =
+                u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""), 16)
+            {
                 out.push(v);
                 i += 3;
                 continue;
@@ -588,7 +694,11 @@ fn browse_smb(req: &BrowseRequest) -> Result<BrowseReport, String> {
     if !target.starts_with("\\\\") {
         return Err("that is not a Windows folder address".into());
     }
-    let parts: Vec<&str> = target.trim_start_matches('\\').split('\\').filter(|s| !s.is_empty()).collect();
+    let parts: Vec<&str> = target
+        .trim_start_matches('\\')
+        .split('\\')
+        .filter(|s| !s.is_empty())
+        .collect();
     if parts.is_empty() {
         return Err("that is not a Windows folder address".into());
     }
@@ -605,7 +715,11 @@ fn browse_smb(req: &BrowseRequest) -> Result<BrowseReport, String> {
 
 #[cfg(windows)]
 fn smb_list_windows(unc: &str, username: &str, password: &str) -> Result<BrowseReport, String> {
-    let parts: Vec<&str> = unc.trim_start_matches('\\').split('\\').filter(|s| !s.is_empty()).collect();
+    let parts: Vec<&str> = unc
+        .trim_start_matches('\\')
+        .split('\\')
+        .filter(|s| !s.is_empty())
+        .collect();
     if parts.len() == 1 {
         return smb_view_windows(parts[0], username, password);
     }
@@ -659,7 +773,11 @@ fn smb_view_windows(host: &str, username: &str, password: &str) -> Result<Browse
     let mut entries = Vec::new();
     for line in text.lines() {
         let line = line.trim();
-        if line.is_empty() || line.starts_with("Share") || line.starts_with("---") || line.starts_with("The command") {
+        if line.is_empty()
+            || line.starts_with("Share")
+            || line.starts_with("---")
+            || line.starts_with("The command")
+        {
             continue;
         }
         let name = line.split_whitespace().next().unwrap_or("");
@@ -676,6 +794,8 @@ fn smb_view_windows(host: &str, username: &str, password: &str) -> Result<Browse
             open_url: String::new(),
             browse: format!("smb:{address}"),
             address,
+            proposal: "use".into(),
+            their_name: name.into(),
         });
     }
     if entries.is_empty() {
@@ -702,14 +822,24 @@ fn read_unc_dir(unc: &str) -> Result<BrowseReport, String> {
         let size = meta.map(|m| m.len()).unwrap_or(0);
         let path = format!("{unc}\\{name}");
         entries.push(FileEntry {
-            name,
-            kind: if folder { "folder".into() } else { "file".into() },
+            name: name.clone(),
+            kind: if folder {
+                "folder".into()
+            } else {
+                "file".into()
+            },
             size,
             path: path.clone(),
             why: "On that Windows folder share.".into(),
             open_url: String::new(),
-            browse: if folder { format!("smb:{path}") } else { String::new() },
+            browse: if folder {
+                format!("smb:{path}")
+            } else {
+                String::new()
+            },
             address: path,
+            proposal: if folder { "use".into() } else { "list".into() },
+            their_name: name,
         });
     }
     Ok(BrowseReport {
@@ -735,17 +865,26 @@ fn parse_ps_children(stdout: &str) -> Vec<FileEntry> {
     arr.iter()
         .filter_map(|item| {
             let name = item.get("Name")?.as_str()?.to_string();
-            let folder = item.get("PSIsContainer").and_then(|v| v.as_bool()).unwrap_or(false);
+            let folder = item
+                .get("PSIsContainer")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             let size = item.get("Length").and_then(|v| v.as_u64()).unwrap_or(0);
             Some(FileEntry {
                 name: name.clone(),
-                kind: if folder { "folder".into() } else { "file".into() },
+                kind: if folder {
+                    "folder".into()
+                } else {
+                    "file".into()
+                },
                 size,
                 path: name.clone(),
                 why: "On that Windows folder share.".into(),
                 open_url: String::new(),
                 browse: String::new(),
-                address: name,
+                address: name.clone(),
+                proposal: if folder { "use".into() } else { "list".into() },
+                their_name: name,
             })
         })
         .take(200)
@@ -754,7 +893,21 @@ fn parse_ps_children(stdout: &str) -> Vec<FileEntry> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ips_from_net, looks_like_files_app, parse_dav};
+    use super::{describe_storage, ips_from_net, looks_like_files_app, parse_dav};
+
+    #[test]
+    fn storage_talks_plain() {
+        let (title, proposal, why) = describe_storage("vm-data", "zfspool");
+        assert_eq!(title, "Disks for other programs");
+        assert_eq!(proposal, "leave");
+        assert!(why.contains("vm-data"));
+        let (title, proposal, _) = describe_storage("photos", "cifs");
+        assert_eq!(title, "Shared folder");
+        assert_eq!(proposal, "use");
+        let (title, proposal, _) = describe_storage("local", "dir");
+        assert_eq!(title, "Installer files on that computer");
+        assert_eq!(proposal, "leave");
+    }
 
     #[test]
     fn net0_static_ip() {
@@ -776,7 +929,9 @@ mod tests {
             <d:response><d:href>/dav/files/u/note.txt</d:href><d:propstat><d:prop><d:getcontentlength>12</d:getcontentlength><d:resourcetype/></d:prop></d:propstat></d:response>
         </d:multistatus>"#;
         let entries = parse_dav(xml, "https://x/dav/files/u/");
-        assert!(entries.iter().any(|e| e.name == "Photos" && e.kind == "folder"));
+        assert!(entries
+            .iter()
+            .any(|e| e.name == "Photos" && e.kind == "folder"));
         assert!(entries.iter().any(|e| e.name == "note.txt" && e.size == 12));
     }
 }

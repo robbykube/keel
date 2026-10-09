@@ -29,8 +29,43 @@ function card(k, v) {
   return `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`;
 }
 
+// Where to reach this machine from another computer.
+//
+// Someone standing at the appliance sees a working screen and is then told to
+// open it from their own PC. Without this they have no way to find out where,
+// because the appliance shows no terminal and answers to no name on the
+// network. This is the only place that address appears.
+function showReach(s) {
+  const box = $("reach");
+  if (!box) return;
+
+  const addresses = Array.isArray(s.addresses) ? s.addresses : [];
+  if (!addresses.length) {
+    // Say so plainly rather than hiding. A machine with no address is the
+    // reason someone cannot reach it, and that is worth telling them.
+    box.innerHTML = `
+      <div class="reach-k">Open from another computer</div>
+      <div class="reach-v">No network address yet</div>
+      <div class="reach-sub">Check the network cable. This machine cannot be reached from another computer until it has an address.</div>`;
+    box.hidden = false;
+    return;
+  }
+
+  const port = location.port || "9478";
+  const rows = addresses
+    .map((ip) => `<div class="reach-v">http://${ip}:${port}/</div>`)
+    .join("");
+  const files = addresses.map((ip) => `<code>\\\\${ip}\\files</code>`).join(" ");
+
+  box.innerHTML = `
+    <div class="reach-k">Open from another computer</div>
+    ${rows}
+    <div class="reach-sub">Files from Windows File Explorer: ${files}</div>`;
+  box.hidden = false;
+}
+
 async function load() {
-  const [sys, disks, health, issues, power, pools, shares] = await Promise.all([
+  const [sys, disks, health, issues, power, pools, shares, overlay] = await Promise.all([
     get("/api/system"),
     get("/api/disks"),
     get("/api/health"),
@@ -38,6 +73,7 @@ async function load() {
     get("/api/power"),
     get("/api/pools"),
     get("/api/shares"),
+    get("/api/overlay"),
   ]);
 
   $("health").textContent = issues.data.red
@@ -46,6 +82,7 @@ async function load() {
   $("timing").textContent = `system ${sys.server} / ${sys.client}ms · disks ${disks.server} / ${disks.client}ms`;
 
   const s = sys.data;
+  showReach(s);
   $("cards").innerHTML = [
     card("Host", s.hostname),
     card("CPU", `${pct(s.cpu_pct)} · ${s.cores} cores`),
@@ -65,7 +102,7 @@ async function load() {
     nIssues
       ? `<a href="/repair.html">${nIssues} on Repair</a>`
       : `<a href="/repair.html">Repair quiet</a>`,
-    `<a href="/guide.html#away-from-home">away via Tailscale</a>`,
+    `<a href="/guide.html#away-from-home">away via ${overlay.data.provider}</a>`,
     `<a href="/notes.html">Notes</a>`,
   ];
   $("glance").innerHTML = glance.join(" · ");

@@ -17,13 +17,16 @@
     </div>
     <nav>
       <a class="active" href="/">Dashboard</a>
+      <a href="/overlay.html">Overlay</a>
       <a href="/catalog.html">Catalog</a>
+      <a href="/installer.html">Try or install</a>
       <a href="/repair.html">Repair</a>
       <a href="/sleep.html">Idle</a>
       <a href="/guide.html">Guide</a>
       <a href="/notes.html">Notes</a>
       <a href="/pools.html">Pools</a>
       <a href="/shares.html">Shares</a>
+      <a href="/login.html">Sign in</a>
     </nav>
     <div class="aside-foot" id="health"></div>
   </aside>
@@ -33,11 +36,16 @@
       <div class="meta" id="timing"></div>
     </header>
     <p class="lede">Health of this control panel. Disks below are this machine’s inventory — not a second page.</p>
+    <div class="reach" id="reach" data-only="linux" hidden></div>
     <p class="glance" id="glance"></p>
     <section class="cards" id="cards"></section>
-    <details class="why">
+    <details class="why" data-only="windows">
       <summary>What to do on this Windows copy</summary>
       <p>Click around. Put ideas in <a href="/notes.html">Notes</a>. Add a pool only as a plan (files stay on the other computer). Do not wipe <a class="term" href="/guide.html#proxmox">Proxmox</a> on rok. Real disks and shares wait for a Linux keel box.</p>
+    </details>
+    <details class="why" data-only="linux">
+      <summary>What to do on this machine</summary>
+      <p>This is the keel computer itself. The disks below are really plugged into it. Group them into a <a href="/pools.html">pool</a>, then publish a <a href="/shares.html">share</a> so other computers can open the files. You can do all of this from here, or from a browser on another computer using the address above.</p>
     </details>
     <h2>Disks in this machine</h2>
     <div class="table-wrap scroll">
@@ -56,6 +64,7 @@
       </table>
     </div>
   </main>
+  <script src="/platform.js"></script>
   <script src="/terms.js"></script>
   <script src="/app.js"></script>
 </body>

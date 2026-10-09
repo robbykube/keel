@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>keel · Overlay</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <aside>
+    <div class="brand"><span>keel</span></div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a class="active" href="/overlay.html">Overlay</a>
+      <a href="/catalog.html">Catalog</a>
+      <a href="/repair.html">Repair</a>
+      <a href="/pools.html">Pools</a>
+      <a href="/shares.html">Shares</a>
+      <a href="/login.html">Sign in</a>
+    </nav>
+  </aside>
+  <main>
+    <header><h1>Overlay</h1><div class="meta" id="state"></div></header>
+    <p class="lede">Self-hosted-first remote access for the same GUI and file shares.</p>
+    <details class="why" open>
+      <summary>Why Headscale?</summary>
+      <p>Headscale is Keel’s preferred control plane because it can live under your control. Keel still uses the compatible Tailscale client, so Tailscale devices and tooling remain available. The overlay is the road; local LAN access still works without it.</p>
+    </details>
+    <div class="work-split">
+      <div class="work-col">
+        <h2>Current status</h2>
+        <div class="card" id="current">checking…</div>
+      </div>
+      <div class="work-col">
+        <h2>Enroll this machine</h2>
+        <form class="form" id="form">
+          <label>Provider
+            <select id="provider">
+              <option value="headscale">Headscale (self-hosted)</option>
+              <option value="tailscale">Tailscale hosted</option>
+            </select>
+          </label>
+          <label>Machine name
+            <input id="hostname" placeholder="keel" />
+          </label>
+          <label class="wide">Control URL
+            <input id="control" placeholder="https://headscale.example.com" />
+          </label>
+          <label class="wide">One-time enrollment key
+            <input id="key" type="password" autocomplete="off" required />
+          </label>
+          <button type="submit">Enroll</button>
+        </form>
+        <p class="meta" id="result"></p>
+      </div>
+    </div>
+  </main>
+  <script src="/overlay.js"></script>
+</body>
+</html>

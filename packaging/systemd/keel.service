@@ -1,0 +1,29 @@
+[Unit]
+Description=Keel appliance control plane
+Documentation=https://keel.local/guide.html
+After=network-online.target tailscaled.service smbd.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/usr/lib/keel
+ExecStart=/usr/bin/keel
+Environment=KEEL_DATA=/var/lib/keel
+Environment=KEEL_BIND=0.0.0.0
+EnvironmentFile=-/etc/keel/keel.env
+Restart=on-failure
+RestartSec=2s
+
+# Keel needs privileged operations through a later narrow helper. Until that
+# boundary exists, this unit is a packaging contract rather than production
+# hardening. Do not install it on a LAN appliance without KEEL_ADMIN_TOKEN.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/keel
+
+[Install]
+WantedBy=multi-user.target

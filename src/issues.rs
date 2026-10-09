@@ -1,7 +1,12 @@
 use crate::inventory::Inventory;
 use crate::model::{Issue, IssuesReport, RepairAction, RepairResult};
 
-pub fn report(idle: bool, inventory: Inventory, pool_count: usize, share_count: usize) -> IssuesReport {
+pub fn report(
+    idle: bool,
+    inventory: Inventory,
+    pool_count: usize,
+    share_count: usize,
+) -> IssuesReport {
     let mut items = Vec::new();
 
     if matches!(inventory, Inventory::Mock) {
@@ -20,7 +25,7 @@ pub fn report(idle: bool, inventory: Inventory, pool_count: usize, share_count: 
             id: "no-pool",
             severity: "yellow",
             title: "No pool",
-            why: "There is no bucket for files yet. Open Pools and add one. Prefer “on another computer” so Proxmox is left alone.",
+            why: "There is no place for files yet. Open Pools and add one. Prefer “on another computer” so Proxmox is left alone.",
             evidence: "pools=0".into(),
             repair: None,
         });
@@ -31,7 +36,7 @@ pub fn report(idle: bool, inventory: Inventory, pool_count: usize, share_count: 
             id: "no-share",
             severity: "yellow",
             title: "No share",
-            why: "You turned things on but there is no named door into the files. Open Shares and add one.",
+            why: "Keel is active but there is no share name for a PC to open. Open Shares and add one.",
             evidence: "shares=0".into(),
             repair: None,
         });
@@ -45,16 +50,22 @@ pub fn report(idle: bool, inventory: Inventory, pool_count: usize, share_count: 
             available: true,
         },
         RepairAction {
+            id: "restart-keel",
+            label: "Restart Keel",
+            safe: true,
+            available: matches!(inventory, Inventory::Linux),
+        },
+        RepairAction {
             id: "restart-samba",
             label: "Restart SMB",
             safe: true,
-            available: false,
+            available: matches!(inventory, Inventory::Linux),
         },
         RepairAction {
             id: "restart-tailscale",
             label: "Restart Tailscale",
             safe: true,
-            available: false,
+            available: matches!(inventory, Inventory::Linux),
         },
         RepairAction {
             id: "open-ports",

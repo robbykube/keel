@@ -30,25 +30,26 @@
     <header>
       <h1>Pools</h1>
     </header>
-    <p class="lede">A pool is the bucket the files live in. One bucket now. You pick whose disks hold it.</p>
+    <p class="lede">A pool is where the files are stored. Keep files that already exist, or use disks in this machine.</p>
     <details class="why">
       <summary>What is a pool?</summary>
-      <p>Think of a big box of files. keel does not care yet <em>which brand</em> of box — only <em>where</em> the box is.</p>
-      <p><strong>On another computer</strong> means: your Proxmox or TrueNAS machine already has the files. keel just uses that folder. Nothing is copied. Nothing is wiped. Pick this while rok stays as it is.</p>
-      <p><strong>Disks in this machine</strong> means: keel would use hard drives plugged into the keel box. We are not doing that on this Windows PC. You can still name the intent.</p>
-      <p>The address is “how to find that folder on the other computer.” You will get that from the other machine’s share settings. You do not need to know the short names for those sharing methods.</p>
+      <p>A pool is the files keel should use. keel does not care yet which brand of system holds them — only where they are.</p>
+      <p><strong>On another computer</strong> means the files already live there (your Proxmox or TrueNAS machine, in this house). keel uses that folder. Nothing is copied. Nothing is wiped. Sign in on the left so keel can read the names that computer already uses. It does not invent them.</p>
+      <p data-only="windows"><strong>Disks in this machine</strong> means keel would use hard drives plugged into the keel box. We are not doing that on this Windows PC. You can still name the intent.</p>
+      <p data-only="linux"><strong>Disks in this machine</strong> means the hard drives plugged into this keel computer. They are listed on the Dashboard.</p>
+      <p>Most people only need “on another computer” at install, to keep personal files. Day to day they use a share name, not Proxmox disk names. This lab still needs the Proxmox list while rok holds the files.</p>
     </details>
     <details class="why">
       <summary>Did I reach Proxmox?</summary>
-      <p>Look around + Sign in on the left is how keel talks to Proxmox. Success looks like: status says “signed in to proxmox”, and a list appears (Node rok, local, vm-data, …). The password is not kept, so you sign in again next time. Remembered names (below Look around) mean we have seen that computer before.</p>
-          <p>A row in the table on the right is a <strong>plan</strong> of which bucket keel should use. It now survives a restart. This Windows copy still does not mount the disk as a drive letter. To actually see names of files, Sign in on the left, then List files. Family files are in OpenCloud, not on Proxmox local.</p>
-          <p>You still open Proxmox in the browser the usual way. keel does not replace that screen.</p>
+      <p>Look around + Sign in on the left is how keel talks to that computer. After sign-in, keel reads the names Proxmox already has, then marks each row <strong>Use this</strong> or <strong>Leave this</strong>. Shared folders and the files app are use. Installer disks and disks for other programs are leave. The password is not kept, so you sign in again next time.</p>
+      <p>A row in the table on the right is a <strong>plan</strong> of which files keel should use. It survives a restart.<span data-only="windows"> This Windows copy still does not attach those files as a drive letter.</span> To see file names, Sign in, then List files.</p>
+      <p>If you already know those names, tick <strong>Show the names that computer uses</strong>. Rows still say Use this or Leave this. Default is the plain heading.</p>
     </details>
     <div class="work-split">
       <div class="work-col">
         <div class="pane">
           <form class="form look" id="lookform">
-            <label class="wide">Look around (type a name or number, not a whole-house scan)
+            <label class="wide">Look around (type a name or number — not a search of every machine)
               <input name="host" id="host" placeholder="name or number of that computer" />
             </label>
             <button type="submit">Look around</button>
@@ -56,21 +57,22 @@
           <div class="recents" id="recents" hidden></div>
           <div class="found" id="found" hidden></div>
           <form class="form" id="signinform">
-            <label>Name on that computer <input id="user" name="username" autocomplete="username" placeholder="root@pam" /></label>
+            <label>Name on that computer <input id="user" name="username" autocomplete="username" placeholder="root" /></label>
             <label>Password <input id="pass" name="password" type="password" autocomplete="current-password" /></label>
-            <label>Realm (Proxmox)
+            <label>Account type
               <select id="realm">
-                <option value="pam">pam</option>
-                <option value="pve">pve</option>
+                <option value="pam">Linux login</option>
+                <option value="pve">Proxmox login</option>
               </select>
             </label>
             <label class="check"><input type="checkbox" id="insecure" /> Homemade certificate (only if the lock is red)</label>
             <button type="submit">Sign in</button>
           </form>
           <p class="meta" id="signinwhy">Sign in on this page. Do not paste the password into chat. keel keeps the name, not the password. The Proxmox session stays in memory so you can list files until keel restarts.</p>
+          <label class="check"><input type="checkbox" id="theirnames" /> Show the names that computer uses</label>
           <div class="found" id="places" hidden></div>
           <form class="form" id="filesform" hidden>
-            <p class="meta">Check files — OpenCloud name and password, not Proxmox. Paste the files website if List files did not find a door.</p>
+            <p class="meta">Check files — files app name and password, not Proxmox. Paste the files website if List files did not find it.</p>
             <label class="wide">Files app address <input id="filesurl" placeholder="https://… the site you already open for files" /></label>
             <label>Name on the files app <input id="filesuser" autocomplete="username" /></label>
             <label>Password <input id="filespass" type="password" autocomplete="current-password" /></label>
@@ -82,7 +84,7 @@
       </div>
       <div class="work-col">
         <form class="form" id="form">
-          <label>Name for this bucket <input name="name" required placeholder="files" /></label>
+          <label>Name for these files <input name="name" required placeholder="files" /></label>
           <label>Where are the files?
             <select name="kind">
               <option value="foreign">On another computer (keep Proxmox / TrueNAS)</option>
@@ -106,6 +108,7 @@
       </div>
     </div>
   </main>
+  <script src="/platform.js"></script>
   <script src="/pools.js"></script>
 </body>
 </html>

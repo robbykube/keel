@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>keel · Sign in</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <aside>
+    <div class="brand"><span>keel</span></div>
+    <p class="prose">The local control plane. Sign in to change storage, services, or remote access.</p>
+  </aside>
+  <main>
+    <header><h1>Sign in</h1></header>
+    <p class="lede">Use the Keel admin token configured during setup.</p>
+    <form class="form auth-form" id="form">
+      <label class="wide">Admin token
+        <input id="token" type="password" autocomplete="current-password" autofocus required />
+      </label>
+      <button type="submit">Sign in</button>
+    </form>
+    <p class="meta" id="status"></p>
+    <p><a href="/">Back to dashboard</a></p>
+  </main>
+  <script src="/login.js"></script>
+</body>
+</html>

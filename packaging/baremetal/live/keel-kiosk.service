@@ -1,0 +1,36 @@
+[Unit]
+Description=Keel appliance screen
+Documentation=https://keel.local/guide.html
+After=keel.service systemd-user-sessions.service
+Wants=keel.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=keel-kiosk
+Group=keel-kiosk
+# PAMName gives this unit a real logind session on seat0, which is what lets
+# cage take the display and the keyboard as an unprivileged user. The stack is
+# installed as /etc/pam.d/keel-kiosk by install-kiosk-in-rootfs.sh.
+PAMName=keel-kiosk
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty-fail
+UtmpMode=user
+StandardOutput=journal
+StandardError=journal
+# Gives the kiosk user its own /run/keel-kiosk, wiped when the service stops.
+# The browser profile lives there on purpose: nothing in it is worth keeping,
+# and an ephemeral profile means a reboot can never show a stale GUI.
+RuntimeDirectory=keel-kiosk
+RuntimeDirectoryMode=0700
+ExecStart=/usr/lib/keel/start-kiosk.sh
+Restart=always
+RestartSec=2s
+# 64 means the script found no display device. That is a permanent fact about
+# this machine, not a transient failure; stop instead of looping.
+RestartPreventExitStatus=64
+
+[Install]
+WantedBy=multi-user.target

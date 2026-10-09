@@ -1,0 +1,11 @@
+[Unit]
+Description=Configure Keel live wired networking
+Before=network-online.target keel.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/keel/configure-network.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

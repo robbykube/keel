@@ -161,6 +161,8 @@ code {
 .why p { margin: 8px 0 0; }
 .opp { margin-bottom: 10px; }
 .opp h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; color: var(--text); }
+.opp.use h3 { color: var(--accent); }
+.opp.leave h3 { color: var(--muted); }
 .opp .ev { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .prose { color: var(--muted); }
@@ -362,3 +364,35 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   .roster-col { max-height: 28vh; }
   .opps-grid { grid-template-columns: 1fr; }
 }
+
+/* Platform-conditional copy. Both variants start hidden so a page never
+   briefly shows text written for the wrong machine; platform.js reveals the
+   matching one by setting data-platform on <html>. */
+[data-only] { display: none; }
+html[data-platform="linux"] [data-only~="linux"],
+html[data-platform="windows"] [data-only~="windows"] { display: revert; }
+
+/* How to reach this machine from another computer. This is the bridge between
+   the appliance's own screen and the owner's PC, so it is louder than a card. */
+.reach {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.reach .reach-k {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.reach .reach-v {
+  color: var(--accent);
+  font-size: 17px;
+  font-weight: 600;
+  word-break: break-all;
+}
+.reach .reach-sub { color: var(--muted); margin-top: 4px; }
+.reach code { color: var(--text); }

@@ -13,7 +13,7 @@ function render(p) {
     card("Policy", p.policy),
     card("Mode", p.mode),
     card("Services stopped", yn(p.services_stopped)),
-    card(`<a class="term" href="/guide.html#tailscale">Tailscale</a> required`, yn(p.tailscale_required)),
+    card(`<a class="term" href="/guide.html#overlay">Overlay</a> required`, yn(p.overlay_required)),
   ].join("");
   $("why").innerHTML = keelLinkTerms(p.why);
 }

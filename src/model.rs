@@ -13,6 +13,12 @@ pub struct Health {
 pub struct SystemSnapshot {
     pub hostname: String,
     pub os: String,
+    /// "linux" or "windows". `os` is a human string like "Debian GNU/Linux 13",
+    /// so the GUI needs this to tell a real appliance from a dev host.
+    pub platform: &'static str,
+    /// Non-loopback IPv4 addresses. The person sitting at the appliance has no
+    /// other way to learn where to reach it from their own computer.
+    pub addresses: Vec<String>,
     pub cpu_pct: f32,
     pub mem_used: u64,
     pub mem_total: u64,
@@ -25,6 +31,8 @@ impl SystemSnapshot {
         Self {
             hostname: "keel".into(),
             os: std::env::consts::OS.into(),
+            platform: std::env::consts::OS,
+            addresses: Vec::new(),
             cpu_pct: 0.0,
             mem_used: 0,
             mem_total: 0,
@@ -47,6 +55,21 @@ pub struct Disk {
     pub fstype: String,
 }
 
+#[derive(Serialize)]
+pub struct InstallerStatus {
+    pub mode: &'static str,
+    pub can_install: bool,
+    pub network: &'static str,
+    pub warning: &'static str,
+    pub disks: Vec<Disk>,
+}
+
+#[derive(Deserialize)]
+pub struct InstallerPlan {
+    pub target: String,
+    pub confirmation: String,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Pool {
     pub name: String,
@@ -63,12 +86,26 @@ pub struct NewPool {
     pub source: String,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Share {
     pub name: String,
     pub path: String,
     pub protocol: String,
     pub pool: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct ShareView {
+    pub name: String,
+    pub path: String,
+    pub protocol: String,
+    pub pool: String,
+    pub lan: Vec<String>,
+    pub overlay: Vec<String>,
+    pub username: String,
+    pub password: String,
+    pub ready: bool,
+    pub why: String,
 }
 
 #[derive(Deserialize)]
@@ -84,7 +121,7 @@ pub struct Power {
     pub mode: &'static str,
     pub host_sleep_allowed: bool,
     pub services_stopped: bool,
-    pub tailscale_required: bool,
+    pub overlay_required: bool,
     pub why: &'static str,
 }
 

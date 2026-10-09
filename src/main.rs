@@ -1,31 +1,40 @@
 mod advisor;
+mod apps;
+mod auth;
 mod catalog;
+mod config;
 mod discover;
 mod files;
+mod installer;
 mod inventory;
 mod issues;
 mod model;
+mod overlay;
 mod remote;
+mod services;
+mod smb;
 mod store;
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use axum::extract::{Path, State};
-use axum::http::{HeaderValue, StatusCode};
+use axum::handler::Handler;
+use axum::http::header::SET_COOKIE;
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use sysinfo::{Pid, ProcessesToUpdate, System};
+use sysinfo::{Networks, Pid, ProcessesToUpdate, System};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
 
 use crate::inventory::Inventory;
 use crate::model::{
-    Disk, Guest, Health, IssuesReport, NewNote, NewPool, NewShare, Note, Opportunity, Pool, Power,
-    RepairRequest, RepairResult, Share, SystemSnapshot,
+    Disk, Guest, Health, InstallerPlan, IssuesReport, NewNote, NewPool, NewShare, Note,
+    Opportunity, Pool, Power, RepairRequest, RepairResult, ShareView, SystemSnapshot,
 };
 use crate::store::Store;
 
@@ -47,43 +56,136 @@ async fn main() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(9478);
 
-    let web = std::env::current_dir()
-        .expect("cwd")
-        .join("web");
+    let web = std::env::current_dir().expect("cwd").join("web");
 
     let app = Router::new()
         .route("/api/health", get(health))
+        .route("/api/auth/login", post(auth_login))
         .route("/api/system", get(system))
         .route("/api/disks", get(disks))
-        .route("/api/pools", get(pools).post(pools_create))
-        .route("/api/shares", get(shares).post(shares_create))
+        .route("/api/installer", get(installer_status))
+        .route(
+            "/api/installer/plan",
+            post(installer_plan).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/pools",
+            get(pools).post(pools_create.layer(axum::middleware::from_fn(auth::require_admin))),
+        )
+        .route(
+            "/api/shares",
+            get(shares).post(shares_create.layer(axum::middleware::from_fn(auth::require_admin))),
+        )
         .route("/api/power", get(power))
-        .route("/api/power/idle", post(power_idle))
-        .route("/api/power/active", post(power_active))
-        .route("/api/power/cancel", post(power_active))
+        .route(
+            "/api/power/idle",
+            post(power_idle).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/power/active",
+            post(power_active).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/power/cancel",
+            post(power_active).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/power/opportunities", get(power_opportunities))
+        .route("/api/overlay", get(overlay_status))
+        .route("/api/services", get(services_status))
+        .route("/api/network/ports", get(network_ports))
+        .route(
+            "/api/overlay/enroll",
+            post(overlay_enroll).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/catalog", get(catalog_list))
+        .route("/api/apps", get(apps_list))
+        .route(
+            "/api/apps/{id}/action",
+            post(app_action).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/issues", get(issues_list))
-        .route("/api/repair", post(repair_run))
-        .route("/api/notes", get(notes_list).post(notes_create))
-        .route("/api/notes/{id}", axum::routing::put(notes_update).delete(notes_delete))
-        .route("/api/look", post(look_around))
-        .route("/api/look/login", post(look_login))
+        .route(
+            "/api/repair",
+            post(repair_run).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/notes",
+            get(notes_list)
+                .post(notes_create.layer(axum::middleware::from_fn(auth::require_admin))),
+        )
+        .route(
+            "/api/notes/{id}",
+            axum::routing::put(notes_update)
+                .delete(notes_delete)
+                .layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/look",
+            post(look_around).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/look/login",
+            post(look_login).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/look/saved", get(look_saved))
-        .route("/api/look/forget", post(look_forget))
+        .route(
+            "/api/look/forget",
+            post(look_forget).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/look/session", get(look_session))
         .route("/api/look/files", get(look_files))
-        .route("/api/look/browse", post(look_browse))
-        .with_state(AppState {
-            inventory: Inventory::detect(),
-            store: Arc::new(Mutex::new(Store::load())),
+        .route(
+            "/api/look/browse",
+            post(look_browse).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .with_state({
+            let mut store = Store::load();
+            crate::smb::bootstrap(&mut store);
+            AppState {
+                inventory: Inventory::detect(),
+                store: Arc::new(Mutex::new(store)),
+            }
         })
-        .fallback_service(ServeDir::new(web));
+        .fallback_service(ServeDir::new(web))
+        // Everything keel serves is local and live. A cached GUI is always
+        // wrong here: after an update the appliance's own kiosk would keep
+        // drawing the previous version's pages from disk cache. "no-cache"
+        // still allows revalidation, so unchanged files come back as 304.
+        .layer(axum::middleware::from_fn(no_cache));
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let bind = std::env::var("KEEL_BIND").unwrap_or_else(|_| "127.0.0.1".into());
+    let addr: SocketAddr = format!("{bind}:{port}")
+        .parse()
+        .unwrap_or_else(|_| panic!("invalid KEEL_BIND address: {bind}"));
+    if !addr.ip().is_loopback() && !crate::auth::token_configured() {
+        panic!("KEEL_ADMIN_TOKEN is required when KEEL_BIND is not loopback");
+    }
     let listener = TcpListener::bind(addr).await.expect("bind");
-    eprintln!("keel listening on http://127.0.0.1:{port}");
-    axum::serve(listener, app).await.expect("serve");
+    eprintln!("keel listening on http://{addr}");
+    if crate::auth::loopback_trusted() {
+        eprintln!("keel trusts loopback requests without a token (local console)");
+    }
+    // Connect info is what lets `auth::require_admin` tell a local kiosk request
+    // from a LAN one. Without it every request looks remote and the console
+    // kiosk is locked out of its own appliance.
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .expect("serve");
+}
+
+async fn no_cache(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let mut response = next.run(request).await;
+    response.headers_mut().insert(
+        axum::http::header::CACHE_CONTROL,
+        HeaderValue::from_static("no-cache"),
+    );
+    response
 }
 
 async fn health() -> Json<Health> {
@@ -96,7 +198,10 @@ async fn health() -> Json<Health> {
     })
 }
 
-async fn system() -> ([(axum::http::header::HeaderName, HeaderValue); 1], Json<SystemSnapshot>) {
+async fn system() -> (
+    [(axum::http::header::HeaderName, HeaderValue); 1],
+    Json<SystemSnapshot>,
+) {
     let t0 = Instant::now();
     let snap = tokio::task::spawn_blocking(collect_system)
         .await
@@ -105,7 +210,12 @@ async fn system() -> ([(axum::http::header::HeaderName, HeaderValue); 1], Json<S
     (timing_header(ms), Json(snap))
 }
 
-async fn disks(State(state): State<AppState>) -> ([(axum::http::header::HeaderName, HeaderValue); 1], Json<Vec<Disk>>) {
+async fn disks(
+    State(state): State<AppState>,
+) -> (
+    [(axum::http::header::HeaderName, HeaderValue); 1],
+    Json<Vec<Disk>>,
+) {
     let t0 = Instant::now();
     let list = state.inventory.disks().await;
     (timing_header(t0.elapsed()), Json(list))
@@ -128,32 +238,58 @@ async fn pools_create(
         .map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
-async fn shares(State(state): State<AppState>) -> Json<Vec<Share>> {
-    Json(state.store.lock().await.shares.clone())
+async fn shares(State(state): State<AppState>) -> Json<Vec<ShareView>> {
+    let shares = state.store.lock().await.shares.clone();
+    Json(
+        tokio::task::spawn_blocking({
+            let shares = shares.clone();
+            move || crate::smb::decorate(&shares)
+        })
+        .await
+        .unwrap_or_else(|_| crate::smb::decorate(&shares)),
+    )
 }
 
 async fn shares_create(
     State(state): State<AppState>,
     Json(req): Json<NewShare>,
-) -> Result<Json<Share>, (StatusCode, String)> {
-    state
-        .store
-        .lock()
-        .await
+) -> Result<Json<ShareView>, (StatusCode, String)> {
+    let mut store = state.store.lock().await;
+    let share = store
         .add_share(req)
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let shares = store.shares.clone();
+    drop(store);
+    let views = tokio::task::spawn_blocking({
+        let shares = shares.clone();
+        move || {
+            crate::smb::apply(&shares);
+            crate::smb::decorate(&shares)
+        }
+    })
+    .await
+    .unwrap_or_else(|_| crate::smb::decorate(&shares));
+    let view = views
+        .into_iter()
+        .find(|item| item.name == share.name)
+        .ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "share was saved but not listed".into(),
+            )
+        })?;
+    Ok(Json(view))
 }
 
 fn power_state() -> Power {
     let idle = IDLE.load(Ordering::Relaxed);
     Power {
-        policy: "tailscale-floor",
+        policy: "overlay-floor",
         mode: if idle { "idle" } else { "active" },
         host_sleep_allowed: false,
         services_stopped: idle,
-        tailscale_required: true,
-        why: "Idle keeps the host on and Tailscale running so you can open files and the GUI when you are not at home. The rest of the catalog is installed, not running — like an OS with apps closed. keel stays up as the small control plane. Host S3 is off: that would kill Tailscale and the file path.",
+        overlay_required: true,
+        why: "Idle keeps the host on and the selected overlay running so you can open files and the GUI when you are not at home. The rest of the catalog is installed, not running — like an OS with apps closed. keel stays up as the small control plane. Host S3 is off: that would kill the overlay and the file path.",
     }
 }
 
@@ -188,7 +324,51 @@ async fn issues_list(State(state): State<AppState>) -> Json<IssuesReport> {
 }
 
 async fn repair_run(Json(req): Json<RepairRequest>) -> Json<RepairResult> {
+    if req.id.starts_with("restart-") {
+        return Json(
+            tokio::task::spawn_blocking(move || crate::services::restart(&req.id))
+                .await
+                .unwrap_or_else(|_| RepairResult {
+                    ok: false,
+                    id: "restart".into(),
+                    message: "Could not start the service restart.".into(),
+                }),
+        );
+    }
     Json(crate::issues::apply(&req.id))
+}
+
+async fn installer_status(State(state): State<AppState>) -> Json<crate::model::InstallerStatus> {
+    Json(crate::installer::status(state.inventory.disks().await))
+}
+
+async fn installer_plan(
+    Json(plan): Json<InstallerPlan>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    crate::installer::validate_plan(&plan)
+        .map(|message| Json(serde_json::json!({ "ok": true, "message": message })))
+        .map_err(|message| (StatusCode::BAD_REQUEST, message))
+}
+
+async fn apps_list() -> Json<Vec<crate::apps::AppManifest>> {
+    let idle = IDLE.load(Ordering::Relaxed);
+    Json(crate::apps::manifests(idle))
+}
+
+async fn app_action(
+    Path(id): Path<String>,
+    Json(req): Json<crate::apps::ActionRequest>,
+) -> Json<RepairResult> {
+    let fallback_id = id.clone();
+    Json(
+        tokio::task::spawn_blocking(move || crate::apps::action(&id, &req.action))
+            .await
+            .unwrap_or_else(|_| RepairResult {
+                ok: false,
+                id: fallback_id,
+                message: "Could not start the app action.".into(),
+            }),
+    )
 }
 
 async fn notes_list(State(state): State<AppState>) -> Json<Vec<Note>> {
@@ -285,18 +465,12 @@ async fn look_session(State(state): State<AppState>) -> Json<crate::files::Sessi
 async fn look_files(
     State(state): State<AppState>,
 ) -> Result<Json<crate::files::FilesReport>, (StatusCode, String)> {
-    let session = state
-        .store
-        .lock()
-        .await
-        .live
-        .clone()
-        .ok_or_else(|| {
-            (
-                StatusCode::UNAUTHORIZED,
-                "sign in to Proxmox on Pools first".to_string(),
-            )
-        })?;
+    let session = state.store.lock().await.live.clone().ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            "sign in to Proxmox on Pools first".to_string(),
+        )
+    })?;
     crate::files::inventory(&session)
         .await
         .map(Json)
@@ -322,9 +496,85 @@ async fn power_opportunities() -> Json<Vec<Opportunity>> {
     Json(crate::advisor::opportunities(idle, snap.cpu_pct))
 }
 
+async fn auth_login(
+    Json(req): Json<crate::auth::LoginRequest>,
+) -> Result<(HeaderMap, Json<serde_json::Value>), (StatusCode, String)> {
+    if !crate::auth::token_configured() {
+        return Err((
+            StatusCode::NOT_IMPLEMENTED,
+            "admin authentication is not configured".into(),
+        ));
+    }
+    if !crate::auth::verify(&req.token) {
+        return Err((StatusCode::UNAUTHORIZED, "invalid admin token".into()));
+    }
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        SET_COOKIE,
+        HeaderValue::from_str(&format!(
+            "keel_session={}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400",
+            req.token
+        ))
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid token".into()))?,
+    );
+    Ok((
+        headers,
+        Json(serde_json::json!({ "ok": true, "message": "signed in" })),
+    ))
+}
+
+async fn overlay_status() -> Json<crate::overlay::Status> {
+    Json(
+        tokio::task::spawn_blocking(crate::overlay::status)
+            .await
+            .unwrap_or_else(|_| crate::overlay::Status {
+                provider: crate::overlay::Provider::Unknown,
+                state: crate::overlay::State::Unavailable,
+                control_url: None,
+                overlay_ip: None,
+                dns_name: None,
+                why: "Could not collect overlay status.".into(),
+            }),
+    )
+}
+
+async fn services_status() -> Json<Vec<crate::services::ServiceStatus>> {
+    Json(
+        tokio::task::spawn_blocking(crate::services::core_status)
+            .await
+            .unwrap_or_default(),
+    )
+}
+
+async fn network_ports() -> Json<Vec<crate::services::PortStatus>> {
+    Json(
+        tokio::task::spawn_blocking(crate::services::port_status)
+            .await
+            .unwrap_or_default(),
+    )
+}
+
+async fn overlay_enroll(
+    Json(req): Json<crate::overlay::EnrollRequest>,
+) -> Json<crate::overlay::EnrollResult> {
+    Json(
+        tokio::task::spawn_blocking(|| crate::overlay::enroll(req))
+            .await
+            .unwrap_or_else(|_| crate::overlay::EnrollResult {
+                ok: false,
+                provider: crate::overlay::Provider::Unknown,
+                message: "Could not start overlay enrollment.".into(),
+            }),
+    )
+}
+
 fn timing_header(d: Duration) -> [(axum::http::header::HeaderName, HeaderValue); 1] {
-    let val = HeaderValue::from_str(&format!("{}ms", d.as_millis().max(1))).unwrap_or(HeaderValue::from_static("1ms"));
-    [(axum::http::header::HeaderName::from_static("server-timing"), val)]
+    let val = HeaderValue::from_str(&format!("{}ms", d.as_millis().max(1)))
+        .unwrap_or(HeaderValue::from_static("1ms"));
+    [(
+        axum::http::header::HeaderName::from_static("server-timing"),
+        val,
+    )]
 }
 
 fn collect_system() -> SystemSnapshot {
@@ -339,10 +589,32 @@ fn collect_system() -> SystemSnapshot {
     SystemSnapshot {
         hostname: System::host_name().unwrap_or_else(|| "keel".into()),
         os: System::long_os_version().unwrap_or_else(|| std::env::consts::OS.into()),
+        platform: std::env::consts::OS,
+        addresses: local_addresses(),
         cpu_pct: sys.global_cpu_usage(),
         mem_used: sys.used_memory(),
         mem_total: sys.total_memory(),
         daemon_rss: rss,
         cores: sys.cpus().len() as u32,
     }
+}
+
+/// The addresses another computer on the house network can use to reach this
+/// machine. Link-local and loopback are dropped: they are noise to the owner,
+/// who is being told "type this into your browser".
+fn local_addresses() -> Vec<String> {
+    let networks = Networks::new_with_refreshed_list();
+    let mut found: Vec<String> = networks
+        .iter()
+        .flat_map(|(_, data)| data.ip_networks())
+        .filter_map(|net| match net.addr {
+            IpAddr::V4(v4) if !v4.is_loopback() && !v4.is_link_local() && !v4.is_unspecified() => {
+                Some(v4.to_string())
+            }
+            _ => None,
+        })
+        .collect();
+    found.sort();
+    found.dedup();
+    found
 }

@@ -2,7 +2,52 @@
 
 keel is a **Debian-class appliance**, not a general Linux distro. We take the kernel, glibc, systemd, and a named package list from Debian stable. We do not take “Debian” as a lifestyle (no desktop, no tasksel, no recommended-by-default pile).
 
-`keel` is the control plane. systemd is PID 1. No graphical login on the box.
+`keel` is the control plane. systemd is PID 1.
+
+**The box has a screen and it is graphical.** keel is a newbie appliance: a
+person who has never opened a terminal must be able to plug in a monitor and use
+it. No login prompt, no scrolling boot text, no shell — ever, on the normal
+path. The local screen is a Wayland kiosk (`cage`) running one full-screen
+browser against `127.0.0.1:9478`, which is the same UI a Windows browser reaches
+over the LAN. One codebase, two surfaces.
+
+This reverses an earlier "no graphical login on the box" rule. That rule bought
+a small root and low idle watts, and it cost the product its audience: the
+appliance's own screen showed a Debian login prompt. The trade is now explicit —
+chromium, mesa's DRI drivers and xwayland are roughly 500-700 MB installed
+(rather less after squashfs compression), and the browser idles at a few hundred
+MB of RAM. Idle mitigation is blank-and-stop, not removal.
+
+A terminal still exists for recovery, on `Ctrl+Alt+F3` and over SSH. It is not
+advertised and nothing on the normal path leads to it.
+
+The initial service contract is in `packaging/systemd/keel.service`. The unit
+is intentionally not the final privilege boundary: storage and network
+mutations should move behind a narrow helper before production LAN exposure.
+
+## Console trust
+
+The kiosk cannot authenticate the way a LAN browser does. The admin token is
+readable only from a terminal, and the terminal is exactly what the appliance
+must never show. So `KEEL_TRUST_LOOPBACK=1` (set by the live drop-in, off
+everywhere else) lets requests arriving on loopback skip the token. LAN requests
+are unaffected and still need it.
+
+The justification is physical: whoever is at the keyboard can already power-cycle
+the box and boot it single-user, so they are root-equivalent regardless.
+
+**Never put a reverse proxy in front of keel while this is on.** A proxy on the
+same host makes every forwarded request look like loopback, which converts the
+console exemption into an unauthenticated admin API for the whole network. keel
+ignores `X-Forwarded-For` on purpose; trusting it would be the same hole with
+extra steps.
+
+The cost is that *every* local process gets admin, not just the kiosk — which
+matters because catalog apps are meant to run natively on this host. The fix,
+when catalog apps land: give keel a second listener on a unix socket owned
+`root:keel-kiosk` mode 0660 and exempt that socket instead of an IP. Filesystem
+permissions then name the kiosk exactly. Do this before the first native catalog
+app ships.
 
 ## Effective / quick / accurate
 
@@ -10,7 +55,14 @@ keel is a **Debian-class appliance**, not a general Linux distro. We take the ke
 | --- | --- |
 | Effective | Disks → pool → share; catalog on demand; overlay floor so files work away; Guide that tells the truth |
 | Quick | Fast install (copy a baked root), fast boot (few units), fast GUI, idle watts |
-| Accurate | Live unit state, real `lsblk`/SMART, checksummed image, clock sync *after* boot, advisor evidence not guesses |
+| Accurate | Live unit state, real `lsblk`, checksummed image, clock sync *after* boot, advisor evidence not guesses |
+
+**SMART is not implemented.** Nothing in `src/` calls `smartctl`; the Dashboard
+lists disks but never their health, and the Guide now says so rather than
+implying a Windows-only gap. `smartmontools` is named in `keel-packages.list`
+but that list is not used by the remaster path, so it is not in the image
+either. Until this is built, the accuracy claim above covers disk *identity*,
+not disk *health*.
 
 Speed comes from **less software running**, not from lying. Accuracy comes from **Debian’s kernel + our sensors**, not from reimplementing Linux.
 
@@ -25,12 +77,33 @@ Speed comes from **less software running**, not from lying. Accuracy comes from 
 - samba (or equivalent) when we wire shares — must listen on LAN and on the overlay
 - smartmontools
 - keel.service
+- cage + chromium — the appliance screen; one full-screen browser on
+  `127.0.0.1:9478`, no desktop, no window chrome, nothing to exit into.
+  Debian's cage pulls in xwayland as a hard dependency. This is the largest
+  thing in the image and roughly two thirds of it is avoidable — see
+  `size.md` for the cog/WPE swap that drops the compositor entirely
+- libgl1-mesa-dri + fonts-dejavu-core — what cage and the browser need to draw
+  on real hardware
+- curl — the kiosk waits on `/api/health` before drawing its first frame
+
+**Not Plymouth, yet.** A splash draws from the initramfs, and the remaster reuses
+Debian's stock `/live/initrd.img` instead of regenerating it, so Plymouth in the
+squashfs would never run. Boot is silenced with `quiet loglevel=3
+systemd.show_status=false` instead: blank rather than splashed. Real Plymouth
+needs `update-initramfs` in the rootfs and the result mapped over
+`/live/initrd.img`, which can produce an unbootable ISO and deserves its own
+change.
 
 - **Disk layer:** local ZFS/mdadm **or** a foreign NFS/SMB/iSCSI from TrueNAS/Proxmox. Not both pretending to be one vdev.
 
 **Catalog:** separate image/stream. Installed, stopped. Not in the one-minute root.
 
-**Do not take:** GNOME/KDE, snap, cloud-init, cups, avahi-by-default, popularity-contest, unattended-upgrades that block boot, `Recommends` flood (`apt --no-install-recommends`), extra syslog stacks, Plymouth themes, a local display manager.
+**Do not take:** GNOME/KDE, snap, cloud-init, cups, avahi-by-default, popularity-contest, unattended-upgrades that block boot, `Recommends` flood (`apt --no-install-recommends`), extra syslog stacks, a local display manager.
+
+A kiosk compositor is not a desktop. `cage` draws one window and has no
+launcher, no file manager, no settings app, and no way for a user to reach a
+second program. A display manager is still refused: there is no one to log in
+as, because there is no login.
 
 Build with `debootstrap --variant=minbase` (or equivalent) plus the list above. If a package has no sentence in this file, it does not go in the root image.
 

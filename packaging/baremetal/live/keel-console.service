@@ -1,0 +1,11 @@
+[Unit]
+Description=Show Keel live access details on the local screen
+After=keel.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/keel/show-access.sh
+
+[Install]
+WantedBy=multi-user.target

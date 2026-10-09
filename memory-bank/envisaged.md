@@ -22,9 +22,11 @@ Optional bundle to Loom/Chef. Local Repair must work first. See health-and-repai
 
 ## Explicitly not keel
 
+Parked product thoughts live in `E:\Personal Projects\ideas` (video brand/SaaS, thin files app). They are not Keel work.
+
 - Hypervisor UI (rok stays Proxmox)
 - Plugin bazaar
-- Second OpenCloud
+- Second OpenCloud (SMB is the file path; a web files UI is an idea note, not the catalog)
 - Host S3 as the energy strategy
 - TUI admin
 - Running Chef/Loom on the NAS

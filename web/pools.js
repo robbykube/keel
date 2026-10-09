@@ -1,4 +1,17 @@
 const $ = (id) => document.getElementById(id);
+const NAMES_KEY = "keel-their-names";
+let lastPlaces = [];
+let lastListing = null;
+
+function showTheirNames() {
+  return localStorage.getItem(NAMES_KEY) === "1";
+}
+
+function displayName(plain, their) {
+  const t = String(their || "").trim();
+  if (showTheirNames() && t) return t;
+  return plain;
+}
 
 function where(kind) {
   return kind === "foreign" ? "another computer" : "this machine";
@@ -99,16 +112,16 @@ $("lookform").addEventListener("submit", async (e) => {
       ? open
           .map(
             (h) =>
-              `<article class="opp"><h3>${h.name} · ${h.port}</h3><p>${h.hint}</p>${
+              `<article class="opp"><h3>${escapeHtml(h.name)}</h3><p>${escapeHtml(h.hint)}</p>${
                 h.fill
-                  ? `<button type="button" data-fill="${encodeURIComponent(h.fill)}">Use ${h.fill}</button>`
+                  ? `<button type="button" data-fill="${encodeURIComponent(h.fill)}">Use this folder</button>`
                   : ""
               }</article>`
           )
           .join("")
-      : `<p class="prose">Nothing answered. Wrong name, asleep, or a firewall. Try the LAN number from Proxmox / TrueNAS itself.</p>`) +
+      : `<p class="prose">Nothing answered. Wrong name, the computer is off, or a firewall is in the way. Try the address you already use in the browser.</p>`) +
     (closed.length
-      ? `<p class="meta">Quiet: ${closed.map((h) => h.name).join(", ")}</p>`
+      ? `<p class="meta">Nothing else answered.</p>`
       : "");
 });
 
@@ -197,15 +210,24 @@ $("places").addEventListener("click", (e) => {
   useAddress(decodeURIComponent(raw), name);
 });
 
+function proposalLabel(p) {
+  if (p === "use") return "Use this";
+  if (p === "list") return "You can list this";
+  if (p === "leave") return "Leave this";
+  return "";
+}
+
 function renderPlaces(places) {
+  lastPlaces = places || [];
   $("places").hidden = false;
   $("places").innerHTML =
-    (places || [])
+    (lastPlaces)
       .map((p) => {
+        const shown = displayName(p.title, p.their_name);
         const btns = [];
-        if (p.address) {
+        if (p.proposal !== "leave" && p.address) {
           btns.push(
-            `<button type="button" data-fill="${encodeURIComponent(p.address)}" data-name="${encodeURIComponent(p.title)}">Use ${p.address}</button>`
+            `<button type="button" data-fill="${encodeURIComponent(p.address)}" data-name="${encodeURIComponent(shown)}">Use this folder</button>`
           );
         }
         if (p.open_url) {
@@ -214,9 +236,10 @@ function renderPlaces(places) {
         if (p.browse) {
           btns.push(`<button type="button" data-browse="${encodeURIComponent(p.browse)}">List files</button>`);
         }
-        return `<article class="opp"><h3>${escapeHtml(p.title)} · ${escapeHtml(p.kind)}</h3><p>${escapeHtml(p.why)}</p>${btns.join(" ")}</article>`;
+        const tag = proposalLabel(p.proposal);
+        return `<article class="opp ${escapeHtml(p.proposal || "")}"><h3>${escapeHtml(shown)}${tag ? ` · ${tag}` : ""}</h3><p>${escapeHtml(p.why)}</p>${btns.join(" ")}</article>`;
       })
-      .join("") || `<p class="prose">Signed in, but no folders to copy. That machine may only have VM disks.</p>`;
+      .join("") || `<p class="prose">Signed in. No shared folder a PC can open. Family files may still be in the files app.</p>`;
 }
 
 function viaOf(browse) {
@@ -275,13 +298,15 @@ function bytes(n) {
 }
 
 function renderListing(report) {
+  lastListing = report;
   $("listing").hidden = false;
   const rows = (report.entries || [])
     .map((e) => {
+      const shown = displayName(e.name, e.their_name);
       const btns = [];
-      if (e.address) {
+      if (e.proposal !== "leave" && e.address) {
         btns.push(
-          `<button type="button" data-fill="${encodeURIComponent(e.address)}" data-name="${encodeURIComponent(e.name)}">Use ${e.address}</button>`
+          `<button type="button" data-fill="${encodeURIComponent(e.address)}" data-name="${encodeURIComponent(shown)}">Use this folder</button>`
         );
       }
       if (e.open_url) {
@@ -291,7 +316,8 @@ function renderListing(report) {
         btns.push(`<button type="button" data-browse="${encodeURIComponent(e.browse)}">List</button>`);
       }
       const sz = e.size ? ` · ${bytes(e.size)}` : "";
-      return `<article class="opp"><h3>${escapeHtml(e.name)} · ${escapeHtml(e.kind)}${sz}</h3><p>${escapeHtml(e.why)}</p>${btns.join(" ")}</article>`;
+      const tag = proposalLabel(e.proposal);
+      return `<article class="opp ${escapeHtml(e.proposal || "")}"><h3>${escapeHtml(shown)}${tag ? ` · ${tag}` : ""}${sz}</h3><p>${escapeHtml(e.why)}</p>${btns.join(" ")}</article>`;
     })
     .join("");
   $("listing").innerHTML =
@@ -353,10 +379,19 @@ async function restoreSession() {
       why: e.why,
       browse: e.browse,
       open_url: e.open_url,
+      proposal: e.proposal,
+      their_name: e.their_name,
     }))
   );
   $("filesform").hidden = false;
 }
+
+$("theirnames").checked = showTheirNames();
+$("theirnames").addEventListener("change", () => {
+  localStorage.setItem(NAMES_KEY, $("theirnames").checked ? "1" : "0");
+  if (lastPlaces.length) renderPlaces(lastPlaces);
+  if (lastListing) renderListing(lastListing);
+});
 
 load().then(restoreSession).catch((err) => {
   $("status").textContent = String(err);

@@ -58,6 +58,10 @@ pub struct Place {
     pub browse: String,
     #[serde(default)]
     pub open_url: String,
+    #[serde(default)]
+    pub proposal: String,
+    #[serde(default)]
+    pub their_name: String,
 }
 
 #[derive(Serialize)]
@@ -112,7 +116,7 @@ pub async fn https_hint(host: &str) -> Option<String> {
                 || body.contains("pve")
                 || body.contains("proxmox")
             {
-                return Some("This looks like Proxmox behind a website door. Port 8006 can stay quiet when a front door sits in front. Sign in below. The password stays on this PC in keel — do not paste it into chat.".into());
+                return Some("This looks like Proxmox behind a website. Sign in below. The password stays on this PC in keel — do not paste it into chat.".into());
             }
         }
         let tn = format!("{base}/api/v2.0/system/info");
@@ -151,7 +155,17 @@ pub async fn login(req: &LoginRequest) -> Result<(LoginReport, Option<AuthSessio
     let client = client(req.insecure)?;
     let mut last = "sign-in did not match Proxmox or TrueNAS at that address".to_string();
     for base in bases(&host) {
-        match pve_login(&client, &host, &base, username, &req.password, &req.realm, req.insecure).await {
+        match pve_login(
+            &client,
+            &host,
+            &base,
+            username,
+            &req.password,
+            &req.realm,
+            req.insecure,
+        )
+        .await
+        {
             Ok((report, session)) => return Ok((report, Some(session))),
             Err(e) => last = e,
         }
@@ -205,8 +219,8 @@ async fn pve_login(
     if !status.is_success() {
         return Err("that website is not answering as Proxmox".into());
     }
-    let wrap: PveTicketWrap =
-        serde_json::from_str(&body).map_err(|_| "that website is not answering as Proxmox".to_string())?;
+    let wrap: PveTicketWrap = serde_json::from_str(&body)
+        .map_err(|_| "that website is not answering as Proxmox".to_string())?;
 
     let mut headers = HeaderMap::new();
     let cookie = format!("PVEAuthCookie={}", wrap.data.ticket);
@@ -234,14 +248,17 @@ async fn pve_login(
     for name in &nodes {
         places.extend(crate::files::guest_file_places(client, &headers, base, name).await);
         places.push(Place {
-            title: format!("Node {name}"),
+            title: "This computer".into(),
             kind: "proxmox-node".into(),
             address: String::new(),
-            why: "This is the Proxmox machine itself, not a file folder. Leave it running. keel should not reimage it.".into(),
+            why: format!("The machine itself. Leave it running. Do not replace its system. It calls itself {name}."),
             browse: String::new(),
             open_url: String::new(),
+            proposal: "leave".into(),
+            their_name: name.clone(),
         });
     }
+    places.sort_by_key(|p| crate::files::sort_key(&p.proposal));
 
     let session = AuthSession {
         product: "proxmox".into(),
@@ -259,13 +276,17 @@ async fn pve_login(
             product: "proxmox".into(),
             who: session.who.clone(),
             places,
-            why: "Signed in to Proxmox. Family files live in the files app (OpenCloud), not on local/vm-data. Use Check files to list. Shared folders still have a Use button. Do not point a pool at local.".into(),
+            why: "Signed in. Family files are in the files app. Do not use disks that belong to other programs on that computer. Shared folders have Use this.".into(),
         },
         session,
     ))
 }
 
-pub(crate) async fn get_json(client: &reqwest::Client, url: &str, headers: &HeaderMap) -> Result<Value, String> {
+pub(crate) async fn get_json(
+    client: &reqwest::Client,
+    url: &str,
+    headers: &HeaderMap,
+) -> Result<Value, String> {
     let res = client
         .get(url)
         .headers(headers.clone())
@@ -275,7 +296,9 @@ pub(crate) async fn get_json(client: &reqwest::Client, url: &str, headers: &Head
     if !res.status().is_success() {
         return Err("signed in, but listing storage was refused".into());
     }
-    res.json().await.map_err(|_| "signed in, but the storage list was not readable".to_string())
+    res.json()
+        .await
+        .map_err(|_| "signed in, but the storage list was not readable".to_string())
 }
 
 fn places_from_pve_storage(host: &str, node: &str, v: &Value) -> Vec<Place> {
@@ -292,6 +315,7 @@ fn places_from_pve_storage(host: &str, node: &str, v: &Value) -> Vec<Place> {
                 .to_string();
             let path = item.get("path").and_then(|x| x.as_str()).unwrap_or("");
             let browse = format!("storage:{node}:{name}");
+            let (title, proposal, why) = crate::files::describe_storage(&name, &kind);
             match kind.as_str() {
                 "cifs" | "smb" => {
                     let server = item.get("server").and_then(|x| x.as_str()).unwrap_or(host);
@@ -302,41 +326,39 @@ fn places_from_pve_storage(host: &str, node: &str, v: &Value) -> Vec<Place> {
                         .unwrap_or_else(|| name.clone());
                     let address = format!(r"\\{server}\{share}");
                     Some(Place {
-                        title: name,
+                        title,
                         kind: "windows-folder".into(),
                         address: address.clone(),
-                        why: "A Windows-style folder already shared. Use it as a pool, or List files to check what is in it.".into(),
+                        why,
                         browse: format!("smb:{address}"),
                         open_url: String::new(),
+                        proposal,
+                        their_name: name.clone(),
                     })
                 }
                 "nfs" => {
                     let server = item.get("server").and_then(|x| x.as_str()).unwrap_or(host);
                     let export = item.get("export").and_then(|x| x.as_str()).unwrap_or(path);
                     Some(Place {
-                        title: name,
+                        title,
                         kind: "nfs".into(),
                         address: format!("{server}:{export}"),
-                        why: "A Unix-style folder share. Fine as a pool on another computer. List files shows what Proxmox sees on it.".into(),
+                        why,
                         browse,
                         open_url: String::new(),
+                        proposal,
+                        their_name: name.clone(),
                     })
                 }
-                "dir" if name == "local" => Some(Place {
-                    title: name,
-                    kind: "proxmox-disk".into(),
-                    address: String::new(),
-                    why: "Proxmox’s own disk (ISO/templates). Often already full. Not a family folder. You can still list what is on it.".into(),
-                    browse,
-                    open_url: String::new(),
-                }),
                 _ => Some(Place {
-                    title: name,
-                    kind: "proxmox-disk".into(),
+                    title,
+                    kind: "leave".into(),
                     address: String::new(),
-                    why: format!("Proxmox storage ({kind}). Disks for VMs and LXCs, not a door you open on a laptop. List files shows the images. Family files are in the files app."),
+                    why,
                     browse,
                     open_url: String::new(),
+                    proposal,
+                    their_name: name.clone(),
                 }),
             }
         })
@@ -385,9 +407,13 @@ async fn tn_login(
                         title: name.clone(),
                         kind: "windows-folder".into(),
                         address: format!(r"\\{host}\{name}"),
-                        why: format!("TrueNAS folder. On that machine it lives at {path}."),
+                        why: format!(
+                            "A shared folder a PC can open. Path on that machine: {path}."
+                        ),
                         browse: format!(r"smb:\\{host}\{name}"),
                         open_url: String::new(),
+                        proposal: "use".into(),
+                        their_name: name.clone(),
                     });
                 }
             }
@@ -405,9 +431,11 @@ async fn tn_login(
                                 title: name.into(),
                                 kind: "truenas-pool".into(),
                                 address: format!("/mnt/{name}"),
-                                why: "A TrueNAS bucket. Prefer a named Windows folder above if you see one — that is what a PC opens.".into(),
+                                why: "Storage on that computer. Prefer a named shared folder above if you see one — that is what a PC opens.".into(),
                                 browse: String::new(),
                                 open_url: String::new(),
+                                proposal: "leave".into(),
+                                their_name: name.into(),
                             });
                         }
                     }
@@ -421,7 +449,7 @@ async fn tn_login(
         product: "truenas".into(),
         who: username.into(),
         places,
-        why: "Signed in to TrueNAS. Named Windows folders are the addresses keel can use as a pool on another computer.".into(),
+        why: "Signed in. Shared folders a PC can open are listed first. Use those.".into(),
     })
 }
 

@@ -34,6 +34,7 @@ Windows is for building the GUI and for `keelctl`, not the NAS OS.
 - setup-and-report.md (few-question setup)
 - storage-backends.md (keep data on Proxmox/TrueNAS; keel is the rest)
 - words.md (plain language for the GUI)
+- ui.md (Cerebro interaction/layout intents; Keel keeps its own look)
 
 The product is the OS. This repo’s v0 is the GUI daemon; ISO later. Existing Linux is a bootstrap path, not the end state.
 

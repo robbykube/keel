@@ -20,6 +20,7 @@ impl Store {
             notes: load_notes(),
             saved_remote: load_remote(),
             pools: load_pools(),
+            shares: load_shares(),
             ..Self::default()
         }
     }
@@ -38,7 +39,10 @@ impl Store {
         };
         let source = req.source.trim().to_string();
         if kind == "foreign" && source.is_empty() {
-            return Err("for a pool on another computer, paste the folder address that machine shows you".into());
+            return Err(
+                "for a pool on another computer, paste the folder address that machine shows you"
+                    .into(),
+            );
         }
         let pool = Pool {
             name,
@@ -57,6 +61,12 @@ impl Store {
         if name.is_empty() {
             return Err("name required".into());
         }
+        if !crate::smb::valid_share_name(&name) {
+            return Err("use letters, numbers, dash, or underscore for the share name".into());
+        }
+        if self.shares.iter().any(|item| item.name == name) {
+            return Err("share already exists".into());
+        }
         if self.pools.is_empty() {
             return Err("create a pool first".into());
         }
@@ -70,7 +80,16 @@ impl Store {
             protocol: "smb".into(),
         };
         self.shares.push(share.clone());
+        save_shares(&self.shares)?;
         Ok(share)
+    }
+
+    pub fn ensure_default_share(&mut self, share: Share) {
+        if self.shares.iter().any(|item| item.name == share.name) {
+            return;
+        }
+        self.shares.push(share);
+        let _ = save_shares(&self.shares);
     }
 
     pub fn add_note(&mut self, req: NewNote) -> Result<Note, String> {
@@ -139,7 +158,9 @@ impl Store {
             .hosts
             .retain(|h| !h.host.eq_ignore_ascii_case(host));
         let username = if username.trim().is_empty() {
-            prev.as_ref().map(|p| p.username.clone()).unwrap_or_default()
+            prev.as_ref()
+                .map(|p| p.username.clone())
+                .unwrap_or_default()
         } else {
             username.trim().to_string()
         };
@@ -162,7 +183,8 @@ impl Store {
     }
 
     pub fn remember_remote(&mut self, req: &LoginRequest) {
-        let host = crate::discover::normalize_host(&req.host).unwrap_or_else(|_| req.host.trim().to_string());
+        let host = crate::discover::normalize_host(&req.host)
+            .unwrap_or_else(|_| req.host.trim().to_string());
         self.remember_host(&host, req.username.trim(), req.realm.trim());
     }
 
@@ -263,5 +285,26 @@ fn save_pools(pools: &[Pool]) -> Result<(), String> {
         fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
     let bytes = serde_json::to_vec_pretty(pools).map_err(|e| e.to_string())?;
+    fs::write(path, bytes).map_err(|e| e.to_string())
+}
+
+fn shares_path() -> PathBuf {
+    let dir = std::env::var("KEEL_DATA").unwrap_or_else(|_| "data".into());
+    PathBuf::from(dir).join("shares.json")
+}
+
+fn load_shares() -> Vec<Share> {
+    fs::read(shares_path())
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default()
+}
+
+fn save_shares(shares: &[Share]) -> Result<(), String> {
+    let path = shares_path();
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let bytes = serde_json::to_vec_pretty(shares).map_err(|e| e.to_string())?;
     fs::write(path, bytes).map_err(|e| e.to_string())
 }
