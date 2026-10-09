@@ -64,15 +64,22 @@ pub fn install(plan: &InstallerPlan, disks: &[Disk]) -> Result<String, String> {
     let result = Command::new(INSTALLER_HELPER)
         .arg(&plan.target)
         .env("KEEL_INSTALL_CONFIRM", &plan.confirmation)
-        .status()
+        .output()
         .map_err(|e| format!("could not start the installer: {e}"))?;
-    if !result.success() {
-        return Err(format!(
-            "installer stopped without completing (status {result})"
-        ));
+    if !result.status.success() {
+        let detail = String::from_utf8_lossy(&result.stderr).trim().to_string();
+        return Err(if detail.is_empty() {
+            format!(
+                "installer stopped without completing (status {})",
+                result.status
+            )
+        } else {
+            format!("installer stopped without completing: {detail}")
+        });
     }
+    let detail = String::from_utf8_lossy(&result.stdout).trim().to_string();
     Ok(format!(
-        "Keel was installed to {}. Remove the USB and reboot.",
+        "Keel was installed to {}. Remove the USB and reboot. {detail}",
         plan.target
     ))
 }

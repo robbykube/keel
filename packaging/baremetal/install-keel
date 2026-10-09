@@ -57,10 +57,15 @@ mount -t proc proc "${MOUNT}/proc"
 mount -t sysfs sysfs "${MOUNT}/sys"
 mount -t tmpfs tmpfs "${MOUNT}/run"
 mkdir -p "${MOUNT}/etc/keel"
-printf 'KEEL_ADMIN_TOKEN=\n' > "${MOUNT}/etc/keel/keel.env"
+TOKEN="keel-$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')"
+printf 'KEEL_ADMIN_TOKEN=%s\n' "${TOKEN}" > "${MOUNT}/etc/keel/keel.env"
+install -d -m 0700 "${MOUNT}/var/lib/keel"
+printf '%s\n' "${TOKEN}" > "${MOUNT}/var/lib/keel/admin-token"
+chmod 0600 "${MOUNT}/var/lib/keel/admin-token"
 chroot "${MOUNT}" systemctl enable keel.service
 chroot "${MOUNT}" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Keel --no-nvram --recheck
 chroot "${MOUNT}" grub-install --target=i386-pc "${TARGET}" --recheck
 chroot "${MOUNT}" update-grub
 sync
 echo "Keel installation completed for ${TARGET}."
+echo "Admin token: ${TOKEN} (also saved in /var/lib/keel/admin-token)"
