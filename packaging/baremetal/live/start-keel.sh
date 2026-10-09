@@ -23,4 +23,5 @@ fi
 export KEEL_ADMIN_TOKEN="$(cat "${TOKEN_FILE}")"
 export KEEL_BIND=0.0.0.0
 export KEEL_PORT=9478
+export KEEL_INSTALLER_ENABLED=1
 exec /usr/bin/keel

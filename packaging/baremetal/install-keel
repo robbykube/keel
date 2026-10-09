@@ -1,0 +1,66 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+TARGET="${1:-}"
+if [[ "${EUID}" -ne 0 ]]; then echo "installer must run as root" >&2; exit 2; fi
+if [[ "${KEEL_INSTALL_CONFIRM:-}" != "INSTALL KEEL" ]]; then echo "missing installation confirmation" >&2; exit 2; fi
+if [[ ! "${TARGET}" =~ ^/dev/(sd[a-z]+|vd[a-z]+|xvd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$ ]]; then
+  echo "target is not an accepted whole disk" >&2; exit 2
+fi
+if [[ ! -b "${TARGET}" ]]; then echo "target is not a block device" >&2; exit 2; fi
+if lsblk -nrpo MOUNTPOINT "${TARGET}" | grep -q '[^[:space:]]'; then
+  echo "target or one of its partitions is mounted" >&2; exit 2
+fi
+ROOT_SOURCE="$(findmnt -no SOURCE / || true)"
+ROOT_DISK="$(lsblk -no PKNAME "${ROOT_SOURCE}" 2>/dev/null || true)"
+if [[ -n "${ROOT_DISK}" && "/dev/${ROOT_DISK}" == "${TARGET}" ]]; then
+  echo "refusing to overwrite the running system disk" >&2; exit 2
+fi
+LIVE_SOURCE="$(findmnt -no SOURCE /run/live/medium 2>/dev/null || true)"
+LIVE_DISK="$(lsblk -no PKNAME "${LIVE_SOURCE}" 2>/dev/null || true)"
+if [[ -n "${LIVE_DISK}" && "/dev/${LIVE_DISK}" == "${TARGET}" ]]; then
+  echo "refusing to overwrite the live USB disk" >&2; exit 2
+fi
+
+SOURCE="/run/live/medium/live/filesystem.squashfs"
+[[ -f "${SOURCE}" ]] || { echo "Keel live filesystem not found" >&2; exit 2; }
+MOUNT=/mnt/keel
+cleanup() { set +e; umount -R "${MOUNT}" 2>/dev/null || true; rm -rf -- "${MOUNT}"; }
+trap cleanup EXIT
+mkdir -p "${MOUNT}"
+
+wipefs -a "${TARGET}"
+printf 'label: gpt\n,512M,U\n,,L\n' | sfdisk --wipe always "${TARGET}"
+partprobe "${TARGET}"
+udevadm settle
+if [[ "${TARGET}" == *nvme* || "${TARGET}" == *mmcblk* ]]; then
+  EFI="${TARGET}p1"; ROOT="${TARGET}p2"
+else
+  EFI="${TARGET}1"; ROOT="${TARGET}2"
+fi
+mkfs.vfat -F 32 -n KEEL-EFI "${EFI}"
+mkfs.ext4 -F -L KEEL-ROOT "${ROOT}"
+mount "${ROOT}" "${MOUNT}"
+mkdir -p "${MOUNT}/boot/efi"
+mount "${EFI}" "${MOUNT}/boot/efi"
+unsquashfs -f -d "${MOUNT}" "${SOURCE}"
+
+ROOT_UUID="$(blkid -s UUID -o value "${ROOT}")"
+EFI_UUID="$(blkid -s UUID -o value "${EFI}")"
+cat > "${MOUNT}/etc/fstab" <<EOF
+UUID=${ROOT_UUID} / ext4 defaults 0 1
+UUID=${EFI_UUID} /boot/efi vfat umask=0077 0 2
+EOF
+mount --bind /dev "${MOUNT}/dev"
+mount --bind /dev/pts "${MOUNT}/dev/pts"
+mount -t proc proc "${MOUNT}/proc"
+mount -t sysfs sysfs "${MOUNT}/sys"
+mount -t tmpfs tmpfs "${MOUNT}/run"
+mkdir -p "${MOUNT}/etc/keel"
+printf 'KEEL_ADMIN_TOKEN=\n' > "${MOUNT}/etc/keel/keel.env"
+chroot "${MOUNT}" systemctl enable keel.service
+chroot "${MOUNT}" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Keel --no-nvram --recheck
+chroot "${MOUNT}" grub-install --target=i386-pc "${TARGET}" --recheck
+chroot "${MOUNT}" update-grub
+sync
+echo "Keel installation completed for ${TARGET}."

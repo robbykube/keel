@@ -55,6 +55,9 @@ cp "${ROOT_DIR}/packaging/baremetal/keel-packages.list" \
 cp "${KEEL_BINARY}" "${BUILD_DIR}/config/includes.chroot/usr/bin/keel"
 cp "${ROOT_DIR}/packaging/systemd/keel.service" \
   "${BUILD_DIR}/config/includes.chroot/etc/systemd/system/keel.service"
+cp "${ROOT_DIR}/packaging/baremetal/install-keel" \
+  "${BUILD_DIR}/config/includes.chroot/usr/lib/keel/install-keel"
+chmod 0755 "${BUILD_DIR}/config/includes.chroot/usr/lib/keel/install-keel"
 
 # Keep a copy of the source contract in the image for recovery and support.
 cp "${ROOT_DIR}/packaging/baremetal/README.md" \

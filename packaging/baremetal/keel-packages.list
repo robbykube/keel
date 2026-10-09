@@ -11,6 +11,10 @@ curl
 util-linux
 dosfstools
 e2fsprogs
+squashfs-tools
+grub-efi-amd64
+grub-pc-bin
+grub-pc
 smartmontools
 samba
 linux-image-amd64

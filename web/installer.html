@@ -17,7 +17,7 @@
   </aside>
   <main>
     <header><h1>Try or install Keel</h1></header>
-    <p class="lede">You are in Try mode. Nothing has been changed on an internal disk.</p>
+    <p class="lede">Try mode is safe. Installation erases the selected whole disk.</p>
     <section class="card">
       <h2>What would you like to do?</h2>
       <p><strong>Try Keel</strong> is safe for testing the screen, network, and hardware. Choose <strong>Install Keel</strong> only when you are ready to use a whole computer as your Keel appliance.</p>
@@ -25,7 +25,15 @@
     </section>
     <section class="card">
       <h2>Install safety</h2>
-      <p>Keel will show the disk name, model, and size. You must choose the disk yourself and type <code>INSTALL KEEL</code>. This screen currently creates and checks an installation plan only; it does not write a disk.</p>
+      <p>Keel will show the disk name, model, and size. You must choose the disk yourself and type <code>INSTALL KEEL</code>. The selected whole disk will be erased.</p>
+      <div id="install-form" hidden>
+        <label for="install-target">System disk</label>
+        <select id="install-target"></select>
+        <label for="install-confirm">Type INSTALL KEEL to continue</label>
+        <input id="install-confirm" autocomplete="off" />
+        <button id="install-button" type="button">Install Keel</button>
+        <p id="install-result" aria-live="polite"></p>
+      </div>
       <p><a href="/guide.html#usb-test">Read the simple USB testing guide</a></p>
     </section>
   </main>

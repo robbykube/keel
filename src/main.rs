@@ -343,9 +343,11 @@ async fn installer_status(State(state): State<AppState>) -> Json<crate::model::I
 }
 
 async fn installer_plan(
+    State(state): State<AppState>,
     Json(plan): Json<InstallerPlan>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    crate::installer::validate_plan(&plan)
+    let disks = state.inventory.disks().await;
+    crate::installer::install(&plan, &disks)
         .map(|message| Json(serde_json::json!({ "ok": true, "message": message })))
         .map_err(|message| (StatusCode::BAD_REQUEST, message))
 }
