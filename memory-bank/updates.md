@@ -1,8 +1,34 @@
 # Updates: A/B slots and rollback
 
-**Status:** design sketch, nothing built. keel currently has no update story at
-all — `os.md` describes installing by copying a baked root and says nothing
-about the second release.
+**Status:** signed program updates are implemented. Whole-disk A/B slots are
+still this design, and they are not built.
+
+What works now:
+
+- GitHub Actions publishes `keel-linux-amd64-vX.Y.Z.tar.gz`, `SHA256SUMS`, and
+  `SHA256SUMS.sig` when a `vX.Y.Z` tag is pushed. The tag must match
+  `Cargo.toml`.
+- The private signing key lives only in the GitHub Actions secret
+  `KEEL_RELEASE_SIGNING_KEY`. The matching public key is
+  `packaging/updates/release-public.hex` and is built into the `keel` binary.
+  Do not put the private key in git, memory-bank, or chat.
+- The GitHub repository is private. An appliance cannot see releases until
+  `KEEL_GITHUB_TOKEN` is set in its environment. That token is not a signing
+  key and must not be committed. Making the repository public removes the need
+  for it.
+- The dashboard checks the latest stable release and verifies the signature
+  before it will offer Install update.
+- Install saves the current program, pages, and `/var/lib/keel` settings, then
+  switches to the new program. If the new version does not answer
+  `/api/health`, or the power goes out before that answer, the boot service
+  `keel-update-rollback.service` restores the saved copy.
+- Settings written by a newer Keel than this binary understands stop startup
+  instead of being guessed.
+
+What is still the design below, not code: RAUC, a second root slot, and
+updating the operating system itself. The GitHub package is the Keel program.
+It is not a second root filesystem. Do not unpack an update over the running
+system by hand.
 
 This is the largest missing piece in the product, larger than image size.
 

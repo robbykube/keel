@@ -57,7 +57,16 @@ cp "${ROOT_DIR}/packaging/systemd/keel.service" \
   "${BUILD_DIR}/config/includes.chroot/etc/systemd/system/keel.service"
 cp "${ROOT_DIR}/packaging/baremetal/install-keel" \
   "${BUILD_DIR}/config/includes.chroot/usr/lib/keel/install-keel"
-chmod 0755 "${BUILD_DIR}/config/includes.chroot/usr/lib/keel/install-keel"
+cp "${ROOT_DIR}/packaging/baremetal/rollback-update" \
+  "${BUILD_DIR}/config/includes.chroot/usr/lib/keel/rollback-update"
+chmod 0755 "${BUILD_DIR}/config/includes.chroot/usr/lib/keel/install-keel" \
+  "${BUILD_DIR}/config/includes.chroot/usr/lib/keel/rollback-update"
+cp "${ROOT_DIR}/packaging/systemd/keel-apply-update.service" \
+  "${BUILD_DIR}/config/includes.chroot/etc/systemd/system/keel-apply-update.service"
+cp "${ROOT_DIR}/packaging/systemd/keel-apply-update.path" \
+  "${BUILD_DIR}/config/includes.chroot/etc/systemd/system/keel-apply-update.path"
+cp "${ROOT_DIR}/packaging/systemd/keel-update-rollback.service" \
+  "${BUILD_DIR}/config/includes.chroot/etc/systemd/system/keel-update-rollback.service"
 mkdir -p "${BUILD_DIR}/config/includes.chroot/usr/lib/keel/web"
 cp -a "${ROOT_DIR}/web/." "${BUILD_DIR}/config/includes.chroot/usr/lib/keel/web/"
 

@@ -120,9 +120,33 @@ fn bootstrap(options: Options) -> Result<String, String> {
     let remote_binary = format!("/tmp/keel-{suffix}");
     let remote_service = format!("/tmp/keel-service-{suffix}");
     let remote_env = format!("/tmp/keel-env-{suffix}");
+    let systemd = options
+        .service
+        .parent()
+        .ok_or("service path has no folder")?;
+    let packaging = systemd
+        .parent()
+        .ok_or("service path is not inside packaging")?;
+    let rollback = packaging.join("baremetal").join("rollback-update");
+    let apply_service = systemd.join("keel-apply-update.service");
+    let apply_path = systemd.join("keel-apply-update.path");
+    let rollback_service = systemd.join("keel-update-rollback.service");
+    for file in [&rollback, &apply_service, &apply_path, &rollback_service] {
+        if !file.is_file() {
+            return Err(format!("update file does not exist: {}", file.display()));
+        }
+    }
+    let remote_rollback = format!("/tmp/keel-rollback-{suffix}");
+    let remote_apply = format!("/tmp/keel-apply-{suffix}");
+    let remote_apply_path = format!("/tmp/keel-apply-path-{suffix}");
+    let remote_rollback_service = format!("/tmp/keel-rollback-service-{suffix}");
 
     scp(&options.binary, &options.host, &remote_binary)?;
     scp(&options.service, &options.host, &remote_service)?;
+    scp(&rollback, &options.host, &remote_rollback)?;
+    scp(&apply_service, &options.host, &remote_apply)?;
+    scp(&apply_path, &options.host, &remote_apply_path)?;
+    scp(&rollback_service, &options.host, &remote_rollback_service)?;
     let env_file = format!(
         "KEEL_ADMIN_TOKEN={}\nKEEL_BIND={}\nKEEL_PORT={}\n",
         options.admin_token, options.bind, options.port
@@ -137,10 +161,17 @@ fn bootstrap(options: Options) -> Result<String, String> {
         &format!(
             "sudo install -D -m 0755 {remote_binary} /usr/bin/keel && \
              sudo install -D -m 0644 {remote_service} /etc/systemd/system/keel.service && \
+             sudo install -D -m 0755 {remote_rollback} /usr/lib/keel/rollback-update && \
+             sudo install -D -m 0644 {remote_apply} /etc/systemd/system/keel-apply-update.service && \
+             sudo install -D -m 0644 {remote_apply_path} /etc/systemd/system/keel-apply-update.path && \
+             sudo install -D -m 0644 {remote_rollback_service} /etc/systemd/system/keel-update-rollback.service && \
              sudo install -D -m 0600 {remote_env} /etc/keel/keel.env && \
              sudo install -d -m 0700 /var/lib/keel && \
-             sudo rm -f {remote_binary} {remote_service} {remote_env} && \
-             sudo systemctl daemon-reload && sudo systemctl enable --now keel.service"
+             sudo rm -f {remote_binary} {remote_service} {remote_env} {remote_rollback} {remote_apply} {remote_apply_path} {remote_rollback_service} && \
+             sudo systemctl daemon-reload && \
+             sudo systemctl enable keel-apply-update.path && \
+             sudo systemctl enable keel-update-rollback.service && \
+             sudo systemctl enable --now keel.service"
         ),
     )?;
     let address = ssh_capture(&options.host, "hostname -I")?

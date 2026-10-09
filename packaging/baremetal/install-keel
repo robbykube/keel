@@ -63,6 +63,10 @@ install -d -m 0700 "${MOUNT}/var/lib/keel"
 printf '%s\n' "${TOKEN}" > "${MOUNT}/var/lib/keel/admin-token"
 chmod 0600 "${MOUNT}/var/lib/keel/admin-token"
 chroot "${MOUNT}" systemctl enable keel.service
+if [[ -f "${MOUNT}/etc/systemd/system/keel-apply-update.path" ]]; then
+  chroot "${MOUNT}" systemctl enable keel-apply-update.path
+  chroot "${MOUNT}" systemctl enable keel-update-rollback.service
+fi
 chroot "${MOUNT}" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Keel --no-nvram --recheck
 chroot "${MOUNT}" grub-install --target=i386-pc "${TARGET}" --recheck
 chroot "${MOUNT}" update-grub

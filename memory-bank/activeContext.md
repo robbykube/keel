@@ -21,10 +21,15 @@ rok catalog is **ship-with**. Idle = Tailscale floor (files + GUI from away). Ac
 
 Click around. Write ideas in Notes. Sign in on Pools to list files on rok (OpenCloud), without wiping anything. Do not wipe rok. Real mounts wait for Linux.
 
-The live USB image was remastered **2026-09-14 20:39** (`dist/baremetal/release/keel-amd64.iso`, Debian live 13.7.0 plus Samba). File Explorer on this house network can open `\\<keel-ip>\files` with name `keel` and password `keel`. On USB try-mode that folder is temporary. Copy the ISO onto Ventoy’s data partition. It still does **not** install to an internal disk. Do not write USB or touch rok unless asked.
+The live USB image was remastered **2026-09-14 20:39** (`dist/baremetal/release/keel-amd64.iso`, Debian live 13.7.0 plus Samba). That file is older than the guarded installer and the signed-update units. File Explorer on this house network can open `\\<keel-ip>\files` with name `keel` and password `keel`. On USB try-mode that folder is temporary. Copy a newly built ISO onto Ventoy’s data partition. Do not write USB or touch rok unless asked.
+
+Signed program updates: dashboard checks GitHub, verifies `SHA256SUMS.sig`, and can install on a Linux machine that has `/usr/lib/keel/rollback-update`. A failed start or a power cut before `/api/health` restores the previous program and settings. The private key is the GitHub secret `KEEL_RELEASE_SIGNING_KEY` only. The repository is private, so the appliance also needs `KEEL_GITHUB_TOKEN` in its environment before it can see a release. Whole-disk A/B (RAUC) is still not built.
 
 ## Next
 
+- Build a fresh ISO and boot the installer in a disposable VM before a real disk
+- Publish the next signed tag (`v0.1.2`) when there is a program change to ship
+- Whole-disk A/B updates (RAUC) after the single-disk installer has been proven
 - Mount a foreign NFS/SMB folder into the Keel share (files that still live on rok)
 - Show overlay address next to each share once the overlay is enrolled
 - Optional later: remember a Proxmox API token instead of retyping the password

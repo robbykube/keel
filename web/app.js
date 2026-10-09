@@ -107,10 +107,7 @@ async function load() {
     `<a href="/notes.html">Notes</a>`,
   ];
   $("glance").innerHTML = glance.join(" · ");
-  const update = updates.data;
-  $("updates").innerHTML = update.release_url && update.update_available
-    ? `<a href="${update.release_url}" target="_blank" rel="noreferrer">${update.message}</a>`
-    : update.message;
+  renderUpdate(updates.data);
 
   $("disks").innerHTML = disks.data
     .map((d) => {
@@ -126,6 +123,61 @@ async function load() {
       </tr>`;
     })
     .join("");
+}
+
+function renderUpdate(update) {
+  const box = $("updates");
+  if (!box || !update) return;
+  box.replaceChildren();
+  const text = document.createElement("span");
+  text.textContent = update.message || "Keel could not check for an update.";
+  box.appendChild(text);
+  if (update.release_url) {
+    const link = document.createElement("a");
+    link.href = update.release_url;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = " Release notes";
+    box.appendChild(link);
+  }
+  if (update.can_apply) {
+    box.appendChild(updateButton("Install update", () => postUpdate("/api/updates/install", "INSTALL UPDATE", "Install this Keel update? If the new version does not start, the previous version is restored.")));
+  }
+  if (update.can_restore) {
+    box.appendChild(updateButton("Restore the previous version", () => postUpdate("/api/updates/restore", "RESTORE PREVIOUS", "Put the previous Keel back? This machine will restart with the saved version.")));
+  }
+}
+
+function updateButton(label, action) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.addEventListener("click", action);
+  return button;
+}
+
+async function postUpdate(path, confirmation, question) {
+  if (!window.confirm(question)) return;
+  const box = $("updates");
+  box.textContent = "Working…";
+  try {
+    const res = await fetch(path, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ confirmation }),
+    });
+    const text = await res.text();
+    let message = text;
+    try {
+      message = JSON.parse(text).message || text;
+    } catch {
+      /* The sign-in check answers with plain text. */
+    }
+    box.textContent = message;
+  } catch (error) {
+    box.textContent = String(error);
+  }
 }
 
 load().catch((err) => {

@@ -50,6 +50,45 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
+    if let Some(command) = std::env::args().nth(1).as_deref() {
+        match command {
+            "update-apply" => {
+                if let Err(error) = updates::apply_from_request().await {
+                    eprintln!("keel: {error}");
+                    std::process::exit(1);
+                }
+                return;
+            }
+            "sign-file" => {
+                let Some(path) = std::env::args().nth(2) else {
+                    eprintln!("keel: sign-file needs a file");
+                    std::process::exit(2);
+                };
+                if let Err(error) = updates::sign_file(std::path::Path::new(&path)) {
+                    eprintln!("keel: {error}");
+                    std::process::exit(1);
+                }
+                return;
+            }
+            "keygen" => {
+                let Some(path) = std::env::args().nth(2) else {
+                    eprintln!("keel: keygen needs a path outside the repository");
+                    std::process::exit(2);
+                };
+                if let Err(error) = updates::generate_release_key(std::path::Path::new(&path)) {
+                    eprintln!("keel: {error}");
+                    std::process::exit(1);
+                }
+                return;
+            }
+            _ => {}
+        }
+    }
+    if let Err(error) = crate::config::ensure_supported() {
+        eprintln!("keel: {error}");
+        std::process::exit(1);
+    }
+
     STARTED.set(Instant::now()).ok();
 
     let port: u16 = std::env::var("KEEL_PORT")
@@ -62,6 +101,14 @@ async fn main() {
     let app = Router::new()
         .route("/api/health", get(health))
         .route("/api/updates", get(updates_status))
+        .route(
+            "/api/updates/install",
+            post(updates_install).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/updates/restore",
+            post(updates_restore).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/auth/login", post(auth_login))
         .route("/api/system", get(system))
         .route("/api/disks", get(disks))
@@ -346,6 +393,31 @@ async fn installer_status(State(state): State<AppState>) -> Json<crate::model::I
 
 async fn updates_status() -> Json<crate::updates::UpdateStatus> {
     Json(crate::updates::check().await)
+}
+
+async fn updates_install(
+    Json(request): Json<crate::updates::UpdateRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    update_reply(crate::updates::queue_apply(&request.confirmation).await)
+}
+
+async fn updates_restore(
+    Json(request): Json<crate::updates::UpdateRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    update_reply(crate::updates::queue_restore(&request.confirmation).await)
+}
+
+fn update_reply(result: Result<String, String>) -> (StatusCode, Json<serde_json::Value>) {
+    match result {
+        Ok(message) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "ok": true, "message": message })),
+        ),
+        Err(message) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": message })),
+        ),
+    }
 }
 
 async fn installer_plan(

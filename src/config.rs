@@ -47,13 +47,35 @@ pub fn load() -> Config {
         .and_then(|bytes| serde_json::from_slice::<Config>(&bytes).ok())
         .unwrap_or_default();
 
-    if config.version != CONFIG_VERSION {
+    if config.version < CONFIG_VERSION {
         config.version = CONFIG_VERSION;
     }
     if let Ok(provider) = std::env::var("KEEL_OVERLAY_PROVIDER") {
         config.overlay.provider = Provider::from_name(&provider);
     }
     config
+}
+
+/// A newer config than this Keel understands must stop startup. Guessing would
+/// boot after a rollback with settings the restored Keel cannot read.
+pub fn ensure_supported() -> Result<(), String> {
+    ensure_supported_at(&config_path())
+}
+
+pub fn ensure_supported_at(path: &std::path::Path) -> Result<(), String> {
+    let Ok(bytes) = fs::read(path) else {
+        return Ok(());
+    };
+    let Ok(config) = serde_json::from_slice::<Config>(&bytes) else {
+        return Ok(());
+    };
+    if config.version > CONFIG_VERSION {
+        return Err(format!(
+            "These settings were written by a newer Keel (version {}). This Keel understands version {}. The previous Keel can be restored.",
+            config.version, CONFIG_VERSION
+        ));
+    }
+    Ok(())
 }
 
 pub fn config_path() -> PathBuf {
@@ -83,11 +105,26 @@ fn default_version() -> u32 {
 mod tests {
     use super::Config;
     use crate::overlay::Provider;
+    use std::fs;
 
     #[test]
     fn defaults_to_self_hosted_overlay() {
         let config = Config::default();
         assert!(matches!(config.overlay.provider, Provider::Headscale));
         assert_eq!(config.version, 1);
+    }
+
+    #[test]
+    fn newer_settings_are_refused() {
+        let dir = std::env::temp_dir().join(format!("keel-config-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        fs::write(&path, r#"{"version":99,"overlay":{}}"#).unwrap();
+        let error = super::ensure_supported_at(&path).unwrap_err();
+        assert!(error.contains("newer Keel"));
+        fs::write(&path, r#"{"version":1,"overlay":{}}"#).unwrap();
+        assert!(super::ensure_supported_at(&path).is_ok());
+        let _ = fs::remove_dir_all(&dir);
     }
 }

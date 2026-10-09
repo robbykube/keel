@@ -194,6 +194,7 @@ button {
 }
 button:hover { border-color: var(--accent); color: var(--accent); }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
+#updates button { margin-left: 10px; }
 
 .form {
   display: grid;

@@ -18,3 +18,5 @@ NAS appliance. Web GUI. Speed and low overhead beat feature count.
 - Overlay (Tailscale today; swap the brand, not the job) stays up so files and the GUI work away from home. Never stop it to save watts.
 - House-network file access is Samba. Guest-only shares fail on current Windows, so Live uses name `keel` and password `keel` on purpose until real sign-in. Do not expose that on the public internet.
 - Proxmox/TrueNAS passwords stay in the GUI. Tickets for listing files stay in daemon memory only, never in data/ or git.
+- Update signing key: public half in `packaging/updates/release-public.hex`, private half only in the GitHub secret `KEEL_RELEASE_SIGNING_KEY`. Never write the private key into git, memory-bank, or chat. Program updates restore the previous binary if the new one does not answer `/api/health`. OS slot updates stay RAUC; do not hand-roll a second root.
+- The GitHub repo is private. `KEEL_GITHUB_TOKEN` lets the appliance see releases. Never commit that token.

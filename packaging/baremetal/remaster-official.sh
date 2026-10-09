@@ -153,6 +153,14 @@ install -D -m 0755 "${ROOT_DIR}/packaging/baremetal/live/start-keel.sh" \
   "${ROOTFS_DIR}/usr/lib/keel/start-keel.sh"
 install -D -m 0755 "${ROOT_DIR}/packaging/baremetal/install-keel" \
   "${ROOTFS_DIR}/usr/lib/keel/install-keel"
+install -D -m 0755 "${ROOT_DIR}/packaging/baremetal/rollback-update" \
+  "${ROOTFS_DIR}/usr/lib/keel/rollback-update"
+install -D -m 0644 "${ROOT_DIR}/packaging/systemd/keel-apply-update.service" \
+  "${ROOTFS_DIR}/etc/systemd/system/keel-apply-update.service"
+install -D -m 0644 "${ROOT_DIR}/packaging/systemd/keel-apply-update.path" \
+  "${ROOTFS_DIR}/etc/systemd/system/keel-apply-update.path"
+install -D -m 0644 "${ROOT_DIR}/packaging/systemd/keel-update-rollback.service" \
+  "${ROOTFS_DIR}/etc/systemd/system/keel-update-rollback.service"
 install -D -m 0755 "${ROOT_DIR}/packaging/baremetal/live/show-access.sh" \
   "${ROOTFS_DIR}/usr/lib/keel/show-access.sh"
 install -D -m 0755 "${ROOT_DIR}/packaging/baremetal/live/configure-network.sh" \

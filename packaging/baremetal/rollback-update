@@ -1,0 +1,28 @@
+#!/bin/bash
+# Restore the Keel program and settings saved before the last update.
+# This script is shell on purpose: it has to run when the new Keel binary
+# does not start. It does not download anything and it does not choose a disk.
+set -euo pipefail
+
+PREV=/var/lib/keel/updates/previous
+if [[ ! -f "${PREV}/keel" ]]; then
+  echo "No previous Keel is saved on this machine." >&2
+  exit 1
+fi
+if [[ ! -d "${PREV}/web" ]]; then
+  echo "The previous Keel pages are missing." >&2
+  exit 1
+fi
+
+install -m 0755 "${PREV}/keel" /usr/bin/keel
+rm -rf /usr/lib/keel/web
+mkdir -p /usr/lib/keel/web
+cp -a "${PREV}/web/." /usr/lib/keel/web/
+
+if [[ -d "${PREV}/data" ]]; then
+  find "${PREV}/data" -mindepth 1 -maxdepth 1 -exec cp -a {} /var/lib/keel/ \;
+fi
+
+rm -f /var/lib/keel/updates/pending
+sync
+echo "Restored the previous Keel."

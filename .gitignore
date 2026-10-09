@@ -1,6 +1,8 @@
 /target
 /dist
 /data
+release-private.hex
+*.signing-key
 *.pdb
 .DS_Store
 Thumbs.db

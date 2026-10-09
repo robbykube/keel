@@ -143,11 +143,11 @@ the network at port 9478, so a Windows browser can reach it too. Samba is
 included so Windows File Explorer can open `\\<address>\files` with name `keel`
 and password `keel` on the house network. That folder is temporary in try mode.
 
-**The image still does not install to an internal disk.** The GUI's installer
-page is a stub: `can_install` is gated behind `KEEL_INSTALLER_ENABLED=1` and no
-code writes a partition table. Step 6 above, where the installer writes the
-selected disk, describes the intended product, not this build. The disk-writing
-installer and its confirmation flow remain separate work.
+The reviewed Linux image can install onto one whole internal disk. It refuses
+the disk it booted from and the USB it is running on, and it refuses a disk
+that already has a mounted filesystem. The Install button stays off until the
+image sets `KEEL_INSTALLER_ENABLED=1`. Confirming requires the exact words
+`INSTALL KEEL`. That confirmation erases the selected disk.
 
 If the machine has no KMS-capable GPU, the kiosk cannot start; the boot falls
 back to the text banner with the URL and admin token. A recovery console is on
@@ -236,7 +236,7 @@ the finished product; it is a developer/release-engineering tool.
 
 ## Next implementation steps
 
-1. Add a real installer environment and disk-selection API/UI.
+1. Boot the installer in a disposable VM before using it on a real disk.
 2. Add UEFI boot and ISO/raw-image CI smoke tests in a disposable VM.
 3. Build the Windows `keelctl install-media` GUI flow with checksum and USB
    device confirmation.

@@ -1,0 +1,13 @@
+[Unit]
+Description=Restore the previous Keel if an update did not finish
+DefaultDependencies=no
+Before=keel.service
+ConditionPathExists=/var/lib/keel/updates/pending
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/keel/rollback-update
+TimeoutStartSec=120
+
+[Install]
+WantedBy=keel.service

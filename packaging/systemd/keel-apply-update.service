@@ -1,0 +1,15 @@
+[Unit]
+Description=Install a signed Keel update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=KEEL_DATA=/var/lib/keel
+EnvironmentFile=-/etc/keel/keel.env
+ExecStart=/usr/bin/keel update-apply
+TimeoutStartSec=300
+
+# This unit is outside the daemon sandbox because it replaces /usr/bin/keel.
+# The daemon can only request an update. This unit downloads the release again
+# and checks the signature before it writes anything.

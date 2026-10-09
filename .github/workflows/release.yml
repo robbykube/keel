@@ -16,6 +16,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build release binary
         run: cargo build --release
+      - name: Check tag matches Cargo.toml
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)"
+          tag="${GITHUB_REF_NAME#v}"
+          if [[ "$version" != "$tag" ]]; then
+            echo "Cargo.toml version ${version} does not match tag ${tag}" >&2
+            exit 1
+          fi
       - name: Package appliance payload
         shell: bash
         run: |
@@ -26,6 +36,17 @@ jobs:
           cp -a web release/keel/web
           tar -C release -czf "keel-linux-amd64-${GITHUB_REF_NAME}.tar.gz" keel
           sha256sum "keel-linux-amd64-${GITHUB_REF_NAME}.tar.gz" > SHA256SUMS
+      - name: Sign checksums
+        env:
+          KEEL_RELEASE_SIGNING_KEY: ${{ secrets.KEEL_RELEASE_SIGNING_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${KEEL_RELEASE_SIGNING_KEY:-}" ]]; then
+            echo "KEEL_RELEASE_SIGNING_KEY is not configured" >&2
+            exit 1
+          fi
+          ./target/release/keel sign-file SHA256SUMS
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -33,5 +54,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             "keel-linux-amd64-${GITHUB_REF_NAME}.tar.gz" \
             SHA256SUMS \
+            SHA256SUMS.sig \
             --generate-notes \
             --title "Keel $GITHUB_REF_NAME"
