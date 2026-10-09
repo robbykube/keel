@@ -11,6 +11,8 @@ pub struct UpdateStatus {
     pub update_available: bool,
     pub release_url: Option<String>,
     pub published_at: Option<String>,
+    pub appliance_asset: Option<String>,
+    pub checksum_asset: Option<String>,
     pub message: String,
 }
 
@@ -21,6 +23,13 @@ struct GithubRelease {
     published_at: Option<String>,
     draft: bool,
     prerelease: bool,
+    assets: Vec<GithubAsset>,
+}
+
+#[derive(Deserialize)]
+struct GithubAsset {
+    name: String,
+    browser_download_url: String,
 }
 
 pub async fn check() -> UpdateStatus {
@@ -79,6 +88,18 @@ pub async fn check() -> UpdateStatus {
         update_available,
         release_url: Some(release.html_url),
         published_at: release.published_at,
+        appliance_asset: release
+            .assets
+            .iter()
+            .find(|asset| {
+                asset.name.starts_with("keel-linux-amd64-") && asset.name.ends_with(".tar.gz")
+            })
+            .map(|asset| asset.browser_download_url.clone()),
+        checksum_asset: release
+            .assets
+            .iter()
+            .find(|asset| asset.name == "SHA256SUMS")
+            .map(|asset| asset.browser_download_url.clone()),
         message: if update_available {
             format!("Keel {latest} is available. Installation is not automatic yet.")
         } else {
@@ -95,6 +116,8 @@ fn unavailable(current: &'static str, message: String) -> UpdateStatus {
         update_available: false,
         release_url: None,
         published_at: None,
+        appliance_asset: None,
+        checksum_asset: None,
         message,
     }
 }

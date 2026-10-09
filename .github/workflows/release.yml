@@ -1,0 +1,37 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  linux-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build release binary
+        run: cargo build --release
+      - name: Package appliance payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release/keel
+          install -m 0755 target/release/keel release/keel/keel
+          install -m 0644 packaging/systemd/keel.service release/keel/keel.service
+          cp -a web release/keel/web
+          tar -C release -czf "keel-linux-amd64-${GITHUB_REF_NAME}.tar.gz" keel
+          sha256sum "keel-linux-amd64-${GITHUB_REF_NAME}.tar.gz" > SHA256SUMS
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "keel-linux-amd64-${GITHUB_REF_NAME}.tar.gz" \
+            SHA256SUMS \
+            --generate-notes \
+            --title "Keel $GITHUB_REF_NAME"
