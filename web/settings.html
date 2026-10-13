@@ -65,6 +65,12 @@
       </details>
       <p class="lede">Update Keel from a GitHub release, not from every change on the repository. If the new version does not start, the previous one comes back.</p>
       <div class="lede" id="updates">Checking for a Keel update…</div>
+      <div id="update-progress" hidden>
+        <p class="install-message" id="update-progress-message" aria-live="polite"></p>
+        <div class="install-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <span id="update-progress-bar"></span>
+        </div>
+      </div>
       <p><a href="/login.html">Sign in</a> from another computer, or press Allow on this screen.</p>
     </div>
   </main>

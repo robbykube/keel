@@ -103,6 +103,7 @@ async fn main() {
     let app = Router::new()
         .route("/api/health", get(health))
         .route("/api/updates", get(updates_status))
+        .route("/api/updates/progress", get(updates_progress))
         .route(
             "/api/updates/install",
             post(updates_install).layer(axum::middleware::from_fn(auth::require_admin)),
@@ -443,6 +444,10 @@ async fn installer_status(State(state): State<AppState>) -> Json<crate::model::I
 
 async fn updates_status() -> Json<crate::updates::UpdateStatus> {
     Json(crate::updates::check().await)
+}
+
+async fn updates_progress() -> Json<crate::updates::UpdateProgress> {
+    Json(crate::updates::progress())
 }
 
 async fn updates_install(

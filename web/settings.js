@@ -2,6 +2,8 @@ const $ = (id) => document.getElementById(id);
 
 let connectTimer = 0;
 let lastConnect = null;
+let updateProgressTimer = 0;
+let lastUpdateProgress = null;
 
 function updateButton(label, action) {
   const button = document.createElement("button");
@@ -90,11 +92,57 @@ function renderUpdate(update) {
     link.textContent = " Release notes";
     box.appendChild(link);
   }
-  if (update.can_apply) {
+  const updateRunning = lastUpdateProgress && ["queued", "running"].includes(lastUpdateProgress.state);
+  if (update.can_apply && !updateRunning) {
     box.appendChild(updateButton("Install update", () => postUpdate("/api/updates/install", "INSTALL UPDATE", "Install this Keel update? If the new version does not start, the previous version is restored.")));
   }
   if (update.can_restore) {
     box.appendChild(updateButton("Restore the previous version", () => postUpdate("/api/updates/restore", "RESTORE PREVIOUS", "Put the previous Keel back? This machine will restart with the saved version.")));
+  }
+}
+
+function renderUpdateProgress(progress) {
+  if (!progress) return;
+  lastUpdateProgress = progress;
+  const panel = $("update-progress");
+  const message = $("update-progress-message");
+  const bar = $("update-progress-bar");
+  if (!panel || !message || !bar) return;
+  const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0));
+  panel.hidden = progress.state === "idle";
+  message.textContent = progress.message || "";
+  bar.style.width = `${percent}%`;
+  bar.parentElement.setAttribute("aria-valuenow", String(percent));
+  if (progress.state === "error") message.classList.add("install-error");
+  else message.classList.remove("install-error");
+  if (progress.state === "queued" || progress.state === "running") scheduleUpdateProgressPoll();
+  else stopUpdateProgressPoll();
+}
+
+function scheduleUpdateProgressPoll() {
+  if (updateProgressTimer) return;
+  updateProgressTimer = window.setTimeout(() => {
+    updateProgressTimer = 0;
+    loadUpdateProgress();
+  }, 1200);
+}
+
+function stopUpdateProgressPoll() {
+  if (updateProgressTimer) {
+    window.clearTimeout(updateProgressTimer);
+    updateProgressTimer = 0;
+  }
+}
+
+async function loadUpdateProgress() {
+  try {
+    const res = await fetch("/api/updates/progress", { credentials: "same-origin" });
+    if (!res.ok) return;
+    renderUpdateProgress(await res.json());
+    if (lastUpdateProgress && ["queued", "running"].includes(lastUpdateProgress.state)) return;
+    if (lastUpdateProgress && ["done", "error"].includes(lastUpdateProgress.state)) await loadUpdates();
+  } catch (_) {
+    scheduleUpdateProgressPoll();
   }
 }
 
@@ -129,6 +177,7 @@ async function postUpdate(path, confirmation, question) {
   try {
     const { res, message } = await postJson(path, { confirmation });
     box.textContent = message;
+    await loadUpdateProgress();
     if (res.status === 401 || res.status === 403) {
       box.innerHTML = `${message} <a href="/login.html">Sign in, then try again.</a>`;
     }
@@ -271,4 +320,5 @@ $("client-id-form").addEventListener("submit", async (event) => {
 });
 
 loadUpdates();
+loadUpdateProgress();
 refreshConnect();

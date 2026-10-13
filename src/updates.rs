@@ -38,6 +38,25 @@ pub struct UpdateRequest {
     pub confirmation: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpdateProgress {
+    pub state: String,
+    pub stage: String,
+    pub percent: u8,
+    pub message: String,
+}
+
+impl UpdateProgress {
+    fn idle() -> Self {
+        Self {
+            state: "idle".into(),
+            stage: "idle".into(),
+            percent: 0,
+            message: String::new(),
+        }
+    }
+}
+
 #[derive(Deserialize)]
 struct GithubRelease {
     tag_name: String,
@@ -190,7 +209,27 @@ pub async fn check() -> UpdateStatus {
 }
 
 pub async fn queue_apply(confirmation: &str) -> Result<String, String> {
-    queue(confirmation, "apply", "INSTALL UPDATE").await
+    let result = queue(confirmation, "apply", "INSTALL UPDATE").await;
+    if result.is_ok() {
+        write_update_progress(
+            "queued",
+            "queued",
+            1,
+            "The update is queued and will start shortly.",
+        );
+    }
+    result
+}
+
+pub fn progress() -> UpdateProgress {
+    if !cfg!(target_os = "linux") {
+        return UpdateProgress::idle();
+    }
+    let path = data_dir().join("updates").join("progress.json");
+    fs::read(path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_else(UpdateProgress::idle)
 }
 
 pub async fn queue_restore(confirmation: &str) -> Result<String, String> {
@@ -308,12 +347,28 @@ fn write_request(kind: &str) -> Result<(), String> {
 }
 
 async fn apply_verified_release() -> Result<String, String> {
+    write_update_progress("running", "starting", 2, "Starting the signed update.");
+    let result = apply_verified_release_inner().await;
+    match &result {
+        Ok(message) => write_update_progress("done", "complete", 100, message),
+        Err(error) => write_update_progress("error", "stopped", 0, error),
+    }
+    result
+}
+
+async fn apply_verified_release_inner() -> Result<String, String> {
     if Path::new("/run/live/medium").exists() {
         return Err(
             "This is a USB trial. Install Keel on the internal disk before updating.".into(),
         );
     }
     clear_result();
+    write_update_progress(
+        "running",
+        "checking",
+        5,
+        "Checking GitHub for the latest signed release.",
+    );
     let client = github_client()?;
     let release = fetch_latest(&client).await?;
     let package = release
@@ -331,13 +386,48 @@ async fn apply_verified_release() -> Result<String, String> {
         .iter()
         .find(|asset| asset.name == "SHA256SUMS.sig")
         .ok_or_else(|| "The release is not signed, so Keel will not install it.".to_string())?;
-    let sums = read_limited(&client, asset_download_url(checksum), MAX_CHECKSUM_BYTES).await?;
-    let sig = read_limited(&client, asset_download_url(signature), 512).await?;
+    let sums = read_limited_with_progress(
+        &client,
+        asset_download_url(checksum),
+        MAX_CHECKSUM_BYTES,
+        "Downloading the signed checksum.",
+        8,
+        16,
+    )
+    .await?;
+    let sig = read_limited_with_progress(
+        &client,
+        asset_download_url(signature),
+        512,
+        "Downloading the signature.",
+        16,
+        22,
+    )
+    .await?;
+    write_update_progress(
+        "running",
+        "verifying",
+        26,
+        "Checking the release signature.",
+    );
     verify_bytes(&sums, &sig)?;
     let expected = checksum_for(&String::from_utf8_lossy(&sums), &package.name)
         .ok_or_else(|| "The signed checksum list does not include the Keel package.".to_string())?;
-    let package_bytes =
-        read_limited(&client, asset_download_url(package), MAX_PACKAGE_BYTES).await?;
+    let package_bytes = read_limited_with_progress(
+        &client,
+        asset_download_url(package),
+        MAX_PACKAGE_BYTES,
+        "Downloading the Keel update.",
+        30,
+        68,
+    )
+    .await?;
+    write_update_progress(
+        "running",
+        "verifying",
+        72,
+        "Checking the downloaded update.",
+    );
     let actual = encode_hex(&Sha256::digest(&package_bytes));
     if !actual.eq_ignore_ascii_case(&expected) {
         return Err("The downloaded package does not match the signed checksum.".into());
@@ -347,9 +437,12 @@ async fn apply_verified_release() -> Result<String, String> {
     let staged = updates.join("staged");
     let _ = fs::remove_dir_all(&staged);
     fs::create_dir_all(&staged).map_err(|error| error.to_string())?;
+    write_update_progress("running", "staging", 76, "Preparing the update.");
     extract_package(&package_bytes, &staged)?;
+    write_update_progress("running", "saving", 80, "Saving the current Keel version.");
     save_previous()?;
     write_pending()?;
+    write_update_progress("running", "installing", 86, "Installing the signed update.");
     if let Err(error) = install_staged(&staged) {
         let _ = run_rollback_script();
         let _ = restart_keel();
@@ -357,6 +450,7 @@ async fn apply_verified_release() -> Result<String, String> {
             "The update was not installed. The previous version is still in place. {error}"
         ));
     }
+    write_update_progress("running", "restarting", 92, "Restarting Keel.");
     if let Err(error) = restart_keel() {
         let _ = run_rollback_script();
         let _ = restart_keel();
@@ -364,6 +458,12 @@ async fn apply_verified_release() -> Result<String, String> {
             "Keel did not restart. The previous version was restored. {error}"
         ));
     }
+    write_update_progress(
+        "running",
+        "checking",
+        96,
+        "Waiting for the new Keel to answer.",
+    );
     let expected_version = release.tag_name.trim_start_matches('v');
     if let Err(error) = wait_for_version(expected_version).await {
         let _ = run_rollback_script();
@@ -471,6 +571,17 @@ async fn read_limited(
     url: &str,
     limit: usize,
 ) -> Result<Vec<u8>, String> {
+    read_limited_with_progress(client, url, limit, "", 0, 0).await
+}
+
+async fn read_limited_with_progress(
+    client: &reqwest::Client,
+    url: &str,
+    limit: usize,
+    message: &str,
+    start: u8,
+    end: u8,
+) -> Result<Vec<u8>, String> {
     let parsed =
         reqwest::Url::parse(url).map_err(|_| "The download address is not a URL.".to_string())?;
     if !allowed_download_url(&parsed) {
@@ -501,6 +612,23 @@ async fn read_limited(
             return Err("The download is larger than Keel accepts.".into());
         }
         body.extend_from_slice(&chunk);
+        if !message.is_empty() {
+            let percent = response
+                .content_length()
+                .filter(|total| *total > 0)
+                .map(|total| {
+                    let fraction = (body.len() as u64).min(total) as u128 * 100
+                        / total as u128;
+                    start.saturating_add(
+                        ((end.saturating_sub(start) as u128 * fraction) / 100) as u8,
+                    )
+                })
+                .unwrap_or(start);
+            write_update_progress("running", "downloading", percent, message);
+        }
+    }
+    if !message.is_empty() {
+        write_update_progress("running", "downloading", end, message);
     }
     Ok(body)
 }
@@ -896,6 +1024,29 @@ fn clear_result() {
     let _ = fs::remove_file(data_dir().join("updates").join("result"));
 }
 
+fn write_update_progress(state: &str, stage: &str, percent: u8, message: &str) {
+    let path = data_dir().join("updates").join("progress.json");
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    if fs::create_dir_all(parent).is_err() {
+        return;
+    }
+    let progress = UpdateProgress {
+        state: state.into(),
+        stage: stage.into(),
+        percent: percent.min(100),
+        message: message.into(),
+    };
+    let Ok(body) = serde_json::to_vec(&progress) else {
+        return;
+    };
+    let temp = path.with_extension("json.tmp");
+    if fs::write(&temp, body).is_ok() {
+        let _ = fs::rename(temp, path);
+    }
+}
+
 fn sync_file(path: &Path) -> Result<(), String> {
     let file = OpenOptions::new()
         .write(true)
@@ -1228,6 +1379,20 @@ mod tests {
         assert!(newer_than("1.0.0", "0.99.99"));
         assert!(!newer_than("0.1.0", "0.1.0"));
         assert!(!newer_than("0.0.9", "0.1.0"));
+    }
+
+    #[test]
+    fn update_progress_round_trips_without_secrets() {
+        let progress = UpdateProgress {
+            state: "running".into(),
+            stage: "downloading".into(),
+            percent: 42,
+            message: "Downloading the Keel update.".into(),
+        };
+        let encoded = serde_json::to_string(&progress).unwrap();
+        let decoded: UpdateProgress = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded, progress);
+        assert!(!encoded.contains("token"));
     }
 
     #[test]
