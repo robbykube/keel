@@ -21,7 +21,8 @@ What works now:
   be committed. Making the repository public removes the need for it.
 - Settings checks the latest stable GitHub release and verifies the signature
   before it will offer Install update. A push to main is not an update. The
-  box only counts a signed `vX.Y.Z` release.
+  box only counts a signed `vX.Y.Z` release. Private release files are
+  downloaded from the GitHub API as raw bytes, not as JSON.
 - Install saves the current program, pages, and `/var/lib/keel` settings, then
   switches to the new program. If the new version does not answer
   `/api/health`, or the power goes out before that answer, the boot service

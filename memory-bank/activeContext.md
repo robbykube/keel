@@ -33,7 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 - Copy the new ISO onto Ventoy and reinstall on the Samsung disk so Settings can save the GitHub token and Install shows live progress.
 - Boot the installer in a disposable VM before the next real disk
-- After GitHub Actions finishes `v0.1.2`, refresh Settings on a 0.1.1 machine and install the update there
+- Put `v0.1.3` on the Keel machine once without Settings (0.1.1/0.1.2 cannot download signed files). After that, Settings updates work.
 - Whole-disk A/B updates (RAUC) after the single-disk installer has been proven
 - Mount a foreign NFS/SMB folder into the Keel share (files that still live on rok)
 - Show overlay address next to each share once the overlay is enrolled

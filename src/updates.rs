@@ -51,6 +51,7 @@ struct GithubRelease {
 #[derive(Deserialize)]
 struct GithubAsset {
     name: String,
+    url: String,
     browser_download_url: String,
 }
 
@@ -81,7 +82,12 @@ pub async fn check() -> UpdateStatus {
         }
     };
 
-    let response = match client.get(&url).send().await {
+    let response = match client
+        .get(&url)
+        .header(ACCEPT, HeaderValue::from_static("application/vnd.github+json"))
+        .send()
+        .await
+    {
         Ok(response) => response,
         Err(error) => {
             return unavailable(
@@ -325,13 +331,13 @@ async fn apply_verified_release() -> Result<String, String> {
         .iter()
         .find(|asset| asset.name == "SHA256SUMS.sig")
         .ok_or_else(|| "The release is not signed, so Keel will not install it.".to_string())?;
-    let sums = read_limited(&client, &checksum.browser_download_url, MAX_CHECKSUM_BYTES).await?;
-    let sig = read_limited(&client, &signature.browser_download_url, 512).await?;
+    let sums = read_limited(&client, asset_download_url(checksum), MAX_CHECKSUM_BYTES).await?;
+    let sig = read_limited(&client, asset_download_url(signature), 512).await?;
     verify_bytes(&sums, &sig)?;
     let expected = checksum_for(&String::from_utf8_lossy(&sums), &package.name)
         .ok_or_else(|| "The signed checksum list does not include the Keel package.".to_string())?;
     let package_bytes =
-        read_limited(&client, &package.browser_download_url, MAX_PACKAGE_BYTES).await?;
+        read_limited(&client, asset_download_url(package), MAX_PACKAGE_BYTES).await?;
     let actual = encode_hex(&Sha256::digest(&package_bytes));
     if !actual.eq_ignore_ascii_case(&expected) {
         return Err("The downloaded package does not match the signed checksum.".into());
@@ -393,21 +399,20 @@ async fn verify_release_assets(
             sha256: None,
         };
     };
-    let sums = match read_limited(client, &checksum.browser_download_url, MAX_CHECKSUM_BYTES).await
-    {
+    let sums = match read_limited(client, asset_download_url(checksum), MAX_CHECKSUM_BYTES).await {
         Ok(sums) => sums,
         Err(_) => {
             return SignatureCheck {
-                state: "invalid",
+                state: "download_failed",
                 sha256: None,
             }
         }
     };
-    let sig = match read_limited(client, &signature.browser_download_url, 512).await {
+    let sig = match read_limited(client, asset_download_url(signature), 512).await {
         Ok(sig) => sig,
         Err(_) => {
             return SignatureCheck {
-                state: "invalid",
+                state: "download_failed",
                 sha256: None,
             }
         }
@@ -434,6 +439,7 @@ async fn fetch_latest(client: &reqwest::Client) -> Result<GithubRelease, String>
     let url = format!("https://api.github.com/repos/{REPOSITORY}/releases/latest");
     let response = client
         .get(url)
+        .header(ACCEPT, HeaderValue::from_static("application/vnd.github+json"))
         .send()
         .await
         .map_err(|error| format!("GitHub could not be reached: {error}"))?;
@@ -472,6 +478,7 @@ async fn read_limited(
     }
     let mut response = client
         .get(parsed)
+        .header(ACCEPT, HeaderValue::from_static("application/octet-stream"))
         .send()
         .await
         .map_err(|error| format!("download failed: {error}"))?;
@@ -553,6 +560,9 @@ fn decide(
             "Keel {latest} is available and the signature checks out. This machine does not have the update service yet, so Keel will not install it."
         ),
         "missing" => format!("Keel {latest} is available, but it is not signed. Keel will not install it."),
+        "download_failed" => format!(
+            "Keel {latest} is available, but this computer could not download the signed files from GitHub."
+        ),
         _ => format!("Keel {latest} is available, but the signature is not valid. Keel will not install it."),
     };
     Decision {
@@ -964,12 +974,16 @@ fn github_headers() -> Result<HeaderMap, String> {
     let token = load_github_token()?;
     if let Some(value) = github_authorization(&token)? {
         headers.insert(AUTHORIZATION, value);
-        headers.insert(
-            ACCEPT,
-            HeaderValue::from_static("application/vnd.github+json"),
-        );
     }
     Ok(headers)
+}
+
+fn asset_download_url(asset: &GithubAsset) -> &str {
+    if asset.url.starts_with("https://api.github.com/") {
+        asset.url.as_str()
+    } else {
+        asset.browser_download_url.as_str()
+    }
 }
 
 fn github_token_path() -> PathBuf {
@@ -1217,6 +1231,19 @@ mod tests {
     }
 
     #[test]
+    fn downloads_private_release_files_from_the_github_api() {
+        let asset = GithubAsset {
+            name: "SHA256SUMS".into(),
+            url: "https://api.github.com/repos/robbykube/keel/releases/assets/1".into(),
+            browser_download_url: "https://github.com/robbykube/keel/releases/download/v0.1.2/SHA256SUMS".into(),
+        };
+        assert_eq!(
+            asset_download_url(&asset),
+            "https://api.github.com/repos/robbykube/keel/releases/assets/1"
+        );
+    }
+
+    #[test]
     fn release_key_is_not_the_public_test_vector() {
         let key = release_public_key().expect("public key");
         assert_ne!(encode_hex(key.as_bytes()), RFC8032_TEST_PUBLIC);
@@ -1312,6 +1339,9 @@ mod tests {
         assert!(!decide("0.1.1", "0.1.2", true, "verified", &windows).can_apply);
         assert!(!decide("0.1.1", "0.1.2", true, "missing", &ready).can_apply);
         assert!(!decide("0.1.1", "0.1.2", true, "invalid", &ready).can_apply);
+        let download = decide("0.1.1", "0.1.2", true, "download_failed", &ready);
+        assert!(!download.can_apply);
+        assert!(download.message.contains("could not download"));
         let current = decide("0.1.2", "0.1.2", false, "unchecked", &ready);
         assert!(!current.can_apply);
         assert!(current.message.contains("GitHub release 0.1.2"));
