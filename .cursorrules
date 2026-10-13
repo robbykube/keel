@@ -9,8 +9,9 @@ NAS appliance. Web GUI. Speed and low overhead beat feature count.
 - Short forms in the UI (`lsblk`, RSS) are Guide links (terms.js), not unexplained jargon.
 - GUI copy is plain words and a proposal (Use this / Leave this). Do not put machine names (`vm-data`, `vmbr`, `local-lvm`) in headings by default. Optional: show the names that computer uses. Do not invent clever metaphors.
 - Look around reads names from the other computer after sign-in. It does not invent Proxmox labels. Everyday keel uses share names. Proxmox listing is keep-existing-files (this lab now; others mainly at install).
-- UI interaction follows Cerebro (`memory-bank/ui.md`): window is the frame; sidebar never scrolls; Notes at the bottom of the sidebar; Save-button rule; errors name the fix; not-running is grey not red. Do not copy Cerebro’s yellow accent — Keel stays sea-glass.
+- UI interaction follows Cerebro (`memory-bank/ui.md`): window is the frame; sidebar never scrolls; extras open from a menu to the right (`This computer`: Disks, Install, Repair); Guide/Settings/Sign in above Notes; Notes at the bottom of the sidebar; Save-button rule; errors name the fix; not-running is grey not red. Do not copy Cerebro’s yellow accent — Keel stays sea-glass. Chrome lives in `web/chrome.js` plus flyout CSS in `web/style.css`.
 - The window is the frame: do not make the page scroll. One `.scroll` region per view; Why boxes start closed. Notes is a list + pad split.
+- Install progress is one sentence and a bar. Do not dump helper stdout into the GUI. The helper writes `/run/keel/install.json`; the page polls `GET /api/installer/progress`. The GitHub token is saved in Settings after install, never baked into the ISO.
 - Notes persist under `data/` (gitignored). Do not treat Notes as family file storage.
 - Never put remote passwords in chat transcripts you control, memory-bank, or git. Sign-in is the Pools page.
 - Ship the rok-inspired service catalog (including guests that were stopped on rok). Do not add a third-party plugin bazaar.
@@ -19,4 +20,4 @@ NAS appliance. Web GUI. Speed and low overhead beat feature count.
 - House-network file access is Samba. Guest-only shares fail on current Windows, so Live uses name `keel` and password `keel` on purpose until real sign-in. Do not expose that on the public internet.
 - Proxmox/TrueNAS passwords stay in the GUI. Tickets for listing files stay in daemon memory only, never in data/ or git.
 - Update signing key: public half in `packaging/updates/release-public.hex`, private half only in the GitHub secret `KEEL_RELEASE_SIGNING_KEY`. Never write the private key into git, memory-bank, or chat. Program updates restore the previous binary if the new one does not answer `/api/health`. OS slot updates stay RAUC; do not hand-roll a second root.
-- The GitHub repo is private. `KEEL_GITHUB_TOKEN` lets the appliance see releases. Never commit that token.
+- The GitHub repo is private. Settings Connect GitHub uses device flow (code on the Keel screen, approve on a phone or PC). The access token is saved to `KEEL_DATA/github.token` and must never be returned from an API or committed. The GitHub app id is public (`packaging/updates/github-client-id`, `KEEL_GITHUB_CLIENT_ID`, or `KEEL_DATA/github.client_id`). Never commit a client secret.

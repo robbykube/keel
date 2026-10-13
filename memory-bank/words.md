@@ -6,8 +6,11 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 
 | We say | Means |
 | --- | --- |
-| Pool | Where the files are stored |
-| Share | The name a PC uses to open those files. Same name at home and away |
+| Files | The name a PC uses to open those files. Same name at home and away |
+| Disks | Where the files are stored |
+| Apps | Programs that are installed. Open one when you need it |
+| Away | The same files, when you are not at home |
+| Rest | The computer stays on and apps stay closed. Away stays connected |
 | On another computer | Files stay on Proxmox or TrueNAS; keel does not wipe them |
 | Disks in this machine | Files would live on drives in the keel box |
 | Look around | Check one computer you name. Not a search of every machine |

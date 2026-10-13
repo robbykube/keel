@@ -71,7 +71,7 @@ pub fn status() -> Status {
             control_url,
             overlay_ip: None,
             dns_name: None,
-            why: "Overlay status is available on the Linux Keel appliance; this Windows copy is development-only.".into(),
+            why: "Away connects on the Keel computer. This Windows copy is only for trying the screen.".into(),
         };
     }
 
@@ -107,7 +107,7 @@ pub fn enroll(req: EnrollRequest) -> EnrollResult {
     let control_url = match req.provider {
         Provider::Headscale => match req.control_url.as_deref().and_then(valid_control_url) {
             Some(url) => Some(url.to_string()),
-            None => return failed(req.provider, "Headscale requires an HTTPS control URL"),
+            None => return failed(req.provider, "Type the address of the computer you run. It has to start with https."),
         },
         Provider::Tailscale => None,
         Provider::Unknown => return failed(req.provider, "unknown overlay provider"),

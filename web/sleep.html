@@ -3,8 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>keel · Idle</title>
+  <title>keel · Rest</title>
   <link rel="stylesheet" href="/style.css" />
+  <script src="/approve.js"></script>
+  <script src="/chrome.js"></script>
 </head>
 <body>
   <aside>
@@ -16,33 +18,36 @@
       <span>keel</span>
     </div>
     <nav>
-      <a href="/">Dashboard</a>
-      <a href="/catalog.html">Catalog</a>
-      <a href="/repair.html">Repair</a>
-      <a class="active" href="/sleep.html">Idle</a>
-      <a href="/guide.html">Guide</a>
-      <a href="/notes.html">Notes</a>
-      <a href="/pools.html">Pools</a>
-      <a href="/shares.html">Shares</a>
+      <a href="/">Home</a>
+      <a href="/shares.html">Files</a>
+      <a href="/catalog.html">Apps</a>
+      <a href="/overlay.html">Away</a>
+      <a class="quiet" href="/pools.html">Disks</a>
+      <a class="quiet" href="/installer.html">Install</a>
+      <a class="quiet" href="/repair.html">Repair</a>
+      <a class="quiet" href="/notes.html">Notes</a>
+      <a class="quiet" href="/guide.html">Guide</a>
+      <a class="quiet" href="/settings.html">Settings</a>
+      <a class="quiet" href="/login.html">Sign in</a>
     </nav>
     <div class="aside-foot" id="health"></div>
   </aside>
   <main>
     <header>
-      <h1>Idle</h1>
+      <h1>Rest</h1>
     </header>
-    <p class="lede">Like a computer: the box stays on. Apps stay closed until you open them. Tailscale stays up so files still work away from home.</p>
+    <p class="lede">The computer stays on. Apps stay closed until you open them.</p>
     <section class="cards" id="cards"></section>
     <details class="why">
-      <summary>Why the Tailscale floor</summary>
+      <summary>Why it stays on</summary>
       <p id="why"></p>
     </details>
     <p class="actions">
-      <button type="button" id="idle">Idle</button>
-      <button type="button" id="active">Active</button>
+      <button type="button" id="idle">Rest</button>
+      <button type="button" id="active">Open apps</button>
       <span class="meta" id="status"></span>
     </p>
-    <h2>Advisor</h2>
+    <h2>Suggestions</h2>
     <div class="scroll opps-grid" id="opps"></div>
   </main>
   <script src="/terms.js"></script>

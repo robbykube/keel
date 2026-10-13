@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>keel · Repair</title>
   <link rel="stylesheet" href="/style.css" />
+  <script src="/approve.js"></script>
+  <script src="/chrome.js"></script>
 </head>
 <body>
   <aside>
@@ -16,14 +18,17 @@
       <span>keel</span>
     </div>
     <nav>
-      <a href="/">Dashboard</a>
-      <a href="/catalog.html">Catalog</a>
-      <a class="active" href="/repair.html">Repair</a>
-      <a href="/sleep.html">Idle</a>
-      <a href="/guide.html">Guide</a>
-      <a href="/notes.html">Notes</a>
-      <a href="/pools.html">Pools</a>
-      <a href="/shares.html">Shares</a>
+      <a href="/">Home</a>
+      <a href="/shares.html">Files</a>
+      <a href="/catalog.html">Apps</a>
+      <a href="/overlay.html">Away</a>
+      <a class="quiet" href="/pools.html">Disks</a>
+      <a class="quiet" href="/installer.html">Install</a>
+      <a class="quiet active" href="/repair.html">Repair</a>
+      <a class="quiet" href="/notes.html">Notes</a>
+      <a class="quiet" href="/guide.html">Guide</a>
+      <a class="quiet" href="/settings.html">Settings</a>
+      <a class="quiet" href="/login.html">Sign in</a>
     </nav>
     <div class="aside-foot" id="health"></div>
   </aside>
@@ -32,11 +37,7 @@
       <h1>Repair</h1>
       <div class="meta" id="banner"></div>
     </header>
-    <p class="lede">One sentence. Evidence. Fix if it is safe.</p>
-    <details class="why">
-      <summary>Why Repair, not Settings</summary>
-      <p>Find the failure, read the sentence, press Fix if it is safe. Do not hunt knobs.</p>
-    </details>
+    <p class="lede">Press Fix on the problem.</p>
     <div class="work-split">
       <div class="work-col">
         <h2>Issues</h2>
@@ -44,8 +45,8 @@
       </div>
       <div class="work-col">
         <div class="dock">
-          <h2>Playbook</h2>
-          <p class="prose">Safe one-clicks. Grey means not wired up yet<span data-only="windows"> on this Windows host (needs Linux <a class="term" href="/guide.html#systemctl">systemctl</a> / <a class="term" href="/guide.html#nft">nft</a>)</span>.</p>
+          <h2>Fixes</h2>
+          <p class="prose">Safe buttons. Grey means this one is not ready yet.</p>
           <p id="playbook"></p>
           <p class="meta" id="status"></p>
         </div>

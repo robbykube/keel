@@ -30,6 +30,9 @@ mount -t sysfs sysfs "${ROOTFS_DIR}/sys"
 mount --bind /dev "${ROOTFS_DIR}/dev"
 mount --bind /dev/pts "${ROOTFS_DIR}/dev/pts" || true
 
+if [[ -e "${ROOTFS_DIR}/etc/resolv.conf" || -L "${ROOTFS_DIR}/etc/resolv.conf" ]]; then
+  cp -a "${ROOTFS_DIR}/etc/resolv.conf" "${ROOTFS_DIR}/etc/resolv.conf.keel-bak"
+fi
 if [[ -r /etc/resolv.conf ]]; then
   mkdir -p "${ROOTFS_DIR}/etc"
   cp /etc/resolv.conf "${ROOTFS_DIR}/etc/resolv.conf"
@@ -59,6 +62,9 @@ rm -rf "${ROOTFS_DIR}/var/lib/apt/lists/"*
 
 if [[ -f "${APT_LIST}.keel-bak" ]]; then
   mv "${APT_LIST}.keel-bak" "${APT_LIST}"
+fi
+if [[ -e "${ROOTFS_DIR}/etc/resolv.conf.keel-bak" || -L "${ROOTFS_DIR}/etc/resolv.conf.keel-bak" ]]; then
+  mv "${ROOTFS_DIR}/etc/resolv.conf.keel-bak" "${ROOTFS_DIR}/etc/resolv.conf"
 fi
 
 # The kiosk is not root. Chromium refuses to sandbox itself as root, and the

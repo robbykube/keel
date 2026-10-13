@@ -9,9 +9,10 @@
 - Networking: bind a chosen LAN interface; show IP:port and UNC. Overlay is the away path for the **same** shares — show that address next to the LAN one. Do not depend on mDNS.
 - Overlay is provider-neutral in Keel. Headscale is self-hosted-first; Tailscale is a compatible client/control option. The app asks Keel for overlay status and addresses rather than hardcoding a provider.
 - Versioned base configuration is loaded from `KEEL_DATA/config.json`; writes use a temporary file plus rename. Overlay mutation is intentionally not exposed until admin authentication exists.
-- Transitional admin boundary: mutation routes use bearer auth from `KEEL_ADMIN_TOKEN`; loopback development may omit it, but non-loopback startup fails closed without it.
+- Admin boundary: mutation routes accept `Authorization: Bearer` from `KEEL_ADMIN_TOKEN`, or an HttpOnly `keel_session` cookie. `/login.html` can still exchange the token for a one-day session. Another computer can `POST /api/auth/requests`; the Keel screen (loopback only) shows Allow / Not now and that answer starts the session. Non-loopback startup fails closed without a token. Loopback trust (`KEEL_TRUST_LOOPBACK=1`) is the kiosk's own API access, separate from this click.
 - Guide is static HTML next to the dashboard. `/repair.html` is local issues + playbook Fixes.
-- UI shell: `html/body` `overflow: hidden`; `main` is a column; one `.scroll` (or `.table-wrap.scroll`) per page. Sidebar does not scroll. Interaction rules in [ui.md](ui.md) (from Cerebro). Not a tab per subsystem.
+- UI shell: `html/body` `overflow: hidden`; `main` is a column; one `.scroll` (or `.table-wrap.scroll`) per page. Sidebar does not scroll (`aside { overflow: hidden }` on desktop). Everyday rows plus a This computer flyout; Notes at the bottom. Interaction rules in [ui.md](ui.md) (from Cerebro). Not a tab per subsystem.
+- Whole-disk install: `POST /api/installer/plan` starts `/usr/lib/keel/install-keel` in the background and returns. The helper writes `/run/keel/install.json` (sentence, percent, token only when done). `GET /api/installer/progress` is what the Install page polls. Tool output stays in `/run/keel/install.log`.
 
 ## Objects
 

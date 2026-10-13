@@ -14,8 +14,18 @@ conventions (15 Sep 2026).
   Chrome stays put. One scroll region per view; a list/detail split scrolls
   each side inside itself. Why boxes start closed and scroll in themselves.
 - **The sidebar never scrolls.** Primary rows stay visible. Extra destinations
-  open from a short menu to the right (Cerebro: Workflows / Library / Help),
-  not a long stacked list. Notes stays at the bottom of the sidebar.
+  open from a short menu to the right (Cerebro: Work / Research / Library),
+  not a long stacked list. Guide and Settings sit above Notes. Notes stays at
+  the bottom of the sidebar.
+
+Keel’s mapping in `web/chrome.js`:
+
+- Everyday: Home, Files, Apps, Away
+- Menu to the right, **This computer**: Disks, Install, Repair. The row names
+  the page you are on when it belongs to that menu.
+- Support: Guide, Settings, Sign in
+- Notes at the bottom, then health and Shut down
+- Rest stays a Home link, not a sidebar row
 - **One window.** Not a browser tab per subsystem. Dashboard, Shares, Overlay,
   Repair, Guide, Notes share one chrome.
 - **Content fills the width.** Prose keeps a reading measure. Cards sit 16px

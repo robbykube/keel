@@ -8,21 +8,50 @@
 </head>
 <body>
   <aside>
-    <div class="brand"><span>keel</span></div>
-    <p class="prose">The local control plane. Sign in to change storage, services, or remote access.</p>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3 14.5 12 5l9 9.5-9 4.5-9-4.5z" />
+        <path fill="none" stroke="currentColor" stroke-width="1.6" d="M12 5v14" />
+      </svg>
+      <span>keel</span>
+    </div>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/shares.html">Files</a>
+      <a href="/catalog.html">Apps</a>
+      <a href="/overlay.html">Away</a>
+      <a class="quiet" href="/pools.html">Disks</a>
+      <a class="quiet" href="/installer.html">Install</a>
+      <a class="quiet" href="/repair.html">Repair</a>
+      <a class="quiet" href="/notes.html">Notes</a>
+      <a class="quiet" href="/guide.html">Guide</a>
+      <a class="quiet" href="/settings.html">Settings</a>
+      <a class="quiet active" href="/login.html">Sign in</a>
+    </nav>
   </aside>
   <main>
     <header><h1>Sign in</h1></header>
-    <p class="lede">Use the Keel admin token configured during setup.</p>
-    <form class="form auth-form" id="form">
-      <label class="wide">Admin token
-        <input id="token" type="password" autocomplete="current-password" autofocus required />
-      </label>
-      <button type="submit">Sign in</button>
-    </form>
+    <p class="lede" id="lede">Ask the Keel computer to allow this browser. Someone at that screen presses Allow.</p>
     <p class="meta" id="status"></p>
-    <p><a href="/">Back to dashboard</a></p>
+    <div class="actions">
+      <button type="button" id="ask-keel">Ask the Keel computer</button>
+      <button type="button" id="local-login" hidden>Continue on this computer</button>
+    </div>
+    <details class="why">
+      <summary>Use the admin token instead</summary>
+      <form class="form auth-form" id="form">
+        <label class="wide">Admin token
+          <span class="token-row">
+            <input id="token" type="password" autocomplete="current-password" />
+            <button type="button" id="show-token">Show</button>
+          </span>
+        </label>
+        <button type="submit">Sign in</button>
+      </form>
+    </details>
   </main>
+  <script src="/approve.js"></script>
+  <script src="/chrome.js"></script>
   <script src="/login.js"></script>
 </body>
 </html>

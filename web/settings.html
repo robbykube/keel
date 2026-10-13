@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>keel · Settings</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <aside>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3 14.5 12 5l9 9.5-9 4.5-9-4.5z" />
+        <path fill="none" stroke="currentColor" stroke-width="1.6" d="M12 5v14" />
+      </svg>
+      <span>keel</span>
+    </div>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/shares.html">Files</a>
+      <a href="/catalog.html">Apps</a>
+      <a href="/overlay.html">Away</a>
+      <a class="quiet" href="/pools.html">Disks</a>
+      <a class="quiet" href="/installer.html">Install</a>
+      <a class="quiet" href="/repair.html">Repair</a>
+      <a class="quiet" href="/notes.html">Notes</a>
+      <a class="quiet" href="/guide.html">Guide</a>
+      <a class="quiet active" href="/settings.html">Settings</a>
+      <a class="quiet" href="/login.html">Sign in</a>
+    </nav>
+  </aside>
+  <main>
+    <header><h1>Settings</h1></header>
+    <p class="lede">Updates come from your existing GitHub repository, github.com/robbykube/keel. That repository is private, so this computer needs your permission to see it. Connect GitHub on your phone or this PC. You do not need a second repository. The sign-in stays on this computer.</p>
+    <div class="scroll">
+      <div id="github-connect">
+        <button type="button" id="github-connect-button">Connect GitHub</button>
+        <button type="button" id="github-disconnect-button" hidden>Disconnect GitHub</button>
+        <div id="github-device" hidden>
+          <p class="install-message" id="github-device-message"></p>
+          <div class="install-token-box github-code">
+            <code id="github-user-code"></code>
+          </div>
+          <p class="meta">On your phone or another computer, open <a id="github-device-link" href="https://github.com/login/device" rel="noreferrer">github.com/login/device</a> and enter that code. Then allow Keel to read releases.</p>
+          <button type="button" id="github-cancel">Cancel</button>
+        </div>
+        <p class="meta" id="github-connect-status"></p>
+      </div>
+      <details class="why" id="github-manual">
+        <summary>Paste a token instead</summary>
+        <p>A GitHub token with read access to <code>robbykube/keel</code> also works. The page never shows it again.</p>
+        <form class="form" id="token-form">
+          <label class="wide">GitHub token
+            <input id="github-token" type="password" autocomplete="off" spellcheck="false" />
+          </label>
+          <button type="submit">Save token</button>
+        </form>
+        <form class="form" id="client-id-form">
+          <label class="wide">GitHub app id
+            <input id="github-client-id" autocomplete="off" spellcheck="false" />
+          </label>
+          <button type="submit">Save app id</button>
+        </form>
+        <p class="meta">The app id is public. It is only needed if Connect GitHub does not start. That GitHub App is a login on the repository you already have, not a new project. Tick Enable Device Flow, turn off expiring tokens, Contents read, and allow it on robbykube/keel.</p>
+      </details>
+      <p class="lede">Update Keel from GitHub. If the new version does not start, the previous one comes back.</p>
+      <div class="lede" id="updates">Checking for a Keel update…</div>
+      <p><a href="/login.html">Sign in</a> from another computer, or press Allow on this screen.</p>
+    </div>
+  </main>
+  <script src="/approve.js"></script>
+  <script src="/chrome.js"></script>
+  <script src="/settings.js"></script>
+</body>
+</html>

@@ -5,6 +5,7 @@ mod catalog;
 mod config;
 mod discover;
 mod files;
+mod github_connect;
 mod installer;
 mod inventory;
 mod issues;
@@ -21,12 +22,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
+use axum::response::Redirect;
 use axum::handler::Handler;
-use axum::http::header::SET_COOKIE;
-use axum::http::{HeaderMap, HeaderValue, StatusCode};
+use axum::http::{HeaderValue, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use serde::Deserialize;
 use sysinfo::{Networks, Pid, ProcessesToUpdate, System};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
@@ -109,10 +111,41 @@ async fn main() {
             "/api/updates/restore",
             post(updates_restore).layer(axum::middleware::from_fn(auth::require_admin)),
         )
-        .route("/api/auth/login", post(auth_login))
+        .route(
+            "/api/settings/github-token",
+            post(github_token_save).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/settings/github-client-id",
+            post(github_client_id_save).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/settings/github-connect",
+            get(github_connect_poll)
+                .post(github_connect_start)
+                .layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/settings/github-connect/cancel",
+            post(github_connect_cancel).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route("/api/settings/github-app", get(github_app_setup))
+        .route("/api/auth/login", post(auth::login))
+        .route(
+            "/api/auth/requests",
+            get(auth::sign_in_requests).post(auth::create_sign_in),
+        )
+        .route(
+            "/api/auth/requests/{id}",
+            get(auth::sign_in_status).post(auth::answer_sign_in),
+        )
         .route("/api/system", get(system))
         .route("/api/disks", get(disks))
         .route("/api/installer", get(installer_status))
+        .route(
+            "/api/installer/progress",
+            get(installer_progress).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route(
             "/api/installer/plan",
             post(installer_plan).layer(axum::middleware::from_fn(auth::require_admin)),
@@ -139,6 +172,10 @@ async fn main() {
             post(power_active).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route("/api/power/opportunities", get(power_opportunities))
+        .route(
+            "/api/shutdown",
+            post(shutdown).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/overlay", get(overlay_status))
         .route("/api/services", get(services_status))
         .route("/api/network/ports", get(network_ports))
@@ -356,6 +393,19 @@ async fn power_active() -> Json<Power> {
     Json(power_state())
 }
 
+async fn shutdown() -> (StatusCode, Json<serde_json::Value>) {
+    if !cfg!(target_os = "linux") {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": "Shutdown is available on the Keel Linux appliance, not this development host." })),
+        );
+    }
+    match std::process::Command::new("systemctl").args(["poweroff"]).spawn() {
+        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "message": "Keel is shutting down." }))),
+        Err(error) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "ok": false, "message": format!("Could not start shutdown: {error}") }))),
+    }
+}
+
 async fn catalog_list() -> Json<Vec<Guest>> {
     let idle = IDLE.load(Ordering::Relaxed);
     Json(crate::catalog::guests(idle))
@@ -407,6 +457,63 @@ async fn updates_restore(
     update_reply(crate::updates::queue_restore(&request.confirmation).await)
 }
 
+async fn github_token_save(
+    Json(request): Json<crate::updates::GithubTokenRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    update_reply(crate::updates::save_github_token(&request.token))
+}
+
+async fn github_client_id_save(
+    Json(request): Json<crate::updates::GithubClientIdRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    update_reply(crate::updates::save_github_client_id(&request.client_id))
+}
+
+async fn github_connect_start() -> Result<Json<crate::github_connect::GithubConnectStatus>, (StatusCode, Json<serde_json::Value>)>
+{
+    crate::github_connect::start()
+        .await
+        .map(Json)
+        .map_err(|message| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "ok": false, "message": message })),
+            )
+        })
+}
+
+async fn github_connect_poll() -> Result<Json<crate::github_connect::GithubConnectStatus>, (StatusCode, Json<serde_json::Value>)>
+{
+    crate::github_connect::poll()
+        .await
+        .map(Json)
+        .map_err(|message| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "ok": false, "message": message })),
+            )
+        })
+}
+
+async fn github_connect_cancel() -> Json<crate::github_connect::GithubConnectStatus> {
+    Json(crate::github_connect::cancel())
+}
+
+#[derive(Deserialize)]
+struct GithubAppQuery {
+    code: Option<String>,
+}
+
+async fn github_app_setup(Query(query): Query<GithubAppQuery>) -> Redirect {
+    let Some(code) = query.code.filter(|value| !value.trim().is_empty()) else {
+        return Redirect::to("/settings.html?github=missing");
+    };
+    match crate::github_connect::finish_app(&code).await {
+        Ok(_) => Redirect::to("/settings.html?github=ready"),
+        Err(_) => Redirect::to("/settings.html?github=failed"),
+    }
+}
+
 fn update_reply(result: Result<String, String>) -> (StatusCode, Json<serde_json::Value>) {
     match result {
         Ok(message) => (
@@ -420,14 +527,28 @@ fn update_reply(result: Result<String, String>) -> (StatusCode, Json<serde_json:
     }
 }
 
+async fn installer_progress() -> Json<crate::installer::InstallProgress> {
+    Json(crate::installer::progress())
+}
+
 async fn installer_plan(
     State(state): State<AppState>,
     Json(plan): Json<InstallerPlan>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     let disks = state.inventory.disks().await;
-    crate::installer::install(&plan, &disks)
-        .map(|message| Json(serde_json::json!({ "ok": true, "message": message })))
-        .map_err(|message| (StatusCode::BAD_REQUEST, message))
+    crate::installer::start(&plan, &disks)
+        .map(|message| {
+            (
+                StatusCode::ACCEPTED,
+                Json(serde_json::json!({ "ok": true, "message": message })),
+            )
+        })
+        .map_err(|message| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "ok": false, "message": message })),
+            )
+        })
 }
 
 async fn apps_list() -> Json<Vec<crate::apps::AppManifest>> {
@@ -574,33 +695,6 @@ async fn power_opportunities() -> Json<Vec<Opportunity>> {
         .await
         .unwrap_or_else(|_| SystemSnapshot::empty());
     Json(crate::advisor::opportunities(idle, snap.cpu_pct))
-}
-
-async fn auth_login(
-    Json(req): Json<crate::auth::LoginRequest>,
-) -> Result<(HeaderMap, Json<serde_json::Value>), (StatusCode, String)> {
-    if !crate::auth::token_configured() {
-        return Err((
-            StatusCode::NOT_IMPLEMENTED,
-            "admin authentication is not configured".into(),
-        ));
-    }
-    if !crate::auth::verify(&req.token) {
-        return Err((StatusCode::UNAUTHORIZED, "invalid admin token".into()));
-    }
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        SET_COOKIE,
-        HeaderValue::from_str(&format!(
-            "keel_session={}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400",
-            req.token
-        ))
-        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid token".into()))?,
-    );
-    Ok((
-        headers,
-        Json(serde_json::json!({ "ok": true, "message": "signed in" })),
-    ))
 }
 
 async fn overlay_status() -> Json<crate::overlay::Status> {

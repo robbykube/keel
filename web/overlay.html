@@ -3,53 +3,55 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>keel · Overlay</title>
+  <title>keel · Away</title>
   <link rel="stylesheet" href="/style.css" />
+  <script src="/approve.js"></script>
+  <script src="/chrome.js"></script>
 </head>
 <body>
   <aside>
     <div class="brand"><span>keel</span></div>
     <nav>
-      <a href="/">Dashboard</a>
-      <a class="active" href="/overlay.html">Overlay</a>
-      <a href="/catalog.html">Catalog</a>
-      <a href="/repair.html">Repair</a>
-      <a href="/pools.html">Pools</a>
-      <a href="/shares.html">Shares</a>
-      <a href="/login.html">Sign in</a>
+      <a href="/">Home</a>
+      <a href="/shares.html">Files</a>
+      <a href="/catalog.html">Apps</a>
+      <a class="active" href="/overlay.html">Away</a>
+      <a class="quiet" href="/pools.html">Disks</a>
+      <a class="quiet" href="/installer.html">Install</a>
+      <a class="quiet" href="/repair.html">Repair</a>
+      <a class="quiet" href="/notes.html">Notes</a>
+      <a class="quiet" href="/guide.html">Guide</a>
+      <a class="quiet" href="/settings.html">Settings</a>
+      <a class="quiet" href="/login.html">Sign in</a>
     </nav>
   </aside>
   <main>
-    <header><h1>Overlay</h1><div class="meta" id="state"></div></header>
-    <p class="lede">Self-hosted-first remote access for the same GUI and file shares.</p>
-    <details class="why" open>
-      <summary>Why Headscale?</summary>
-      <p>Headscale is Keel’s preferred control plane because it can live under your control. Keel still uses the compatible Tailscale client, so Tailscale devices and tooling remain available. The overlay is the road; local LAN access still works without it.</p>
-    </details>
+    <header><h1>Away</h1><div class="meta" id="state"></div></header>
+    <p class="lede">Use the same files when you are not at home.</p>
     <div class="work-split">
       <div class="work-col">
-        <h2>Current status</h2>
+        <h2>Now</h2>
         <div class="card" id="current">checking…</div>
       </div>
       <div class="work-col">
-        <h2>Enroll this machine</h2>
+        <h2>Connect this computer</h2>
         <form class="form" id="form">
-          <label>Provider
+          <label>Connection
             <select id="provider">
-              <option value="headscale">Headscale (self-hosted)</option>
-              <option value="tailscale">Tailscale hosted</option>
+              <option value="headscale">A computer you run</option>
+              <option value="tailscale">Tailscale</option>
             </select>
           </label>
-          <label>Machine name
+          <label>Name for this computer
             <input id="hostname" placeholder="keel" />
           </label>
-          <label class="wide">Control URL
-            <input id="control" placeholder="https://headscale.example.com" />
+          <label class="wide">Address
+            <input id="control" placeholder="https://example.com" />
           </label>
-          <label class="wide">One-time enrollment key
+          <label class="wide">One-time key
             <input id="key" type="password" autocomplete="off" required />
           </label>
-          <button type="submit">Enroll</button>
+          <button type="submit">Connect</button>
         </form>
         <p class="meta" id="result"></p>
       </div>

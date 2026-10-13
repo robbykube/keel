@@ -133,7 +133,7 @@ wsl -d Debian -u root -- bash packaging/baremetal/remaster-official.sh
 The first run downloads and verifies the Debian live ISO, so it can take some
 time. The remaster follows Debian's current live amd64 **standard** ISO (today)
 13.7.0). Set `KEEL_DEBIAN_LIVE_VERSION` only if you need a specific point
-release. The result is `dist/baremetal/release/keel-amd64.iso`. Copy that single
+release. The result is `dist/baremetal/release/keel-amd64-install.iso`. Copy that single
 file onto Ventoy's large data partition; do not extract it.
 
 This first image is a non-destructive **Keel Live** smoke test. It boots
@@ -147,7 +147,10 @@ The reviewed Linux image can install onto one whole internal disk. It refuses
 the disk it booted from and the USB it is running on, and it refuses a disk
 that already has a mounted filesystem. The Install button stays off until the
 image sets `KEEL_INSTALLER_ENABLED=1`. Confirming requires the exact words
-`INSTALL KEEL`. That confirmation erases the selected disk.
+`INSTALL KEEL`. That confirmation erases the selected disk. The Install page
+shows one sentence and a bar while that runs; tool output stays in
+`/run/keel/install.log`, not on the screen. When it finishes, the page asks
+you to remove the USB and shows the sign-in token.
 
 If the machine has no KMS-capable GPU, the kiosk cannot start; the boot falls
 back to the text banner with the URL and admin token. A recovery console is on

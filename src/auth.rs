@@ -1,14 +1,23 @@
-use axum::extract::{ConnectInfo, Request};
-use axum::http::header::{AUTHORIZATION, COOKIE};
-use axum::http::StatusCode;
+use axum::extract::{ConnectInfo, Path, Request};
+use axum::http::header::{AUTHORIZATION, COOKIE, SET_COOKIE};
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use serde::Deserialize;
-use std::net::SocketAddr;
+use axum::Json;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
     pub token: String,
+}
+
+#[derive(Deserialize)]
+pub struct DecideBody {
+    pub allow: bool,
 }
 
 /// Physical-console trust. The person sitting at the appliance cannot read the
@@ -62,7 +71,10 @@ pub async fn require_admin(request: Request, next: Next) -> Response {
             .and_then(|value| value.to_str().ok())
             .map(|cookies| {
                 cookies.split(';').any(|cookie| {
-                    cookie.trim().strip_prefix("keel_session=") == Some(expected.as_str())
+                    cookie
+                        .trim()
+                        .strip_prefix("keel_session=")
+                        .is_some_and(|value| credential_ok(value, &expected))
                 })
             })
             .unwrap_or(false);
@@ -70,7 +82,11 @@ pub async fn require_admin(request: Request, next: Next) -> Response {
     if authorized {
         next.run(request).await
     } else {
-        (StatusCode::UNAUTHORIZED, "admin authentication required").into_response()
+        (
+            StatusCode::UNAUTHORIZED,
+            "Sign in first. Ask the Keel computer, or open Sign in and use the admin token.",
+        )
+            .into_response()
     }
 }
 
@@ -78,6 +94,298 @@ pub fn verify(token: &str) -> bool {
     std::env::var("KEEL_ADMIN_TOKEN")
         .map(|expected| !expected.trim().is_empty() && token == expected)
         .unwrap_or(false)
+}
+
+/// The appliance screen is the only place that may Allow a sign-in. A browser
+/// on another computer can ask, and the person at the Keel computer presses
+/// the button. That keeps the admin token off the everyday path.
+pub fn screen_may_answer(loopback: bool) -> bool {
+    loopback
+}
+
+const PENDING_TTL: Duration = Duration::from_secs(120);
+const ANSWER_TTL: Duration = Duration::from_secs(60);
+const SESSION_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+const MAX_WAITING: usize = 4;
+
+#[derive(Clone)]
+enum RequestState {
+    Waiting,
+    Allowed(String),
+    Denied,
+}
+
+struct Pending {
+    id: String,
+    from: IpAddr,
+    state: RequestState,
+    keep_until: Instant,
+}
+
+struct Gate {
+    requests: Vec<Pending>,
+    sessions: HashMap<String, Instant>,
+}
+
+impl Gate {
+    fn purge(&mut self, now: Instant) {
+        self.requests.retain(|request| request.keep_until > now);
+        self.sessions.retain(|_, expires| *expires > now);
+    }
+}
+
+fn gate() -> std::sync::MutexGuard<'static, Gate> {
+    static GATE: OnceLock<Mutex<Gate>> = OnceLock::new();
+    GATE.get_or_init(|| {
+        Mutex::new(Gate {
+            requests: Vec::new(),
+            sessions: HashMap::new(),
+        })
+    })
+    .lock()
+    .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn random_id() -> Result<String, String> {
+    let mut bytes = [0u8; 32];
+    getrandom::getrandom(&mut bytes).map_err(|_| "could not start a sign-in request".to_string())?;
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut id = String::with_capacity(64);
+    for byte in bytes {
+        id.push(HEX[(byte >> 4) as usize] as char);
+        id.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    Ok(id)
+}
+
+fn valid_id(id: &str) -> bool {
+    id.len() == 64 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+pub fn session_cookie(session: &str) -> String {
+    format!("keel_session={session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400")
+}
+
+pub fn issue_session() -> Result<String, String> {
+    let id = random_id()?;
+    let mut gate = gate();
+    let now = Instant::now();
+    gate.purge(now);
+    gate.sessions.insert(id.clone(), now + SESSION_TTL);
+    Ok(id)
+}
+
+pub fn credential_ok(presented: &str, admin_token: &str) -> bool {
+    if !presented.is_empty() && presented == admin_token {
+        return true;
+    }
+    let mut gate = gate();
+    let now = Instant::now();
+    gate.purge(now);
+    gate.sessions.get(presented).is_some_and(|expires| *expires > now)
+}
+
+/// Ask the Keel computer to allow this browser. The same address keeps one
+/// open request, so a second click does not stack banners.
+pub fn create_request(from: IpAddr) -> Result<String, String> {
+    let mut gate = gate();
+    let now = Instant::now();
+    gate.purge(now);
+    if let Some(existing) = gate
+        .requests
+        .iter()
+        .find(|request| request.from == from && matches!(request.state, RequestState::Waiting))
+    {
+        return Ok(existing.id.clone());
+    }
+    let waiting = gate
+        .requests
+        .iter()
+        .filter(|request| matches!(request.state, RequestState::Waiting))
+        .count();
+    if waiting >= MAX_WAITING {
+        return Err(
+            "Someone else is already waiting at the Keel computer. Try again in a minute.".into(),
+        );
+    }
+    let id = random_id()?;
+    gate.requests.push(Pending {
+        id: id.clone(),
+        from,
+        state: RequestState::Waiting,
+        keep_until: now + PENDING_TTL,
+    });
+    Ok(id)
+}
+
+#[derive(Serialize)]
+pub struct ScreenRequest {
+    pub id: String,
+    pub message: String,
+}
+
+fn screen_message(ip: IpAddr) -> String {
+    if ip.is_loopback() {
+        "A browser on this computer wants to sign in. Allow it if that was you.".into()
+    } else {
+        format!("A browser at {ip} wants to sign in. Allow it if that was you.")
+    }
+}
+
+pub fn pending_for_screen() -> Vec<ScreenRequest> {
+    let mut gate = gate();
+    let now = Instant::now();
+    gate.purge(now);
+    gate.requests
+        .iter()
+        .filter(|request| matches!(request.state, RequestState::Waiting))
+        .map(|request| ScreenRequest {
+            id: request.id.clone(),
+            message: screen_message(request.from),
+        })
+        .collect()
+}
+
+pub fn decide(id: &str, allow: bool) -> Result<(), String> {
+    if !valid_id(id) {
+        return Err("That request has expired. Ask again from the other computer.".into());
+    }
+    let mut gate = gate();
+    let now = Instant::now();
+    gate.purge(now);
+    let Some(index) = gate.requests.iter().position(|request| request.id == id) else {
+        return Err("That request has expired. Ask again from the other computer.".into());
+    };
+    if !matches!(gate.requests[index].state, RequestState::Waiting) {
+        return Err("That request was already answered.".into());
+    }
+    if allow {
+        let session = random_id()?;
+        gate.sessions.insert(session.clone(), now + SESSION_TTL);
+        gate.requests[index].state = RequestState::Allowed(session);
+    } else {
+        gate.requests[index].state = RequestState::Denied;
+    }
+    gate.requests[index].keep_until = now + ANSWER_TTL;
+    Ok(())
+}
+
+pub enum RequestView {
+    Waiting,
+    Allowed(String),
+    Denied,
+    Expired,
+}
+
+pub fn poll(id: &str) -> RequestView {
+    if !valid_id(id) {
+        return RequestView::Expired;
+    }
+    let mut gate = gate();
+    let now = Instant::now();
+    gate.purge(now);
+    match gate.requests.iter().find(|request| request.id == id) {
+        None => RequestView::Expired,
+        Some(request) => match &request.state {
+            RequestState::Waiting => RequestView::Waiting,
+            RequestState::Allowed(session) => RequestView::Allowed(session.clone()),
+            RequestState::Denied => RequestView::Denied,
+        },
+    }
+}
+
+pub async fn login(
+    Json(req): Json<LoginRequest>,
+) -> Result<(HeaderMap, Json<serde_json::Value>), (StatusCode, String)> {
+    if !token_configured() {
+        return Err((
+            StatusCode::NOT_IMPLEMENTED,
+            "Admin sign-in is not set up on this computer yet.".into(),
+        ));
+    }
+    let token = req.token.trim();
+    if !verify(token) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            "That admin token does not match. Ask the Keel computer, or type the token again."
+                .into(),
+        ));
+    }
+    let session = issue_session().map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))?;
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        SET_COOKIE,
+        HeaderValue::from_str(&session_cookie(&session))
+            .map_err(|_| (StatusCode::BAD_REQUEST, "could not start the sign-in session".into()))?,
+    );
+    Ok((
+        headers,
+        Json(serde_json::json!({ "ok": true, "message": "signed in" })),
+    ))
+}
+
+pub async fn create_sign_in(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if !token_configured() {
+        return Err((
+            StatusCode::NOT_IMPLEMENTED,
+            "Admin sign-in is not set up on this computer yet.".into(),
+        ));
+    }
+    let id = create_request(addr.ip()).map_err(|error| (StatusCode::CONFLICT, error))?;
+    Ok(Json(serde_json::json!({ "id": id })))
+}
+
+pub async fn sign_in_requests(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+) -> Result<Json<Vec<ScreenRequest>>, (StatusCode, String)> {
+    if !screen_may_answer(addr.ip().is_loopback()) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "Sign-in requests show on the Keel computer's own screen.".into(),
+        ));
+    }
+    Ok(Json(pending_for_screen()))
+}
+
+pub async fn sign_in_status(
+    Path(id): Path<String>,
+) -> Result<(HeaderMap, Json<serde_json::Value>), (StatusCode, String)> {
+    let (state, session) = match poll(&id) {
+        RequestView::Waiting => ("waiting", None),
+        RequestView::Allowed(session) => ("allowed", Some(session)),
+        RequestView::Denied => ("denied", None),
+        RequestView::Expired => ("expired", None),
+    };
+    let mut headers = HeaderMap::new();
+    if let Some(session) = session {
+        headers.insert(
+            SET_COOKIE,
+            HeaderValue::from_str(&session_cookie(&session)).map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "could not start the sign-in session".to_string(),
+                )
+            })?,
+        );
+    }
+    Ok((headers, Json(serde_json::json!({ "state": state }))))
+}
+
+pub async fn answer_sign_in(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Path(id): Path<String>,
+    Json(body): Json<DecideBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if !screen_may_answer(addr.ip().is_loopback()) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "Press Allow on the Keel computer's own screen.".into(),
+        ));
+    }
+    decide(&id, body.allow).map_err(|error| (StatusCode::CONFLICT, error))?;
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 pub fn token_configured() -> bool {
@@ -88,7 +396,7 @@ pub fn token_configured() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{loopback_trusted, token_configured};
+    use super::*;
 
     #[test]
     fn empty_token_is_not_configured() {
@@ -110,5 +418,54 @@ mod tests {
         std::env::set_var("KEEL_TRUST_LOOPBACK", "1");
         assert!(loopback_trusted());
         std::env::remove_var("KEEL_TRUST_LOOPBACK");
+    }
+
+    #[test]
+    fn the_keel_screen_answers_a_sign_in_once() {
+        {
+            let mut gate = gate();
+            gate.requests.clear();
+            gate.sessions.clear();
+        }
+
+        assert!(screen_may_answer(true));
+        assert!(!screen_may_answer(false));
+
+        let first: IpAddr = "10.1.1.1".parse().unwrap();
+        let id = create_request(first).unwrap();
+        assert_eq!(create_request(first).unwrap(), id);
+        assert_eq!(pending_for_screen().len(), 1);
+        assert!(pending_for_screen()[0].message.contains("10.1.1.1"));
+
+        decide(&id, false).unwrap();
+        assert!(matches!(poll(&id), RequestView::Denied));
+        assert!(decide(&id, true).is_err());
+        assert!(pending_for_screen().is_empty());
+
+        let second: IpAddr = "10.1.1.2".parse().unwrap();
+        let id = create_request(second).unwrap();
+        decide(&id, true).unwrap();
+        let RequestView::Allowed(session) = poll(&id) else {
+            panic!("allowed sign-in did not return a session");
+        };
+        assert!(credential_ok(&session, "not-the-token"));
+        assert!(!credential_ok("short", "not-the-token"));
+        assert!(credential_ok("not-the-token", "not-the-token"));
+
+        {
+            let mut open = gate();
+            open.requests
+                .iter_mut()
+                .find(|request| request.id == id)
+                .unwrap()
+                .keep_until = Instant::now() - Duration::from_secs(1);
+        }
+        assert!(matches!(poll(&id), RequestView::Expired));
+        assert!(credential_ok(&session, "not-the-token"));
+
+        for host in ["10.2.0.1", "10.2.0.2", "10.2.0.3", "10.2.0.4"] {
+            create_request(host.parse().unwrap()).unwrap();
+        }
+        assert!(create_request("10.2.0.5".parse().unwrap()).is_err());
     }
 }

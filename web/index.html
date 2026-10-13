@@ -16,38 +16,30 @@
       <span>keel</span>
     </div>
     <nav>
-      <a class="active" href="/">Dashboard</a>
-      <a href="/overlay.html">Overlay</a>
-      <a href="/catalog.html">Catalog</a>
-      <a href="/installer.html">Try or install</a>
-      <a href="/repair.html">Repair</a>
-      <a href="/sleep.html">Idle</a>
-      <a href="/guide.html">Guide</a>
-      <a href="/notes.html">Notes</a>
-      <a href="/pools.html">Pools</a>
-      <a href="/shares.html">Shares</a>
-      <a href="/login.html">Sign in</a>
+      <a class="active" href="/">Home</a>
+      <a href="/shares.html">Files</a>
+      <a href="/catalog.html">Apps</a>
+      <a href="/overlay.html">Away</a>
+      <a class="quiet" href="/pools.html">Disks</a>
+      <a class="quiet" href="/installer.html">Install</a>
+      <a class="quiet" href="/repair.html">Repair</a>
+      <a class="quiet" href="/notes.html">Notes</a>
+      <a class="quiet" href="/guide.html">Guide</a>
+      <a class="quiet" href="/settings.html">Settings</a>
+      <a class="quiet" href="/login.html">Sign in</a>
     </nav>
     <div class="aside-foot" id="health"></div>
   </aside>
   <main>
     <header>
-      <h1 id="title">Dashboard</h1>
+      <h1 id="title">Home</h1>
       <div class="meta" id="timing"></div>
     </header>
-    <p class="lede">Health of this control panel. Disks below are this machine’s inventory — not a second page.</p>
+    <p class="lede">Open <a href="/shares.html">Files</a>, or open an <a href="/catalog.html">app</a>. <a href="/sleep.html">Let this computer rest</a> when you are done.</p>
     <div class="reach" id="reach" data-only="linux" hidden></div>
     <p class="glance" id="glance"></p>
-    <div class="lede" id="updates">Checking GitHub for a stable Keel release…</div>
     <section class="cards" id="cards"></section>
-    <details class="why" data-only="windows">
-      <summary>What to do on this Windows copy</summary>
-      <p>Click around. Put ideas in <a href="/notes.html">Notes</a>. Add a pool only as a plan (files stay on the other computer). Do not wipe <a class="term" href="/guide.html#proxmox">Proxmox</a> on rok. Real disks and shares wait for a Linux keel box.</p>
-    </details>
-    <details class="why" data-only="linux">
-      <summary>What to do on this machine</summary>
-      <p>This is the keel computer itself. The disks below are really plugged into it. Group them into a <a href="/pools.html">pool</a>, then publish a <a href="/shares.html">share</a> so other computers can open the files. You can do all of this from here, or from a browser on another computer using the address above.</p>
-    </details>
+    <p class="meta" data-only="windows">This PC is for trying the screen. Files stay on the other computer.</p>
     <h2>Disks in this machine</h2>
     <div class="table-wrap scroll">
       <table>
@@ -66,6 +58,8 @@
     </div>
   </main>
   <script src="/platform.js"></script>
+  <script src="/approve.js"></script>
+  <script src="/chrome.js"></script>
   <script src="/terms.js"></script>
   <script src="/app.js"></script>
 </body>

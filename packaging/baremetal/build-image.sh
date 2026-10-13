@@ -105,10 +105,10 @@ echo "Building the bootable Keel ISO..."
 lb build
 
 mkdir -p "${OUT_DIR}/release"
-mv "live-image-amd64.hybrid.iso" "${OUT_DIR}/release/keel-amd64.iso"
-sha256sum "${OUT_DIR}/release/keel-amd64.iso" \
-  > "${OUT_DIR}/release/keel-amd64.iso.sha256"
+mv "live-image-amd64.hybrid.iso" "${OUT_DIR}/release/keel-amd64-install.iso"
+sha256sum "${OUT_DIR}/release/keel-amd64-install.iso" \
+  > "${OUT_DIR}/release/keel-amd64-install.iso.sha256"
 
-echo "Created ${OUT_DIR}/release/keel-amd64.iso"
-echo "Checksum: ${OUT_DIR}/release/keel-amd64.iso.sha256"
+echo "Created ${OUT_DIR}/release/keel-amd64-install.iso"
+echo "Checksum: ${OUT_DIR}/release/keel-amd64-install.iso.sha256"
 echo "No target disk was modified."

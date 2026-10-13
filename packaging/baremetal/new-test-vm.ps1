@@ -40,7 +40,7 @@ if (-not $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrato
 if (-not $IsoPath) {
   # packaging\baremetal -> packaging -> repo root, without walking through '..'.
   $repoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-  $IsoPath = Join-Path $repoRoot 'dist\baremetal\release\keel-amd64.iso'
+  $IsoPath = Join-Path $repoRoot 'dist\baremetal\release\keel-amd64-install.iso'
 }
 
 if (-not (Test-Path -LiteralPath $IsoPath)) {

@@ -1,10 +1,13 @@
 const $ = (id) => document.getElementById(id);
 
 function show(status) {
-  const provider = status.provider || "unknown";
+  const names = { headscale: "A computer you run", tailscale: "Tailscale", unknown: "Not connected" };
+  const states = { connected: "connected", not_configured: "not set up", unavailable: "not available here" };
+  const provider = names[status.provider] || "Not connected";
+  const state = states[status.state] || status.state || "";
   const address = status.overlay_ip || status.dns_name || "—";
-  $("state").textContent = `${provider} · ${status.state}`;
-  const control = status.control_url ? `<p class="prose">control: ${status.control_url}</p>` : "";
+  $("state").textContent = state;
+  const control = status.control_url ? `<p class="prose">${status.control_url}</p>` : "";
   $("current").innerHTML = `<div class="k">${provider}</div><div class="v">${address}</div>${control}<p class="prose">${status.why}</p>`;
 }
 
@@ -15,7 +18,7 @@ async function refresh() {
 
 $("form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  $("result").textContent = "enrolling…";
+  $("result").textContent = "Connecting.";
   const provider = $("provider").value;
   const res = await fetch("/api/overlay/enroll", {
     method: "POST",

@@ -13,7 +13,7 @@ function render(p) {
     card("Policy", p.policy),
     card("Mode", p.mode),
     card("Services stopped", yn(p.services_stopped)),
-    card(`<a class="term" href="/guide.html#overlay">Overlay</a> required`, yn(p.overlay_required)),
+    card(`<a class="term" href="/guide.html#overlay">Away</a> stays on`, yn(p.overlay_required)),
   ].join("");
   $("why").innerHTML = keelLinkTerms(p.why);
 }
@@ -39,18 +39,18 @@ async function refresh() {
   renderOpps(opps);
 }
 
-async function setMode(path, label) {
+async function setMode(path) {
   $("status").textContent = "…";
   const res = await fetch(path, { method: "POST" });
   const p = await res.json();
   render(p);
-  $("status").textContent = `mode ${p.mode} (${label})`;
+  $("status").textContent = p.mode === "idle" ? "Resting." : "Apps can open.";
   const opps = await fetch("/api/power/opportunities").then((r) => r.json());
   renderOpps(opps);
 }
 
-$("idle").addEventListener("click", () => setMode("/api/power/idle", "Tailscale floor — files still work away"));
-$("active").addEventListener("click", () => setMode("/api/power/active", "demand, not all-on"));
+$("idle").addEventListener("click", () => setMode("/api/power/idle"));
+$("active").addEventListener("click", () => setMode("/api/power/active"));
 
 refresh().catch((err) => {
   $("why").textContent = String(err);

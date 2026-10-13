@@ -3,8 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>keel · Pools</title>
+  <title>keel · Disks</title>
   <link rel="stylesheet" href="/style.css" />
+  <script src="/approve.js"></script>
+  <script src="/chrome.js"></script>
 </head>
 <body>
   <aside>
@@ -16,35 +18,24 @@
       <span>keel</span>
     </div>
     <nav>
-      <a href="/">Dashboard</a>
-      <a href="/catalog.html">Catalog</a>
-      <a href="/repair.html">Repair</a>
-      <a href="/sleep.html">Idle</a>
-      <a href="/guide.html">Guide</a>
-      <a href="/notes.html">Notes</a>
-      <a class="active" href="/pools.html">Pools</a>
-      <a href="/shares.html">Shares</a>
+      <a href="/">Home</a>
+      <a href="/shares.html">Files</a>
+      <a href="/catalog.html">Apps</a>
+      <a href="/overlay.html">Away</a>
+      <a class="quiet active" href="/pools.html">Disks</a>
+      <a class="quiet" href="/installer.html">Install</a>
+      <a class="quiet" href="/repair.html">Repair</a>
+      <a class="quiet" href="/notes.html">Notes</a>
+      <a class="quiet" href="/guide.html">Guide</a>
+      <a class="quiet" href="/settings.html">Settings</a>
+      <a class="quiet" href="/login.html">Sign in</a>
     </nav>
   </aside>
   <main>
     <header>
-      <h1>Pools</h1>
+      <h1>Disks</h1>
     </header>
-    <p class="lede">A pool is where the files are stored. Keep files that already exist, or use disks in this machine.</p>
-    <details class="why">
-      <summary>What is a pool?</summary>
-      <p>A pool is the files keel should use. keel does not care yet which brand of system holds them — only where they are.</p>
-      <p><strong>On another computer</strong> means the files already live there (your Proxmox or TrueNAS machine, in this house). keel uses that folder. Nothing is copied. Nothing is wiped. Sign in on the left so keel can read the names that computer already uses. It does not invent them.</p>
-      <p data-only="windows"><strong>Disks in this machine</strong> means keel would use hard drives plugged into the keel box. We are not doing that on this Windows PC. You can still name the intent.</p>
-      <p data-only="linux"><strong>Disks in this machine</strong> means the hard drives plugged into this keel computer. They are listed on the Dashboard.</p>
-      <p>Most people only need “on another computer” at install, to keep personal files. Day to day they use a share name, not Proxmox disk names. This lab still needs the Proxmox list while rok holds the files.</p>
-    </details>
-    <details class="why">
-      <summary>Did I reach Proxmox?</summary>
-      <p>Look around + Sign in on the left is how keel talks to that computer. After sign-in, keel reads the names Proxmox already has, then marks each row <strong>Use this</strong> or <strong>Leave this</strong>. Shared folders and the files app are use. Installer disks and disks for other programs are leave. The password is not kept, so you sign in again next time.</p>
-      <p>A row in the table on the right is a <strong>plan</strong> of which files keel should use. It survives a restart.<span data-only="windows"> This Windows copy still does not attach those files as a drive letter.</span> To see file names, Sign in, then List files.</p>
-      <p>If you already know those names, tick <strong>Show the names that computer uses</strong>. Rows still say Use this or Leave this. Default is the plain heading.</p>
-    </details>
+    <p class="lede">Keep files that already live on another computer, or use the disks in this one. <a href="/guide.html#pool">What this means.</a></p>
     <div class="work-split">
       <div class="work-col">
         <div class="pane">

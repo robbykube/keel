@@ -3,8 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>keel · Shares</title>
+  <title>keel · Files</title>
   <link rel="stylesheet" href="/style.css" />
+  <script src="/approve.js"></script>
+  <script src="/chrome.js"></script>
 </head>
 <body>
   <aside>
@@ -16,23 +18,26 @@
       <span>keel</span>
     </div>
     <nav>
-      <a href="/">Dashboard</a>
-      <a href="/catalog.html">Catalog</a>
-      <a href="/repair.html">Repair</a>
-      <a href="/sleep.html">Idle</a>
-      <a href="/guide.html">Guide</a>
-      <a href="/notes.html">Notes</a>
-      <a href="/pools.html">Pools</a>
-      <a class="active" href="/shares.html">Shares</a>
+      <a href="/">Home</a>
+      <a class="active" href="/shares.html">Files</a>
+      <a href="/catalog.html">Apps</a>
+      <a href="/overlay.html">Away</a>
+      <a class="quiet" href="/pools.html">Disks</a>
+      <a class="quiet" href="/installer.html">Install</a>
+      <a class="quiet" href="/repair.html">Repair</a>
+      <a class="quiet" href="/notes.html">Notes</a>
+      <a class="quiet" href="/guide.html">Guide</a>
+      <a class="quiet" href="/settings.html">Settings</a>
+      <a class="quiet" href="/login.html">Sign in</a>
     </nav>
   </aside>
   <main>
     <header>
-      <h1>Shares</h1>
+      <h1>Files</h1>
     </header>
-    <p class="lede">A share is the name File Explorer uses to open the files. Same name at home and <a class="term" href="/guide.html#away">away</a>.</p>
+    <p class="lede">This is the name other computers use to open the files.</p>
     <details class="why">
-      <summary>How do I open this from Windows?</summary>
+      <summary>Open these from another computer</summary>
       <p>On the Keel computer, File Explorer can open the folder like a network drive. Paste the address (it starts with two backslashes). For this house network the name is <code>keel</code> and the password is <code>keel</code>. That is open on purpose until Keel has real sign-in. Do not put this on the public internet.</p>
     </details>
     <p class="meta" id="access"></p>
@@ -40,9 +45,9 @@
       <div class="work-col">
         <form class="form" id="form">
           <label>Name people will see <input name="name" required placeholder="photos" /></label>
-          <label>Which pool <select name="pool" id="pool"></select></label>
-          <label class="wide">Folder inside the pool <input name="path" placeholder="leave blank for the whole pool" /></label>
-          <button type="submit">Add share</button>
+          <label>Which disks <select name="pool" id="pool"></select></label>
+          <label class="wide">Folder <input name="path" placeholder="leave blank for all of them" /></label>
+          <button type="submit">Add</button>
         </form>
         <p class="meta" id="status"></p>
       </div>

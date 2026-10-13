@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>keel · Guide</title>
   <link rel="stylesheet" href="/style.css" />
+  <script src="/approve.js"></script>
+  <script src="/chrome.js"></script>
 </head>
 <body>
   <aside>
@@ -16,44 +18,47 @@
       <span>keel</span>
     </div>
     <nav>
-      <a href="/">Dashboard</a>
-      <a href="/catalog.html">Catalog</a>
-      <a href="/repair.html">Repair</a>
-      <a href="/sleep.html">Idle</a>
-      <a class="active" href="/guide.html">Guide</a>
-      <a href="/notes.html">Notes</a>
-      <a href="/pools.html">Pools</a>
-      <a href="/shares.html">Shares</a>
+      <a href="/">Home</a>
+      <a href="/shares.html">Files</a>
+      <a href="/catalog.html">Apps</a>
+      <a href="/overlay.html">Away</a>
+      <a class="quiet" href="/pools.html">Disks</a>
+      <a class="quiet" href="/installer.html">Install</a>
+      <a class="quiet" href="/repair.html">Repair</a>
+      <a class="quiet" href="/notes.html">Notes</a>
+      <a class="quiet active" href="/guide.html">Guide</a>
+      <a class="quiet" href="/settings.html">Settings</a>
+      <a class="quiet" href="/login.html">Sign in</a>
     </nav>
   </aside>
   <main>
     <header>
       <h1>Guide</h1>
     </header>
-    <p class="lede">This page lives in the app so you never have to hunt a wiki.</p>
+    <p class="lede">The names on the screen, and what they mean.</p>
     <div class="guide-split">
       <article class="prose">
         <h2>Words</h2>
         <p>Short names in the app look like <a class="term" href="#lsblk">this</a> and jump here.</p>
         <dl>
-          <dt id="pool">Pool</dt>
+          <dt id="pool">Disks</dt>
           <dd>Where the files are stored.</dd>
-          <dt id="share">Share</dt>
-          <dd>The name your computer uses to open those files. Same name at home and away.</dd>
+          <dt id="share">Files</dt>
+          <dd>The name another computer uses to open those files. Same name at home and away.</dd>
           <dt id="lsblk"><code>lsblk</code></dt>
-          <dd><span data-only="windows">Linux’s list of disks in the machine. This Windows copy fakes that list.</span><span data-only="linux">Linux’s list of disks in the machine. The disks on the Dashboard come from it, and they are real.</span></dd>
+          <dd><span data-only="windows">Linux’s list of disks in the machine. This Windows copy fakes that list.</span><span data-only="linux">Linux’s list of disks in the machine. The disks on Home come from it, and they are real.</span></dd>
           <dt id="rss">RSS</dt>
           <dd>How much memory the keel program is using right now. Smaller is better.</dd>
           <dt id="api">API</dt>
           <dd>The app asking itself for numbers (disks, health). The timing on the dashboard is how fast that answer came back.</dd>
           <dt id="smart">SMART</dt>
-          <dd>The disk reporting if it feels healthy. Keel does not read this yet, on any machine — the Dashboard lists disks but not their health.</dd>
+          <dd>The disk reporting if it feels healthy. Keel does not read this yet, on any machine — Home lists disks but not their health.</dd>
           <dt id="lxc">LXC</dt>
           <dd>A small computer-inside-a-computer on Proxmox. Your rok list is these. keel’s OS uses normal programs instead.</dd>
-          <dt id="overlay">Overlay</dt>
-          <dd>A private path so phones and laptops open the <em>same shares</em> when you are not on home Wi‑Fi. Keel prefers self-hosted Headscale and remains compatible with Tailscale clients. Idle keeps the selected overlay on. If we switch providers, the job stays: files work away from the computer.</dd>
+          <dt id="overlay">Away</dt>
+          <dd>The same files, when you are not on home Wi‑Fi. Open <a href="/overlay.html">Away</a> to connect. <a href="/sleep.html">Rest</a> keeps that connection on.</dd>
           <dt id="away">Away</dt>
-          <dd>Not on the house network. You still open the share; the overlay is the road.</dd>
+          <dd>Not on the house network. You still open the same files. Away is how you reach them.</dd>
           <dt id="opencloud">OpenCloud</dt>
           <dd>The files app already running on rok. keel does not replace it there.</dd>
           <dt id="proxmox">Proxmox</dt>
@@ -72,17 +77,17 @@
 
         <h2 data-only="windows">This Windows copy</h2>
         <div data-only="windows">
-          <p>You are looking at the control panel we are building. The real keel OS will run on Linux later. Disks here are fake. Pools you add are a saved plan, not a real mount yet.</p>
-          <p><strong>What to do now:</strong> click the pages, leave ideas in <a href="/notes.html">Notes</a>, maybe add a pool as “on another computer.” Do not wipe rok. Do not expect this PC to serve family files yet.</p>
+          <p>You are looking at the screen we are building. The real Keel computer will run on Linux later. Disks here are an example. Choices you save are a plan, not files on this PC yet.</p>
+          <p><strong>What to do now:</strong> click Files, Apps, and Away. Leave ideas in <a href="/notes.html">Notes</a>. Do not wipe the other computer. Do not expect this PC to serve family files yet.</p>
         </div>
 
         <h2 data-only="linux">This keel computer</h2>
         <div data-only="linux">
-          <p>You are looking at the keel computer itself. The disks on the Dashboard are really plugged into this machine, and a share you publish here can be opened from other computers in the house.</p>
-          <p><strong>What to do now:</strong> group disks into a <a href="/pools.html">pool</a>, publish a <a href="/shares.html">share</a>, then open the address on the Dashboard from another computer to check it works from there too.</p>
+          <p>You are looking at the Keel computer itself. The disks on Home are really plugged into this machine. A name you add on Files can be opened from other computers in the house.</p>
+          <p><strong>What to do now:</strong> choose <a href="/pools.html">Disks</a>, add a name on <a href="/shares.html">Files</a>, then open that address from another computer.</p>
         </div>
 
-        <p>Dashboard is health plus this machine’s disk list. Disks is not a separate place — that extra link is gone so the two do not look like twins.</p>
+        <p>Home shows how this computer is doing, and the disks plugged into it. <a href="/pools.html">Disks</a> is where you choose which files Keel should use.</p>
 
         <h2 id="usb-test">Try Keel from USB</h2>
         <p>The safest first appliance test uses a spare computer and a USB stick. Windows writes the Keel image to the stick. The spare computer boots from it, while your Windows PC opens Keel in a browser on the same local network.</p>
@@ -90,8 +95,12 @@
         <p>Keel can work without internet during the USB test. It only needs the local network for Windows to open the GUI. Internet is needed later to check GitHub for a signed update, or to join a Headscale server that is somewhere else. An update keeps the previous version and puts it back if the new one does not start.</p>
         <p>You cannot run the USB as a normal Windows app while Windows is using that computer. To test it on the same PC, reboot and choose the USB, or run the image inside a disposable VM. The Windows installer will explain each choice in simple words.</p>
 
+        <h2 id="github-connect">GitHub updates</h2>
+        <p>Releases already come from your repository at <a href="https://github.com/robbykube/keel">github.com/robbykube/keel</a>. You do not need a second repository. That one is private, so this computer needs your permission to see it. On <a href="/settings.html">Settings</a>, press <strong>Connect GitHub</strong>. A short code appears. On your phone or this PC, open github.com/login/device, enter the code, and allow Keel to read releases. The sign-in stays on the Keel computer. The page never shows the secret.</p>
+        <p>The first time, GitHub asks you to allow a Keel login on that same repository (Device Flow on, expiring tokens off, Contents read). That is not a new project. The public app id can be saved in Settings if Connect GitHub does not start. You can paste a GitHub token instead.</p>
+
         <h2 id="usb-files">Open files from Windows</h2>
-        <p>When Keel is running on a Linux computer on this house network, File Explorer can open a folder on that computer. On Shares, copy the address that starts with two backslashes. For now the name is <code>keel</code> and the password is <code>keel</code>. That is open on the house network on purpose. It is not safe on the public internet.</p>
+        <p>When Keel is running on a Linux computer on this house network, File Explorer can open a folder on that computer. On <a href="/shares.html">Files</a>, copy the address that starts with two backslashes. For now the name is <code>keel</code> and the password is <code>keel</code>. That is open on the house network on purpose. It is not safe on the public internet.</p>
         <p>On USB try-mode that folder is temporary. Files you copy there are gone when you shut the computer down.<span data-only="windows"> This Windows copy of the control panel cannot serve folders; only the Linux Keel computer can.</span></p>
 
         <h2>Notes</h2>
@@ -109,25 +118,25 @@
         <p>keel does not invent names like the ones Proxmox uses. After you sign in, it <em>reads</em> the names that computer already has, then marks each row Use this or Leave this.</p>
         <p>Use this: a folder a PC can already open, or a files app (if that computer named it something like OpenCloud). Leave this: installer files, or disks that belong to other programs.</p>
         <p>This house still needs that list while files live on rok. For a new keel box, most people only do this at install — so personal files stay where they are. After that, they use a share name. They do not live in Proxmox names.</p>
-        <p>If you already know the names on that computer, you can show them. Tick “Show the names that computer uses” on Pools. Use this / Leave this stays. Default is the plain heading.</p>
+        <p>If you already know the names on that computer, you can show them. Tick “Show the names that computer uses” on <a href="/pools.html">Disks</a>. Use this / Leave this stays. Default is the plain heading.</p>
 
         <h2>Look around</h2>
-        <p>On Pools, type the name or number of that computer — whatever you already use in the browser. keel checks a few well-known services: Proxmox, websites, shared folders. It does <em>not</em> scan every machine on the house network. An open website is not yet a folder of files.</p>
+        <p>On <a href="/pools.html">Disks</a>, type the name or number of that computer — whatever you already use in the browser. keel checks a few well-known services: Proxmox, websites, shared folders. It does <em>not</em> scan every machine on the house network. An open website is not yet a folder of files.</p>
         <p>You can <strong>sign in on that page</strong> so keel can list what is there. The password is typed into keel on this PC. Do not paste it into chat. Every name you type is kept until you delete it. keel does not keep the password. The Proxmox session stays in memory until keel restarts, so you can list files without signing in on every click.</p>
         <p>The raw Proxmox port can stay closed when a locked website sits in front. Sign-in still talks to that website.</p>
 
         <h2>Check files</h2>
-        <p>Family files live in the files app (<a class="term" href="#opencloud">OpenCloud</a> on rok), not on disks that belong to other programs. After you sign in to Proxmox, Pools says Use this or Leave this. Listing the files app needs that app’s name and password — not the Proxmox one. You can also paste the files website you already open. Listing is read-only. Open the files app to change anything.</p>
+        <p>Family files live in the files app (<a class="term" href="#opencloud">OpenCloud</a> on rok), not on disks that belong to other programs. After you sign in to Proxmox, Disks says Use this or Leave this. Listing the files app needs that app’s name and password — not the Proxmox one. You can also paste the files website you already open. Listing is read-only. Open the files app to change anything.</p>
         <p>List files on installer disks or disks for other programs shows installers and program disks. That is how you check what that computer is storing. It is not the photo library.</p>
 
-        <h2>Idle</h2>
-        <p>keel works like an OS. The computer stays on. Apps stay closed until you open them. Idle keeps Tailscale so you can open files and the GUI when you are not at home. We do not sleep the whole Proxmox machine.</p>
+        <h2>Rest</h2>
+        <p>The computer stays on. Apps stay closed until you open them. <a href="/sleep.html">Rest</a> keeps the away connection up, so files still open when you are not at home.</p>
 
         <h2>What ships</h2>
         <p>The OS comes with the same jobs as your rok list (VPN, passwords, files, photos, and so on). Installed does not mean running. Open the one you need; the rest can stay off.</p>
 
-        <h2>Pools and shares</h2>
-        <p>Linux Keel starts with a share named <code>files</code> so a PC can open a folder without extra setup. Add more names on <a href="/shares.html">Shares</a> after you have a <a href="/pools.html">pool</a>. Prefer “on another computer” so rok is left alone.</p>
+        <h2>Files and disks</h2>
+        <p>Linux Keel starts with a files name so a PC can open a folder without extra setup. Add more names on <a href="/shares.html">Files</a> after you choose <a href="/pools.html">Disks</a>.</p>
 
         <h2>Repair</h2>
         <p>If something is wrong, <a href="/repair.html">Repair</a> says it in a sentence. Fix is a safe button, not a settings hunt.</p>

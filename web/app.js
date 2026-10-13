@@ -65,7 +65,7 @@ function showReach(s) {
 }
 
 async function load() {
-  const [sys, disks, health, issues, power, pools, shares, overlay, updates] = await Promise.all([
+  const [sys, disks, health, issues, power, pools, shares] = await Promise.all([
     get("/api/system"),
     get("/api/disks"),
     get("/api/health"),
@@ -73,8 +73,6 @@ async function load() {
     get("/api/power"),
     get("/api/pools"),
     get("/api/shares"),
-    get("/api/overlay"),
-    get("/api/updates"),
   ]);
 
   $("health").textContent = issues.data.red
@@ -93,21 +91,20 @@ async function load() {
 
   const nIssues = issues.data.items.length;
   const glance = [
-    `<a href="/sleep.html">${power.data.mode}</a>`,
+    `<a href="/sleep.html">${power.data.mode === "idle" ? "Resting" : "Apps can open"}</a>`,
     pools.data.length
-      ? `<a href="/pools.html">${pools.data.length} pool</a>`
-      : `<a href="/pools.html">no pool yet</a>`,
+      ? `<a href="/pools.html">${pools.data.length} disks</a>`
+      : `<a href="/pools.html">no disks yet</a>`,
     shares.data.length
-      ? `<a href="/shares.html">${shares.data.length} share</a>`
-      : `<a href="/shares.html">no share yet</a>`,
+      ? `<a href="/shares.html">${shares.data.length} files</a>`
+      : `<a href="/shares.html">no files yet</a>`,
     nIssues
       ? `<a href="/repair.html">${nIssues} on Repair</a>`
       : `<a href="/repair.html">Repair quiet</a>`,
-    `<a href="/guide.html#away-from-home">away via ${overlay.data.provider}</a>`,
+    `<a href="/overlay.html">Away</a>`,
     `<a href="/notes.html">Notes</a>`,
   ];
   $("glance").innerHTML = glance.join(" · ");
-  renderUpdate(updates.data);
 
   $("disks").innerHTML = disks.data
     .map((d) => {
@@ -123,61 +120,6 @@ async function load() {
       </tr>`;
     })
     .join("");
-}
-
-function renderUpdate(update) {
-  const box = $("updates");
-  if (!box || !update) return;
-  box.replaceChildren();
-  const text = document.createElement("span");
-  text.textContent = update.message || "Keel could not check for an update.";
-  box.appendChild(text);
-  if (update.release_url) {
-    const link = document.createElement("a");
-    link.href = update.release_url;
-    link.target = "_blank";
-    link.rel = "noreferrer";
-    link.textContent = " Release notes";
-    box.appendChild(link);
-  }
-  if (update.can_apply) {
-    box.appendChild(updateButton("Install update", () => postUpdate("/api/updates/install", "INSTALL UPDATE", "Install this Keel update? If the new version does not start, the previous version is restored.")));
-  }
-  if (update.can_restore) {
-    box.appendChild(updateButton("Restore the previous version", () => postUpdate("/api/updates/restore", "RESTORE PREVIOUS", "Put the previous Keel back? This machine will restart with the saved version.")));
-  }
-}
-
-function updateButton(label, action) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = label;
-  button.addEventListener("click", action);
-  return button;
-}
-
-async function postUpdate(path, confirmation, question) {
-  if (!window.confirm(question)) return;
-  const box = $("updates");
-  box.textContent = "Working…";
-  try {
-    const res = await fetch(path, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ confirmation }),
-    });
-    const text = await res.text();
-    let message = text;
-    try {
-      message = JSON.parse(text).message || text;
-    } catch {
-      /* The sign-in check answers with plain text. */
-    }
-    box.textContent = message;
-  } catch (error) {
-    box.textContent = String(error);
-  }
 }
 
 load().catch((err) => {

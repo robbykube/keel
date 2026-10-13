@@ -13,6 +13,7 @@ const REPOSITORY: &str = "robbykube/keel";
 const MAX_CHECKSUM_BYTES: usize = 64 * 1024;
 const MAX_PACKAGE_BYTES: usize = 64 * 1024 * 1024;
 const RELEASE_PUBLIC_KEY_HEX: &str = include_str!("../packaging/updates/release-public.hex");
+const BAKED_GITHUB_CLIENT_ID: &str = include_str!("../packaging/updates/github-client-id");
 
 #[derive(Serialize)]
 pub struct UpdateStatus {
@@ -27,6 +28,8 @@ pub struct UpdateStatus {
     pub signature: &'static str,
     pub can_apply: bool,
     pub can_restore: bool,
+    pub github_token_set: bool,
+    pub github_can_connect: bool,
     pub message: String,
 }
 
@@ -99,14 +102,14 @@ pub async fn check() -> UpdateStatus {
         return unavailable(
             current,
             restore,
-            "No published Keel release is visible. A private repository needs KEEL_GITHUB_TOKEN on this machine.".into(),
+            "No published Keel release is visible. Connect GitHub in Settings so this computer can see the private repository.".into(),
         );
     }
     if response.status() == reqwest::StatusCode::UNAUTHORIZED {
         return unavailable(
             current,
             restore,
-            "GitHub refused the token in KEEL_GITHUB_TOKEN.".into(),
+            "GitHub refused this computer's sign-in. Connect GitHub again in Settings.".into(),
         );
     }
     if !response.status().is_success() {
@@ -174,6 +177,8 @@ pub async fn check() -> UpdateStatus {
         signature: checked.state,
         can_apply: decision.can_apply && checked.sha256.is_some(),
         can_restore: restore,
+        github_token_set: github_token_is_set(),
+        github_can_connect: github_can_connect(),
         message: decision.message,
     }
 }
@@ -956,10 +961,8 @@ fn github_client() -> Result<reqwest::Client, String> {
 
 fn github_headers() -> Result<HeaderMap, String> {
     let mut headers = HeaderMap::new();
-    let Ok(token) = std::env::var("KEEL_GITHUB_TOKEN") else {
-        return Ok(headers);
-    };
-    if let Some(value) = github_authorization(token.trim())? {
+    let token = load_github_token()?;
+    if let Some(value) = github_authorization(&token)? {
         headers.insert(AUTHORIZATION, value);
         headers.insert(
             ACCEPT,
@@ -967,6 +970,107 @@ fn github_headers() -> Result<HeaderMap, String> {
         );
     }
     Ok(headers)
+}
+
+fn github_token_path() -> PathBuf {
+    data_dir().join("github.token")
+}
+
+fn load_github_token() -> Result<String, String> {
+    if let Ok(token) = std::env::var("KEEL_GITHUB_TOKEN") {
+        let token = token.trim().to_string();
+        if !token.is_empty() {
+            return Ok(token);
+        }
+    }
+    let Ok(bytes) = fs::read(github_token_path()) else {
+        return Ok(String::new());
+    };
+    String::from_utf8(bytes)
+        .map(|text| text.trim().to_string())
+        .map_err(|_| "The saved GitHub token is not valid text.".into())
+}
+
+pub fn github_token_is_set() -> bool {
+    load_github_token()
+        .map(|token| !token.is_empty())
+        .unwrap_or(false)
+}
+
+pub fn github_can_connect() -> bool {
+    !github_client_id().is_empty()
+}
+
+pub fn github_client_id() -> String {
+    if let Ok(id) = std::env::var("KEEL_GITHUB_CLIENT_ID") {
+        let id = id.trim().to_string();
+        if !id.is_empty() {
+            return id;
+        }
+    }
+    if let Ok(bytes) = fs::read(data_dir().join("github.client_id")) {
+        if let Ok(text) = String::from_utf8(bytes) {
+            let id = text.trim().to_string();
+            if !id.is_empty() {
+                return id;
+            }
+        }
+    }
+    BAKED_GITHUB_CLIENT_ID.trim().to_string()
+}
+
+#[derive(Deserialize)]
+pub struct GithubClientIdRequest {
+    pub client_id: String,
+}
+
+pub fn save_github_client_id(client_id: &str) -> Result<String, String> {
+    let client_id = client_id.trim();
+    let path = data_dir().join("github.client_id");
+    if client_id.is_empty() {
+        let _ = fs::remove_file(&path);
+        return Ok("The GitHub app id was removed from this computer.".into());
+    }
+    if client_id
+        .chars()
+        .any(|character| !character.is_ascii_alphanumeric() && character != '.' && character != '_')
+        || client_id.len() < 8
+        || client_id.len() > 64
+    {
+        return Err("That is not a GitHub app id.".into());
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    fs::write(&path, format!("{client_id}\n")).map_err(|error| error.to_string())?;
+    Ok("GitHub app id saved. Press Connect GitHub.".into())
+}
+
+#[derive(Deserialize)]
+pub struct GithubTokenRequest {
+    pub token: String,
+}
+
+pub fn save_github_token(token: &str) -> Result<String, String> {
+    let token = token.trim();
+    let path = github_token_path();
+    if token.is_empty() {
+        let _ = fs::remove_file(&path);
+        return Ok("The GitHub token was removed from this computer.".into());
+    }
+    github_authorization(token)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let tmp = path.with_extension("token.tmp");
+    fs::write(&tmp, format!("{token}\n")).map_err(|error| error.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600));
+    }
+    fs::rename(tmp, path).map_err(|error| error.to_string())?;
+    Ok("GitHub token saved on this computer. Check for an update on this page.".into())
 }
 
 fn github_authorization(token: &str) -> Result<Option<HeaderValue>, String> {
@@ -1016,6 +1120,8 @@ fn unavailable(current: &'static str, can_restore: bool, message: String) -> Upd
         signature: "unchecked",
         can_apply: false,
         can_restore,
+        github_token_set: github_token_is_set(),
+        github_can_connect: github_can_connect(),
         message,
     }
 }
@@ -1075,6 +1181,31 @@ mod tests {
         assert!(github_authorization("").unwrap().is_none());
         assert!(github_authorization("keel_token").unwrap().is_some());
         assert!(github_authorization("bad token").is_err());
+    }
+
+    #[test]
+    fn saves_github_token_without_echoing_it() {
+        let dir = std::env::temp_dir().join(format!("keel-gh-token-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        std::env::remove_var("KEEL_GITHUB_TOKEN");
+        std::env::remove_var("KEEL_GITHUB_CLIENT_ID");
+        std::env::set_var("KEEL_DATA", &dir);
+        let message = super::save_github_token("ghp_testtoken").unwrap();
+        assert!(message.contains("saved"));
+        assert!(!message.contains("ghp_testtoken"));
+        assert!(super::github_token_is_set());
+        assert_eq!(super::load_github_token().unwrap(), "ghp_testtoken");
+        super::save_github_token("").unwrap();
+        assert!(!super::github_token_is_set());
+        let id_message = super::save_github_client_id("Iv1.keeltestid").unwrap();
+        assert!(id_message.contains("saved"));
+        assert!(super::github_can_connect());
+        assert_eq!(super::github_client_id(), "Iv1.keeltestid");
+        super::save_github_client_id("").unwrap();
+        assert!(!super::github_can_connect());
+        std::env::remove_var("KEEL_DATA");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

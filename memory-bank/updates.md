@@ -12,10 +12,13 @@ What works now:
   `KEEL_RELEASE_SIGNING_KEY`. The matching public key is
   `packaging/updates/release-public.hex` and is built into the `keel` binary.
   Do not put the private key in git, memory-bank, or chat.
-- The GitHub repository is private. An appliance cannot see releases until
-  `KEEL_GITHUB_TOKEN` is set in its environment. That token is not a signing
-  key and must not be committed. Making the repository public removes the need
-  for it.
+- The GitHub repository is private. Settings **Connect GitHub** uses device
+  flow: a code on the Keel screen, approve on a phone or PC. The access token
+  is saved to `KEEL_DATA/github.token` and is never shown again.
+  `KEEL_GITHUB_TOKEN` in the environment still works. The GitHub app id is
+  public (`packaging/updates/github-client-id`, `KEEL_GITHUB_CLIENT_ID`, or
+  `KEEL_DATA/github.client_id`). That token is not a signing key and must not
+  be committed. Making the repository public removes the need for it.
 - The dashboard checks the latest stable release and verifies the signature
   before it will offer Install update.
 - Install saves the current program, pages, and `/var/lib/keel` settings, then

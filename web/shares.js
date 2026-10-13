@@ -11,7 +11,7 @@ async function load() {
   ]);
   $("pool").innerHTML = pools
     .map((p) => `<option value="${p.name}">${p.name} (${p.kind === "foreign" ? "another computer" : "this machine"})</option>`)
-    .join("") || `<option value="">add a pool first</option>`;
+    .join("") || `<option value="">Choose disks first</option>`;
   const first = shares[0];
   if (first) {
     const addr = (first.lan && first.lan[0]) || "";
@@ -28,8 +28,8 @@ async function load() {
     // used to claim the latter, which was wrong on the appliance itself.
     $("access").textContent =
       document.documentElement.dataset.platform === "windows"
-        ? "No share yet. This Windows copy cannot serve folders; only the Linux keel computer can."
-        : "No share yet. Publish one and File Explorer can open it as \\\\address\\files with name keel and password keel.";
+        ? "No name yet. This Windows copy cannot serve folders. The Keel computer can."
+        : "No name yet. Add one, then open it from another computer.";
   }
   $("rows").innerHTML = shares
     .map((s) => {
@@ -37,7 +37,7 @@ async function load() {
       const ready = s.ready ? "yes" : "not yet";
       return `<tr><td><code>${escapeHtml(s.name)}</code></td><td><code>${escapeHtml(addr)}</code></td><td>${ready}</td></tr>`;
     })
-    .join("") || `<tr><td colspan="3">No shares yet.</td></tr>`;
+    .join("") || `<tr><td colspan="3">No names yet.</td></tr>`;
 }
 
 $("form").addEventListener("submit", async (e) => {

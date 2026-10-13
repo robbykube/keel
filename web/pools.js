@@ -31,7 +31,7 @@ async function load() {
       (p) =>
         `<tr><td><code>${p.name}</code></td><td>${where(p.kind)}</td><td>${p.source || "—"}</td></tr>`
     )
-    .join("") || `<tr><td colspan="3">No pool yet. Add one above.</td></tr>`;
+    .join("") || `<tr><td colspan="3">No disks chosen yet. Add them above.</td></tr>`;
   await renderRecents();
 }
 

@@ -3,8 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>keel · Catalog</title>
+  <title>keel · Apps</title>
   <link rel="stylesheet" href="/style.css" />
+  <script src="/approve.js"></script>
+  <script src="/chrome.js"></script>
 </head>
 <body>
   <aside>
@@ -16,37 +18,36 @@
       <span>keel</span>
     </div>
     <nav>
-      <a href="/">Dashboard</a>
-      <a class="active" href="/catalog.html">Catalog</a>
-      <a href="/repair.html">Repair</a>
-      <a href="/sleep.html">Idle</a>
-      <a href="/guide.html">Guide</a>
-      <a href="/notes.html">Notes</a>
-      <a href="/pools.html">Pools</a>
-      <a href="/shares.html">Shares</a>
+      <a href="/">Home</a>
+      <a href="/shares.html">Files</a>
+      <a class="active" href="/catalog.html">Apps</a>
+      <a href="/overlay.html">Away</a>
+      <a class="quiet" href="/pools.html">Disks</a>
+      <a class="quiet" href="/installer.html">Install</a>
+      <a class="quiet" href="/repair.html">Repair</a>
+      <a class="quiet" href="/notes.html">Notes</a>
+      <a class="quiet" href="/guide.html">Guide</a>
+      <a class="quiet" href="/settings.html">Settings</a>
+      <a class="quiet" href="/login.html">Sign in</a>
     </nav>
   </aside>
   <main>
     <header>
-      <h1>Catalog</h1>
+      <h1>Apps</h1>
       <div class="meta" id="mode"></div>
     </header>
-    <p class="lede">Installed is not running. Open an app when you need it.</p>
-    <details class="why">
-      <summary>Why this list</summary>
-      <p>keel works like an OS: the programs are on the disk. You open one when you need it. Nothing has to be on all the time. Idle keeps Tailscale so files and the GUI still work when you are not at home. Active can start the usual files/DNS/vault/proxy set and still leave the quiet ones closed until something asks. These become units on keel Linux, not Proxmox LXCs.</p>
-    </details>
+    <p class="lede">Open an app when you need it. The rest stay closed.</p>
     <div class="table-wrap scroll">
     <table>
       <thead>
         <tr>
           <th>App</th>
-          <th>Role</th>
-          <th>Runtime</th>
+          <th>What it does</th>
+          <th>Runs as</th>
           <th>Status</th>
-          <th>Data</th>
-          <th>Idle policy</th>
-          <th>Actions</th>
+          <th>Files</th>
+          <th>When resting</th>
+          <th></th>
           <th>Why</th>
         </tr>
       </thead>

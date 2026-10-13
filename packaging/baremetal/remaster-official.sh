@@ -19,7 +19,7 @@ OUT_DIR="${ROOT_DIR}/dist/baremetal/release"
 ROOTFS_DIR="${WORK_DIR}/rootfs"
 NEW_SQUASHFS="${WORK_DIR}/filesystem.squashfs"
 NEW_SIZE="${WORK_DIR}/filesystem.size"
-OUTPUT_ISO="${OUT_DIR}/keel-amd64.iso"
+OUTPUT_ISO="${OUT_DIR}/keel-amd64-install.iso"
 
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "This builder must run on Linux or WSL2." >&2
@@ -181,6 +181,10 @@ mkdir -p "${ROOTFS_DIR}/usr/lib/keel/web" "${ROOTFS_DIR}/var/lib/keel"
 rsync -a --delete "${ROOT_DIR}/web/" "${ROOTFS_DIR}/usr/lib/keel/web/"
 find "${ROOTFS_DIR}/usr/lib/keel/web" -type d -exec chmod 0755 {} +
 find "${ROOTFS_DIR}/usr/lib/keel/web" -type f -exec chmod 0644 {} +
+# Windows checkouts can leave CRLF on the helper scripts. Bash then fails on
+# `pipefail\r` before any disk work starts.
+find "${ROOTFS_DIR}/usr/lib/keel" -type f \( -name '*.sh' -o -name 'install-keel' -o -name 'rollback-update' \) \
+  -exec sed -i 's/\r$//' {} +
 
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants"
 ln -sfn ../keel.service \
@@ -201,6 +205,9 @@ else
 
   echo "Adding Samba so Windows can open files on this computer..."
   bash "${ROOT_DIR}/packaging/baremetal/install-samba-in-rootfs.sh" "${ROOTFS_DIR}"
+
+  echo "Adding the disk tools the installer runs from the live USB..."
+  bash "${ROOT_DIR}/packaging/baremetal/install-disk-tools-in-rootfs.sh" "${ROOTFS_DIR}"
 
   # Opt-in, and only with a key. No key, no SSH — a release image should not
   # carry a developer's access.
@@ -318,7 +325,7 @@ xorriso -indev "${BASE_ISO}" -outdev "${OUTPUT_ISO}" \
 
 (
   cd "${OUT_DIR}"
-  sha256sum keel-amd64.iso > keel-amd64.iso.sha256
+  sha256sum keel-amd64-install.iso > keel-amd64-install.iso.sha256
 )
 
 echo "Created: ${OUTPUT_ISO}"

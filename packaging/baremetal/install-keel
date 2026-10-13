@@ -1,75 +1,234 @@
 #!/bin/bash
 set -Eeuo pipefail
 
+STATUS=/run/keel/install.json
+LOG=/run/keel/install.log
+PROGRESS_FINAL=0
+
+json_escape() {
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\r'/}
+  printf '%s' "$s"
+}
+
+progress() {
+  local state="$1" percent="$2" message="$3" token="${4:-}"
+  local token_json="null"
+  if [[ -n "${token}" ]]; then
+    token_json="\"$(json_escape "${token}")\""
+  fi
+  install -d -m 0700 /run/keel
+  umask 077
+  printf '{"state":"%s","percent":%s,"message":"%s","token":%s}\n' \
+    "$(json_escape "${state}")" \
+    "${percent}" \
+    "$(json_escape "${message}")" \
+    "${token_json}" > "${STATUS}.tmp"
+  mv -f "${STATUS}.tmp" "${STATUS}"
+}
+
+fail() {
+  PROGRESS_FINAL=1
+  progress error 0 "$1"
+  echo "$1" >&2
+  exit 2
+}
+
+run() {
+  "$@" >>"${LOG}" 2>&1
+}
+
 TARGET="${1:-}"
-if [[ "${EUID}" -ne 0 ]]; then echo "installer must run as root" >&2; exit 2; fi
-if [[ "${KEEL_INSTALL_CONFIRM:-}" != "INSTALL KEEL" ]]; then echo "missing installation confirmation" >&2; exit 2; fi
+install -d -m 0700 /run/keel
+: >"${LOG}"
+progress running 2 "Checking the disk"
+
+if [[ "${EUID}" -ne 0 ]]; then fail "The installer must run as root."; fi
+if [[ "${KEEL_INSTALL_CONFIRM:-}" != "INSTALL KEEL" ]]; then fail "Type INSTALL KEEL exactly after checking the disk name and size."; fi
 if [[ ! "${TARGET}" =~ ^/dev/(sd[a-z]+|vd[a-z]+|xvd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$ ]]; then
-  echo "target is not an accepted whole disk" >&2; exit 2
+  fail "That is not an accepted whole disk."
 fi
-if [[ ! -b "${TARGET}" ]]; then echo "target is not a block device" >&2; exit 2; fi
+if [[ ! -b "${TARGET}" ]]; then fail "That disk is not available."; fi
 if lsblk -nrpo MOUNTPOINT "${TARGET}" | grep -q '[^[:space:]]'; then
-  echo "target or one of its partitions is mounted" >&2; exit 2
+  fail "That disk is in use. Choose an unmounted system disk."
 fi
 ROOT_SOURCE="$(findmnt -no SOURCE / || true)"
 ROOT_DISK="$(lsblk -no PKNAME "${ROOT_SOURCE}" 2>/dev/null || true)"
 if [[ -n "${ROOT_DISK}" && "/dev/${ROOT_DISK}" == "${TARGET}" ]]; then
-  echo "refusing to overwrite the running system disk" >&2; exit 2
+  fail "That is the disk this USB is using. Choose the computer disk instead."
 fi
 LIVE_SOURCE="$(findmnt -no SOURCE /run/live/medium 2>/dev/null || true)"
 LIVE_DISK="$(lsblk -no PKNAME "${LIVE_SOURCE}" 2>/dev/null || true)"
 if [[ -n "${LIVE_DISK}" && "/dev/${LIVE_DISK}" == "${TARGET}" ]]; then
-  echo "refusing to overwrite the live USB disk" >&2; exit 2
+  fail "That is the USB itself. Choose the computer disk instead."
 fi
+for tool in wipefs sfdisk mkfs.vfat mkfs.ext4 unsquashfs blkid grub-install update-grub; do
+  if ! command -v "${tool}" >/dev/null 2>&1; then
+    fail "This image is missing a disk tool. Use a newer Keel image."
+  fi
+done
 
 SOURCE="/run/live/medium/live/filesystem.squashfs"
-[[ -f "${SOURCE}" ]] || { echo "Keel live filesystem not found" >&2; exit 2; }
+[[ -f "${SOURCE}" ]] || fail "The Keel files on this USB could not be found."
 MOUNT=/mnt/keel
-cleanup() { set +e; umount -R "${MOUNT}" 2>/dev/null || true; rm -rf -- "${MOUNT}"; }
+cleanup() {
+  local code=$?
+  set +e
+  umount -R "${MOUNT}" >/dev/null 2>&1 || true
+  rm -rf -- "${MOUNT}"
+  if [[ "${code}" -ne 0 && "${PROGRESS_FINAL}" -eq 0 ]]; then
+    progress error 0 "Install stopped. The disk may be incomplete. Run the install again on the same disk."
+  fi
+}
 trap cleanup EXIT
 mkdir -p "${MOUNT}"
 
-wipefs -a "${TARGET}"
-printf 'label: gpt\n,512M,U\n,,L\n' | sfdisk --wipe always "${TARGET}"
-partprobe "${TARGET}"
-udevadm settle
-if [[ "${TARGET}" == *nvme* || "${TARGET}" == *mmcblk* ]]; then
-  EFI="${TARGET}p1"; ROOT="${TARGET}p2"
-else
-  EFI="${TARGET}1"; ROOT="${TARGET}2"
-fi
-mkfs.vfat -F 32 -n KEEL-EFI "${EFI}"
-mkfs.ext4 -F -L KEEL-ROOT "${ROOT}"
-mount "${ROOT}" "${MOUNT}"
-mkdir -p "${MOUNT}/boot/efi"
-mount "${EFI}" "${MOUNT}/boot/efi"
-unsquashfs -f -d "${MOUNT}" "${SOURCE}"
+progress running 8 "Clearing the disk"
+# Wipe filesystem signatures while the partition nodes still exist. wipefs on
+# the whole disk re-reads the partition table and the kernel deletes those
+# nodes; wiping them afterwards fails with
+# "probing initialization failed: No such file or directory".
+parts="$(lsblk -nrpo NAME,TYPE "${TARGET}" || true)"
+while read -r device kind; do
+  if [[ "${kind}" == "part" && -b "${device}" ]]; then
+    run wipefs -a -f "${device}" || true
+  fi
+done <<< "${parts}"
+run wipefs -a -f "${TARGET}" || fail "The disk could not be cleared. Run the install again on the same disk."
 
-ROOT_UUID="$(blkid -s UUID -o value "${ROOT}")"
-EFI_UUID="$(blkid -s UUID -o value "${EFI}")"
+progress running 16 "Creating space for Keel"
+# 1 MiB BIOS boot, then the EFI system partition, then the rest for Keel.
+# BIOS GRUB on a GPT disk has nowhere to sit without that first partition, and
+# it stops rather than use unreliable blocklists.
+printf 'label: gpt\n,1M,21686148-6449-6E6F-744E-656564454649\n,512M,U\n,,L\n' | sfdisk --wipe always --wipe-partitions always "${TARGET}" >>"${LOG}" 2>&1 \
+  || fail "The disk could not be prepared. Run the install again on the same disk."
+if [[ "${TARGET}" == *nvme* || "${TARGET}" == *mmcblk* ]]; then
+  BIOS="${TARGET}p1"; EFI="${TARGET}p2"; ROOT="${TARGET}p3"
+else
+  BIOS="${TARGET}1"; EFI="${TARGET}2"; ROOT="${TARGET}3"
+fi
+# sfdisk asks the kernel to create the new nodes. One partprobe can return
+# before the new partition nodes exist.
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  if [[ -b "${BIOS}" && -b "${EFI}" && -b "${ROOT}" ]]; then
+    break
+  fi
+  partprobe "${TARGET}" >>"${LOG}" 2>&1 || true
+  udevadm settle >>"${LOG}" 2>&1 || true
+  sleep 0.5
+done
+if [[ ! -b "${BIOS}" || ! -b "${EFI}" || ! -b "${ROOT}" ]]; then
+  fail "The new partitions did not appear. Run the install again on this same disk."
+fi
+
+progress running 22 "Preparing the disk"
+run wipefs -a -f "${EFI}" || true
+run wipefs -a -f "${ROOT}" || true
+run mkfs.vfat -F 32 -n KEEL-EFI "${EFI}" || fail "The small boot area could not be created. Run the install again on the same disk."
+run mkfs.ext4 -F -q -L KEEL-ROOT "${ROOT}" || fail "The main disk area could not be created. Run the install again on the same disk."
+run mount "${ROOT}" "${MOUNT}" || fail "The disk could not be opened after formatting."
+mkdir -p "${MOUNT}/boot/efi"
+run mount "${EFI}" "${MOUNT}/boot/efi" || fail "The boot area could not be opened after formatting."
+
+progress running 28 "Copying Keel onto the disk"
+set +e
+set +o pipefail
+unsquashfs -f -d "${MOUNT}" -percentage "${SOURCE}" 2>&1 \
+  | tr '\r' '\n' \
+  | tee -a "${LOG}" \
+  | while IFS= read -r line || [[ -n "${line}" ]]; do
+  if [[ "${line}" =~ ^[[:space:]]*([0-9]{1,3})%?[[:space:]]*$ ]]; then
+    pct="${BASH_REMATCH[1]}"
+    if (( pct <= 100 )); then
+      mapped=$((28 + pct * 52 / 100))
+      progress running "${mapped}" "Copying Keel onto the disk"
+    fi
+  fi
+done
+sq=${PIPESTATUS[0]}
+set -o pipefail
+set -e
+if [[ "${sq}" -ne 0 ]]; then
+  fail "Keel could not be copied onto the disk. Run the install again on the same disk."
+fi
+
+progress running 82 "Switching this copy to a real install"
+# The copy is still the USB system. A normal boot does not pass boot=live, so
+# the live startup must not stay in charge: it would mint a new admin token on
+# every boot and keep telling the screen that no disk was changed.
+rm -f "${MOUNT}/etc/systemd/system/keel.service.d/live.conf"
+mkdir -p "${MOUNT}/etc/systemd/system/keel.service.d"
+cat > "${MOUNT}/etc/systemd/system/keel.service.d/installed.conf" <<'EOF'
+[Service]
+Environment=KEEL_TRUST_LOOPBACK=1
+EOF
+rm -f "${MOUNT}/etc/systemd/system/multi-user.target.wants/keel-console.service"
+if [[ -f "${MOUNT}/etc/apt/sources.list" ]]; then
+  sed -i '\|file:/run/live/medium|d' "${MOUNT}/etc/apt/sources.list"
+fi
+cat > "${MOUNT}/etc/hosts" <<'EOF'
+127.0.0.1 localhost
+127.0.1.1 keel
+::1 localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+EOF
+cat > "${MOUNT}/etc/resolv.conf" <<'EOF'
+# Filled in when this computer gets an address.
+EOF
+if [[ -f "${MOUNT}/etc/default/grub" ]] && ! grep -q '^GRUB_DISABLE_OS_PROBER=true$' "${MOUNT}/etc/default/grub"; then
+  printf '\nGRUB_DISABLE_OS_PROBER=true\n' >> "${MOUNT}/etc/default/grub"
+fi
+
+progress running 86 "Writing the sign-in details"
+ROOT_UUID=""
+EFI_UUID=""
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  ROOT_UUID="$(blkid -s UUID -o value "${ROOT}" || true)"
+  EFI_UUID="$(blkid -s UUID -o value "${EFI}" || true)"
+  if [[ -n "${ROOT_UUID}" && -n "${EFI_UUID}" ]]; then
+    break
+  fi
+  udevadm settle >>"${LOG}" 2>&1 || true
+  sleep 0.5
+done
+if [[ -z "${ROOT_UUID}" || -z "${EFI_UUID}" ]]; then
+  fail "The new filesystems have no id yet. Run the install again on this same disk."
+fi
 cat > "${MOUNT}/etc/fstab" <<EOF
 UUID=${ROOT_UUID} / ext4 defaults 0 1
 UUID=${EFI_UUID} /boot/efi vfat umask=0077 0 2
 EOF
-mount --bind /dev "${MOUNT}/dev"
-mount --bind /dev/pts "${MOUNT}/dev/pts"
-mount -t proc proc "${MOUNT}/proc"
-mount -t sysfs sysfs "${MOUNT}/sys"
-mount -t tmpfs tmpfs "${MOUNT}/run"
+run mount --bind /dev "${MOUNT}/dev" || fail "The disk could not be finished."
+run mount --bind /dev/pts "${MOUNT}/dev/pts" || true
+run mount -t proc proc "${MOUNT}/proc" || fail "The disk could not be finished."
+run mount -t sysfs sysfs "${MOUNT}/sys" || fail "The disk could not be finished."
+run mount -t tmpfs tmpfs "${MOUNT}/run" || fail "The disk could not be finished."
 mkdir -p "${MOUNT}/etc/keel"
 TOKEN="keel-$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')"
 printf 'KEEL_ADMIN_TOKEN=%s\n' "${TOKEN}" > "${MOUNT}/etc/keel/keel.env"
 install -d -m 0700 "${MOUNT}/var/lib/keel"
 printf '%s\n' "${TOKEN}" > "${MOUNT}/var/lib/keel/admin-token"
 chmod 0600 "${MOUNT}/var/lib/keel/admin-token"
-chroot "${MOUNT}" systemctl enable keel.service
+run chroot "${MOUNT}" systemctl enable keel.service || fail "Keel could not be set to start on this disk."
 if [[ -f "${MOUNT}/etc/systemd/system/keel-apply-update.path" ]]; then
-  chroot "${MOUNT}" systemctl enable keel-apply-update.path
-  chroot "${MOUNT}" systemctl enable keel-update-rollback.service
+  run chroot "${MOUNT}" systemctl enable keel-apply-update.path || true
+  run chroot "${MOUNT}" systemctl enable keel-update-rollback.service || true
 fi
-chroot "${MOUNT}" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Keel --no-nvram --recheck
-chroot "${MOUNT}" grub-install --target=i386-pc "${TARGET}" --recheck
-chroot "${MOUNT}" update-grub
+
+progress running 92 "Making this disk able to start"
+# Rebuild the boot files on this disk. The copy from the USB still expects a
+# live image; this one mounts the installed filesystem.
+run chroot "${MOUNT}" update-initramfs -u || fail "The startup files could not be rebuilt. Run the install again on the same disk."
+run chroot "${MOUNT}" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Keel --removable --no-nvram --recheck \
+  || fail "This disk could not be set to start Keel. Run the install again on the same disk."
+run chroot "${MOUNT}" grub-install --target=i386-pc "${TARGET}" --recheck \
+  || fail "This disk could not be set to start Keel. Run the install again on the same disk."
+run chroot "${MOUNT}" update-grub || fail "This disk could not be set to start Keel. Run the install again on the same disk."
 sync
-echo "Keel installation completed for ${TARGET}."
-echo "Admin token: ${TOKEN} (also saved in /var/lib/keel/admin-token)"
+
+PROGRESS_FINAL=1
+progress done 100 "Keel is on this disk. Remove the USB and restart." "${TOKEN}"
