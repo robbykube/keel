@@ -67,6 +67,10 @@ The window does not grow a page scrollbar. Older images waited until the helper 
 
 Copying the live system onto the disk is not the whole install. Left alone, the startup script mints a new admin token on every boot (the token printed at the end of install would not match), the screen still says the disk was not changed, `/etc/hosts` is empty, and apt still looks for the USB. `live-config` itself does not run unless the kernel command line says `boot=live`. The installer now switches the copy over: stable token, loopback sign-in kept, USB banner removed, hosts and apt fixed, and a new initramfs built for the installed disk.
 
+## The installed box cannot take a Settings update
+
+A USB **repair** image updates only `/usr/bin/keel` and `/usr/lib/keel/web`. It does not run the disk installer. Build it with `sudo KEEL_REPAIR=1 ./packaging/baremetal/remaster-official.sh`. The file is `dist/baremetal/release/keel-amd64-repair.iso`. Boot that USB once, wait until the screen says to remove it, then restart from the disk.
+
 ## Settings says a release is available but the signature is not valid
 
 Keel 0.1.1 and 0.1.2 asked GitHub for the signed files with a JSON header. GitHub then sent asset metadata instead of `SHA256SUMS.sig`, and Settings treated that as a bad signature. The v0.1.2 files themselves verify. 0.1.3 downloads the files as raw bytes. A 0.1.1 or 0.1.2 box cannot install that fix from Settings; copy `v0.1.3` onto the machine once, then later updates work.

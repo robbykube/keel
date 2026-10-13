@@ -1,0 +1,66 @@
+#!/bin/sh
+set -eu
+
+TARGET_MOUNT=/mnt/keel-installed
+PAYLOAD=/usr/lib/keel/repair-payload
+PROGRESS=/run/keel/install.json
+TARGET_DEVICE=""
+MOUNTED=0
+
+write_progress() {
+  state="$1"
+  percent="$2"
+  message="$3"
+  install -d -m 0755 /run/keel
+  printf '{"state":"%s","percent":%s,"message":"%s"}\n' \
+    "$state" "$percent" "$message" > "$PROGRESS"
+}
+
+cleanup() {
+  if [ "$MOUNTED" -eq 1 ]; then
+    sync || true
+    umount "$TARGET_MOUNT" || true
+  fi
+}
+trap cleanup EXIT
+
+fail() {
+  message="$1"
+  write_progress error 0 "$message"
+  echo "$message" >&2
+  exit 1
+}
+
+write_progress running 5 "Finding the installed Keel disk..."
+TARGET_DEVICE="$(findfs LABEL=KEEL-ROOT 2>/dev/null || true)"
+[ -n "$TARGET_DEVICE" ] || fail "Could not find the installed Keel partition (label KEEL-ROOT)."
+
+write_progress running 15 "Mounting the installed Keel system..."
+install -d -m 0755 "$TARGET_MOUNT"
+mount "$TARGET_DEVICE" "$TARGET_MOUNT" || fail "Could not mount the installed Keel partition."
+MOUNTED=1
+
+[ -d "$TARGET_MOUNT/var/lib/keel" ] || fail "This disk does not look like an installed Keel system."
+[ -f "$PAYLOAD/keel" ] || fail "The USB update payload is incomplete."
+[ -d "$PAYLOAD/web" ] || fail "The USB web payload is incomplete."
+
+write_progress running 35 "Saving the current Keel program..."
+if [ -f "$TARGET_MOUNT/usr/bin/keel" ]; then
+  install -D -m 0755 "$TARGET_MOUNT/usr/bin/keel" \
+    "$TARGET_MOUNT/var/lib/keel/updates/usb-backup/keel.previous"
+fi
+
+write_progress running 55 "Installing the new Keel program..."
+install -D -m 0755 "$PAYLOAD/keel" "$TARGET_MOUNT/usr/bin/keel"
+
+write_progress running 75 "Installing the new Keel web interface..."
+rm -rf "$TARGET_MOUNT/usr/lib/keel/web"
+install -d -m 0755 "$TARGET_MOUNT/usr/lib/keel/web"
+cp -a "$PAYLOAD/web/." "$TARGET_MOUNT/usr/lib/keel/web/"
+find "$TARGET_MOUNT/usr/lib/keel/web" -type d -exec chmod 0755 {} +
+find "$TARGET_MOUNT/usr/lib/keel/web" -type f -exec chmod 0644 {} +
+
+write_progress running 90 "Finishing the update..."
+sync
+write_progress done 100 "Update complete. Remove the USB and restart the computer."
+echo "Keel update completed successfully."

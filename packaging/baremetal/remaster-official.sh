@@ -19,7 +19,13 @@ OUT_DIR="${ROOT_DIR}/dist/baremetal/release"
 ROOTFS_DIR="${WORK_DIR}/rootfs"
 NEW_SQUASHFS="${WORK_DIR}/filesystem.squashfs"
 NEW_SIZE="${WORK_DIR}/filesystem.size"
-OUTPUT_ISO="${OUT_DIR}/keel-amd64-install.iso"
+REPAIR_MODE="${KEEL_REPAIR:-0}"
+if [[ "${REPAIR_MODE}" == "1" ]]; then
+  OUTPUT_BASENAME="keel-amd64-repair"
+else
+  OUTPUT_BASENAME="keel-amd64-install"
+fi
+OUTPUT_ISO="${OUT_DIR}/${OUTPUT_BASENAME}.iso"
 
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "This builder must run on Linux or WSL2." >&2
@@ -186,6 +192,27 @@ find "${ROOTFS_DIR}/usr/lib/keel/web" -type f -exec chmod 0644 {} +
 find "${ROOTFS_DIR}/usr/lib/keel" -type f \( -name '*.sh' -o -name 'install-keel' -o -name 'rollback-update' \) \
   -exec sed -i 's/\r$//' {} +
 
+if [[ "${REPAIR_MODE}" == "1" ]]; then
+  echo "Configuring non-destructive installed-system repair mode..."
+  install -D -m 0755 "${KEEL_BINARY}" \
+    "${ROOTFS_DIR}/usr/lib/keel/repair-payload/keel"
+  mkdir -p "${ROOTFS_DIR}/usr/lib/keel/repair-payload/web"
+  rsync -a --delete "${ROOT_DIR}/web/" \
+    "${ROOTFS_DIR}/usr/lib/keel/repair-payload/web/"
+  install -D -m 0755 "${ROOT_DIR}/packaging/baremetal/repair-installed" \
+    "${ROOTFS_DIR}/usr/lib/keel/repair-installed"
+  install -D -m 0644 "${ROOT_DIR}/packaging/baremetal/live/keel-repair.service" \
+    "${ROOTFS_DIR}/etc/systemd/system/keel-repair.service"
+  install -D -m 0644 /dev/null \
+    "${ROOTFS_DIR}/etc/systemd/system/keel.service.d/repair.conf"
+  cat > "${ROOTFS_DIR}/etc/systemd/system/keel.service.d/repair.conf" <<'EOF'
+[Service]
+Environment=KEEL_INSTALLER_ENABLED=0
+EOF
+  find "${ROOTFS_DIR}/usr/lib/keel" -type f -name 'repair-installed' \
+    -exec sed -i 's/\r$//' {} +
+fi
+
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants"
 ln -sfn ../keel.service \
   "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants/keel.service"
@@ -195,6 +222,10 @@ ln -sfn ../keel-network.service \
   "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants/keel-network.service"
 ln -sfn ../keel-kiosk.service \
   "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants/keel-kiosk.service"
+if [[ "${REPAIR_MODE}" == "1" ]]; then
+  ln -sfn ../keel-repair.service \
+    "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants/keel-repair.service"
+fi
 printf 'keel\n' > "${ROOTFS_DIR}/etc/hostname"
 
 if [[ "${FAST_REBUILD}" -eq 1 ]]; then
@@ -330,5 +361,9 @@ xorriso -indev "${BASE_ISO}" -outdev "${OUTPUT_ISO}" \
 
 echo "Created: ${OUTPUT_ISO}"
 echo "Checksum: ${OUTPUT_ISO}.sha256"
-echo "Copy the ISO file to the large Ventoy data partition."
+if [[ "${REPAIR_MODE}" == "1" ]]; then
+  echo "This is a non-destructive repair image: it updates /usr/bin/keel and /usr/lib/keel/web only."
+else
+  echo "Copy the ISO file to the large Ventoy data partition."
+fi
 echo "No physical disk was modified."

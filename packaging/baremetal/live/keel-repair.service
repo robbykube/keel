@@ -1,0 +1,11 @@
+[Unit]
+Description=Update the installed Keel system from this USB
+DefaultDependencies=no
+After=local-fs.target
+Before=keel.service
+Wants=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/keel/repair-installed
+RemainAfterExit=yes
