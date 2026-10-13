@@ -536,7 +536,7 @@ fn decide(
     if !update_available {
         return Decision {
             can_apply: false,
-            message: "This Keel is up to date.".into(),
+            message: format!("This Keel is up to date with GitHub release {latest}."),
         };
     }
     let message = match signature {
@@ -1312,7 +1312,9 @@ mod tests {
         assert!(!decide("0.1.1", "0.1.2", true, "verified", &windows).can_apply);
         assert!(!decide("0.1.1", "0.1.2", true, "missing", &ready).can_apply);
         assert!(!decide("0.1.1", "0.1.2", true, "invalid", &ready).can_apply);
-        assert!(!decide("0.1.2", "0.1.2", false, "unchecked", &ready).can_apply);
+        let current = decide("0.1.2", "0.1.2", false, "unchecked", &ready);
+        assert!(!current.can_apply);
+        assert!(current.message.contains("GitHub release 0.1.2"));
     }
 
     fn sample_package() -> Vec<u8> {

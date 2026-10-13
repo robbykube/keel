@@ -19,8 +19,9 @@ What works now:
   public (`packaging/updates/github-client-id`, `KEEL_GITHUB_CLIENT_ID`, or
   `KEEL_DATA/github.client_id`). That token is not a signing key and must not
   be committed. Making the repository public removes the need for it.
-- The dashboard checks the latest stable release and verifies the signature
-  before it will offer Install update.
+- Settings checks the latest stable GitHub release and verifies the signature
+  before it will offer Install update. A push to main is not an update. The
+  box only counts a signed `vX.Y.Z` release.
 - Install saves the current program, pages, and `/var/lib/keel` settings, then
   switches to the new program. If the new version does not answer
   `/api/health`, or the power goes out before that answer, the boot service
