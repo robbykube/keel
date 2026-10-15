@@ -356,7 +356,7 @@ xorriso -indev "${BASE_ISO}" -outdev "${OUTPUT_ISO}" \
 
 (
   cd "${OUT_DIR}"
-  sha256sum keel-amd64-install.iso > keel-amd64-install.iso.sha256
+  sha256sum "${OUTPUT_BASENAME}.iso" > "${OUTPUT_BASENAME}.iso.sha256"
 )
 
 echo "Created: ${OUTPUT_ISO}"

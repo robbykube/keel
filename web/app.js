@@ -25,6 +25,19 @@ async function get(path) {
   return { data, client, server };
 }
 
+function diskGlance(pools, storage) {
+  const ready = (storage.roles || []).filter((r) => r.ready).length;
+  const total = ready + pools.length;
+  const disks = total
+    ? `<a href="/pools.html">${total} disks in use</a>`
+    : `<a href="/pools.html">no disks yet</a>`;
+  const c = storage.copies || {};
+  if (storage.copy_running) return `${disks} · <a href="/pools.html">copying now</a>`;
+  if (!c.last_run_ms) return disks;
+  const day = new Date(c.last_run_ms).toLocaleDateString([], { month: "short", day: "numeric" });
+  return `${disks} · <a href="/pools.html">${c.ok ? "copied" : "copy had problems"} ${day}</a>`;
+}
+
 function card(k, v) {
   return `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`;
 }
@@ -65,7 +78,7 @@ function showReach(s) {
 }
 
 async function load() {
-  const [sys, disks, health, issues, power, pools, shares] = await Promise.all([
+  const [sys, disks, health, issues, power, pools, shares, storage] = await Promise.all([
     get("/api/system"),
     get("/api/disks"),
     get("/api/health"),
@@ -73,6 +86,7 @@ async function load() {
     get("/api/power"),
     get("/api/pools"),
     get("/api/shares"),
+    get("/api/storage"),
   ]);
 
   $("health").textContent = issues.data.red
@@ -92,9 +106,7 @@ async function load() {
   const nIssues = issues.data.items.length;
   const glance = [
     `<a href="/sleep.html">${power.data.mode === "idle" ? "Resting" : "Apps can open"}</a>`,
-    pools.data.length
-      ? `<a href="/pools.html">${pools.data.length} disks</a>`
-      : `<a href="/pools.html">no disks yet</a>`,
+    diskGlance(pools.data, storage.data),
     shares.data.length
       ? `<a href="/shares.html">${shares.data.length} files</a>`
       : `<a href="/shares.html">no files yet</a>`,

@@ -39,11 +39,15 @@ impl InstallProgress {
     }
 }
 
-pub fn status(disks: Vec<Disk>) -> InstallerStatus {
-    let enabled = cfg!(target_os = "linux")
+pub fn available() -> bool {
+    cfg!(target_os = "linux")
         && std::env::var("KEEL_INSTALLER_ENABLED").as_deref() == Ok("1")
         && Path::new(INSTALLER_HELPER).is_file()
-        && Path::new(LIVE_SQUASHFS).is_file();
+        && Path::new(LIVE_SQUASHFS).is_file()
+}
+
+pub fn status(disks: Vec<Disk>) -> InstallerStatus {
+    let enabled = available();
     InstallerStatus {
         mode: if enabled { "install" } else { "try" },
         can_install: enabled,
@@ -55,7 +59,7 @@ pub fn status(disks: Vec<Disk>) -> InstallerStatus {
         warning: if enabled {
             "Installation erases the selected whole disk. Check its name, model, and size before continuing."
         } else {
-            "This USB is in safe Try mode. Boot the reviewed keel-amd64-install.iso image to enable installation."
+            "Install is only on the Keel USB image, not on this computer."
         },
         disks,
     }
@@ -101,8 +105,8 @@ pub fn validate_plan(plan: &InstallerPlan, disks: &[Disk]) -> Result<(), String>
     if !cfg!(target_os = "linux") {
         return Err("Installation is only available when Keel is booted on Linux media.".into());
     }
-    if std::env::var("KEEL_INSTALLER_ENABLED").as_deref() != Ok("1") {
-        return Err("The installer is disabled in this build. Use Try mode while the installer is being tested.".into());
+    if !available() {
+        return Err("Install is only on the Keel USB image, not on this computer.".into());
     }
     if plan.confirmation != "INSTALL KEEL" {
         return Err("Type INSTALL KEEL exactly after checking the disk name and size.".into());
@@ -193,9 +197,8 @@ mod tests {
             kind: "disk".into(),
             model: "test".into(),
             transport: "virtio".into(),
-            rotational: false,
             mount: mount.into(),
-            fstype: "".into(),
+            ..Disk::default()
         }
     }
 
@@ -225,6 +228,11 @@ mod tests {
             &[disk("/dev/vda", MIN_INSTALL_BYTES - 1, "")]
         )
         .is_err());
+    }
+
+    #[test]
+    fn available_is_off_without_live_usb() {
+        assert!(!available());
     }
 
     #[test]

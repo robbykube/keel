@@ -78,6 +78,7 @@ impl Store {
             pool: req.pool,
             path: req.path.trim().to_string(),
             protocol: "smb".into(),
+            read_only: false,
         };
         self.shares.push(share.clone());
         save_shares(&self.shares)?;

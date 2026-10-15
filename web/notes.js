@@ -4,22 +4,23 @@ let notes = [];
 let current = null;
 let timer = null;
 let dirty = false;
+let ticket = 0;
 
 function label(n) {
   return n.title.trim() || n.body.trim().split("\n")[0] || "Untitled";
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
 function renderRoster() {
   $("roster").innerHTML = notes
     .map((n) => {
       const on = n.id === current ? " active" : "";
-      return `<button type="button" class="roster-item${on}" data-id="${n.id}">${escapeHtml(label(n))}</button>`;
+      return `<button type="button" class="roster-item${on}" data-id="${escapeHtml(n.id)}">${escapeHtml(label(n))}</button>`;
     })
     .join("") || `<p class="prose">No notes yet.</p>`;
-}
-
-function escapeHtml(s) {
-  return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
 function show(id) {
@@ -28,6 +29,7 @@ function show(id) {
     current = null;
     $("title").value = "";
     $("body").value = "";
+    dirty = false;
     renderRoster();
     return;
   }
@@ -38,75 +40,201 @@ function show(id) {
   renderRoster();
 }
 
+function fields() {
+  return { title: $("title").value, body: $("body").value };
+}
+
+function failText(res, text) {
+  if (res.status === 401) return "Sign in first (bottom of the sidebar), then press Save.";
+  const sentence = (text || "").trim();
+  return sentence || "Keel could not save this note. Press Save again.";
+}
+
+async function readBody(res) {
+  const text = await res.text();
+  try {
+    return { json: JSON.parse(text), text };
+  } catch {
+    return { json: null, text };
+  }
+}
+
+async function createNote(payload) {
+  const res = await fetch("/api/notes", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await readBody(res);
+  if (!res.ok || !data.json || !data.json.id) {
+    $("status").textContent = failText(res, data.text);
+    return null;
+  }
+  notes = notes.filter((n) => n.id !== data.json.id);
+  notes.unshift(data.json);
+  current = data.json.id;
+  dirty = false;
+  renderRoster();
+  return data.json;
+}
+
+async function save() {
+  clearTimeout(timer);
+  const payload = fields();
+  if (!current) {
+    if (!payload.title.trim() && !payload.body.trim()) {
+      $("status").textContent = "Write something, then press Save.";
+      return false;
+    }
+    $("status").textContent = "Saving…";
+    $("save").disabled = true;
+    const created = await createNote(payload);
+    $("save").disabled = false;
+    if (created) $("status").textContent = "Saved.";
+    return Boolean(created);
+  }
+  const id = current;
+  const mine = ++ticket;
+  $("status").textContent = "Saving…";
+  $("save").disabled = true;
+  let res;
+  let data;
+  try {
+    res = await fetch(`/api/notes/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+    data = await readBody(res);
+  } catch (err) {
+    dirty = true;
+    $("save").disabled = false;
+    $("status").textContent = "Keel could not save this note. Press Save again.";
+    return false;
+  }
+  $("save").disabled = false;
+  if (mine !== ticket) return true;
+  if (!res.ok || !data.json) {
+    dirty = true;
+    $("status").textContent = failText(res, data.text);
+    return false;
+  }
+  notes = notes.filter((n) => n.id !== data.json.id);
+  notes.unshift(data.json);
+  const same = current === id && $("title").value === payload.title && $("body").value === payload.body;
+  if (same) {
+    dirty = false;
+    $("status").textContent = "Saved.";
+  } else {
+    dirty = true;
+  }
+  renderRoster();
+  return true;
+}
+
+function scheduleSave() {
+  dirty = true;
+  $("status").textContent = "Not saved yet.";
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    save().catch(() => {
+      dirty = true;
+      $("status").textContent = "Keel could not save this note. Press Save again.";
+    });
+  }, 600);
+}
+
 async function load() {
-  notes = await fetch("/api/notes").then((r) => r.json());
+  const res = await fetch("/api/notes", { credentials: "same-origin" });
+  if (!res.ok) {
+    $("status").textContent = failText(res, await res.text());
+    return;
+  }
+  notes = await res.json();
   if (!current && notes[0]) current = notes[0].id;
   if (current && !notes.some((n) => n.id === current)) current = notes[0] ? notes[0].id : null;
   show(current);
 }
 
-async function save() {
-  if (!current) return;
-  dirty = false;
-  $("status").textContent = "saving…";
-  const res = await fetch(`/api/notes/${current}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ title: $("title").value, body: $("body").value }),
-  });
-  if (!res.ok) {
-    $("status").textContent = await res.text();
-    return;
+$("roster").addEventListener("click", async (event) => {
+  const id = event.target.closest("button[data-id]")?.dataset.id;
+  if (!id || id === current) return;
+  if (dirty) {
+    const ok = await save();
+    if (!ok) return;
   }
-  const n = await res.json();
-  notes = notes.filter((x) => x.id !== n.id);
-  notes.unshift(n);
-  $("status").textContent = "saved";
-  renderRoster();
-}
-
-function scheduleSave() {
-  dirty = true;
-  clearTimeout(timer);
-  timer = setTimeout(save, 450);
-}
-
-$("roster").addEventListener("click", async (e) => {
-  const id = e.target.dataset && e.target.dataset.id;
-  if (!id) return;
-  if (dirty) await save();
   show(id);
+  $("status").textContent = "";
 });
 
 $("title").addEventListener("input", scheduleSave);
 $("body").addEventListener("input", scheduleSave);
 
-$("new").addEventListener("click", async () => {
-  if (dirty) await save();
-  const res = await fetch("/api/notes", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ title: "", body: "" }),
+$("save").addEventListener("click", () => {
+  save().catch(() => {
+    dirty = true;
+    $("status").textContent = "Keel could not save this note. Press Save again.";
   });
-  const n = await res.json();
-  notes.unshift(n);
-  show(n.id);
+});
+
+$("new").addEventListener("click", async () => {
+  clearTimeout(timer);
+  const typed = fields();
+  if ((!current && (typed.title.trim() || typed.body.trim())) || (current && dirty)) {
+    const ok = await save();
+    if (!ok) return;
+  }
+  const created = await createNote({ title: "", body: "" });
+  if (!created) return;
+  show(created.id);
   $("title").focus();
-  $("status").textContent = "new";
+  $("status").textContent = "New note. Write it, then press Save.";
 });
 
 $("remove").addEventListener("click", async () => {
   if (!current) return;
   if (!confirm("Delete this note? It will be gone.")) return;
   const id = current;
-  await fetch(`/api/notes/${id}`, { method: "DELETE" });
+  const res = await fetch(`/api/notes/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  });
+  if (!res.ok) {
+    $("status").textContent = failText(res, await res.text());
+    return;
+  }
   notes = notes.filter((n) => n.id !== id);
   current = notes[0] ? notes[0].id : null;
   dirty = false;
   show(current);
-  $("status").textContent = "deleted";
+  $("status").textContent = "Deleted.";
 });
 
-load().catch((err) => {
-  $("status").textContent = String(err);
+window.addEventListener("pagehide", () => {
+  const payload = fields();
+  const hasText = payload.title.trim() || payload.body.trim();
+  if (current && dirty) {
+    fetch(`/api/notes/${encodeURIComponent(current)}`, {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+  } else if (!current && hasText) {
+    fetch("/api/notes", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+  }
+});
+
+load().catch(() => {
+  $("status").textContent = "Keel could not open notes. Reload the page.";
 });

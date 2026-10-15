@@ -7,6 +7,7 @@ pub struct Health {
     pub version: &'static str,
     pub uptime_ms: u128,
     pub inventory: &'static str,
+    pub can_install: bool,
 }
 
 #[derive(Serialize)]
@@ -42,7 +43,7 @@ impl SystemSnapshot {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Default)]
 pub struct Disk {
     pub name: String,
     pub path: String,
@@ -51,8 +52,15 @@ pub struct Disk {
     pub model: String,
     pub transport: String,
     pub rotational: bool,
+    /// The disk's own mount point, or the first one found on its partitions.
     pub mount: String,
     pub fstype: String,
+    /// Filesystem label on the disk or one of its partitions (`keel-files`, `KEEL-ROOT`).
+    pub label: String,
+    /// Keel itself runs from this disk (`/`, `/boot`, or the USB it started from).
+    pub system: bool,
+    /// No partitions and no filesystem.
+    pub empty: bool,
 }
 
 #[derive(Serialize)]
@@ -92,6 +100,8 @@ pub struct Share {
     pub path: String,
     pub protocol: String,
     pub pool: String,
+    #[serde(default)]
+    pub read_only: bool,
 }
 
 #[derive(Serialize, Clone)]

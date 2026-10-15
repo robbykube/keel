@@ -1,6 +1,6 @@
 [package]
 name = "keel"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 description = "Fast, opinionated NAS with a Proxmox-style web GUI"
 

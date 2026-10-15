@@ -21,10 +21,14 @@ conventions (15 Sep 2026).
 Keel’s mapping in `web/chrome.js`:
 
 - Everyday: Home, Files, Apps, Away
-- Menu to the right, **This computer**: Disks, Install, Repair. The row names
+- Menu to the right, **This computer**: Disks and Repair. Install is only on
+  the live USB image (`can_install`), never in the installed app. The row names
   the page you are on when it belongs to that menu.
 - Support: Guide, Settings, Sign in
-- Notes at the bottom, then health and Shut down
+- Notes at the bottom, then health and a Power button (icon + word). Its menu
+  opens upward: Sign out (only for a browser session), Restart, Shut down.
+  Restart and Shut down confirm first.
+- Sign in hides from the sidebar once signed in (`/api/auth/session`).
 - Rest stays a Home link, not a sidebar row
 - **One window.** Not a browser tab per subsystem. Dashboard, Shares, Overlay,
   Repair, Guide, Notes share one chrome.

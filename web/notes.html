@@ -34,7 +34,6 @@
   <main>
     <header>
       <h1>Notes</h1>
-      <div class="meta" id="status"></div>
     </header>
     <p class="lede">Ideas for later. Not the family files.</p>
     <div class="notes-split">
@@ -46,7 +45,11 @@
         <div class="roster scroll" id="roster"></div>
       </div>
       <div class="editor">
-        <label class="wide">Title <input id="title" placeholder="something to add" /></label>
+        <div class="editor-bar">
+          <label class="wide">Title <input id="title" placeholder="something to add" /></label>
+          <button type="button" id="save">Save</button>
+        </div>
+        <p class="meta" id="status"></p>
         <textarea id="body" placeholder="What you want, why, and any constraint (do not wipe rok, idle must keep Tailscale, …)"></textarea>
       </div>
     </div>

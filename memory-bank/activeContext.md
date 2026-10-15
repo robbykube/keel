@@ -7,7 +7,9 @@ able to install Keel on a whole dedicated computer from Windows without an
 existing target OS. USB is the first transport; PXE/iPXE and BMC virtual
 media are planned transports. A VM remains the safe test environment.
 
-GUI shell: **window is the frame**. Sidebar everyday rows are Home, Files, Apps, Away. Disks, Install, and Repair open from a **This computer** menu to the right so the column never scrolls. Guide, Settings, and Sign in sit above Notes. Notes stays at the bottom, then health and Shut down. Settings is where GitHub updates live. Rest is reached from Home.
+GUI shell: **window is the frame**. Sidebar everyday rows are Home, Files, Apps, Away. Disks and Repair open from a **This computer** menu to the right so the column never scrolls. Install is only on the live USB image, not in the installed app. Guide, Settings, and Sign in sit above Notes; Sign in hides once `/api/auth/session` says signed in (the Keel screen always is). Notes stays at the bottom, then health and a **Power** button (icon) whose menu holds Sign out (browser sessions only), Restart, Shut down. Settings is where GitHub updates live. Rest is reached from Home.
+
+Apps today: the Apps page lists the catalog, but the image ships no app programs and no `keel-app@.service`, so Start does nothing yet. Status there is computed from Rest/Active, not read from systemd. The Tailscale client is also not in the image, so Away cannot enroll from Keel yet. Samba (`\\ip\files`) is the only file path Keel itself serves. Sessions live in RAM, so a Keel restart or update signs browsers out.
 
 rok catalog is **ship-with**. Idle = Tailscale floor (files + GUI from away). Active = demand, not all-on.
 
@@ -21,19 +23,30 @@ rok catalog is **ship-with**. Idle = Tailscale floor (files + GUI from away). Ac
 
 Click around. Write ideas in Notes. Sign in on Pools to list files on rok (OpenCloud), without wiping anything. Do not wipe rok. Real mounts wait for Linux.
 
+The installed box, as of 2026-10-15, answers at `http://192.168.0.191:9478/` and is Linux Keel **0.1.5**. Use that address to see the real machine. It can change. Notes there are empty, and saving one is refused until Sign in. The Files folder browser and the Notes Save button are in this working copy only, not on that box yet.
+
 The installable live image was rebuilt **2026-10-13**: `dist/baremetal/release/keel-amd64-install.iso`. SHA-256 `638725073388db612e2294728b611de7e3e2dd2b549244f8575e3a116d66b8c3`. It includes Settings Connect GitHub (device-flow code), token save, and live Install progress (one sentence and a bar; tool output stays in `/run/keel/install.log`). Install layout is a 1 MiB BIOS boot partition, a 512 MiB EFI partition, then the rest for Keel. After the copy, the installer drops the USB startup (stable admin token, no “disk not changed” banner), writes hosts, drops the USB apt source, rebuilds the initramfs, and installs both EFI and BIOS GRUB. Copy that ISO onto Ventoy and run the install again on the same disk. Do not write USB or touch rok unless asked. File Explorer on this house network can open `\\<keel-ip>\files` with name `keel` and password `keel`. On USB try-mode that folder is temporary. The GitHub token is not in the ISO; save it in Settings after the box is installed.
+
+The non-destructive repair image was built **2026-10-13**: `dist/baremetal/release/keel-amd64-repair.iso` (about 2.1 GiB). SHA-256 `06959ff94a0ce489d6aed83d802f0bbab7262c9905809287887503da6537ac0b`. It carries Linux Keel **0.1.5** plus the current web files. Boot it from USB once; it replaces `/usr/bin/keel` and `/usr/lib/keel/web` on `LABEL=KEEL-ROOT` and leaves `/var/lib/keel` alone. The disk installer is off. Remove the USB when the screen says so, then restart from the disk.
 
 Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and can install the program on a Linux machine that has `/usr/lib/keel/rollback-update`. A failed start or a power cut before `/api/health` restores the previous program and settings. The private key is the GitHub secret `KEEL_RELEASE_SIGNING_KEY` only. The repository is private. Settings **Connect GitHub** shows a device-flow code; approve on a phone or this PC. The token is saved to `KEEL_DATA/github.token` (the page never shows it again). A pasted token and `KEEL_GITHUB_TOKEN` still work. The GitHub app id is public and may be saved on the box; it must not include a client secret. `install-keel` does not write that token, and it must not be baked into the ISO. Whole-disk A/B (RAUC) is still not built.
 
 ## Recent
 
-- Sidebar now follows Cerebro’s sections: everyday rows, a flyout for Disks / Install / Repair, Guide/Settings/Sign in above Notes, `aside { overflow: hidden }`. Look stays sea-glass. No ISO remaster for this.
+- **Files page (2026-10-15):** open a folder, see what is in it, make a folder, move or copy. Pictures stay files. On Linux this only opens a mounted Keel disk under `/srv/keel`, and Copies stays read-only. On this Windows copy the page uses sample folders in `data/mock-files`. New files on the Keel computer are given to the share's name.
+- **Disks step 1 built (2026-10-14, not released yet, needs v0.1.6):** Disks page left column "In this computer" lists every disk with what it holds (Keel itself / a job / In use / Empty / Old data) and **Use…** → pick a job → type the disk name → Erase and use. Jobs: Files (Documents, Work, Media), Nightly copy (Copies folder, read-only, `Latest/` + `Older/<date>/` kept 30 days), Third copy (Documents and Work), Software and Inbox. Each disk is one ext4 partition labelled `keel-<job>`, mounted at `/srv/keel/<job>` by UUID with `nofail,x-systemd.device-timeout=10s`. Host changes (wipefs, parted, mkfs, `/etc/fstab`, mount, useradd, smbpasswd) run via `systemd-run --wait --pipe` because keel.service has `ProtectSystem=full` and a private mount view (`src/storage.rs`). State in `KEEL_DATA/storage.json`. Shares on a disconnected disk are hidden from Samba (never write into an empty mount dir). Daily copy is Keel's own Rust mirror (`src/copies.rs`, no rsync), checked each minute, Copy now button, Repair shows red for a missing disk and yellow for failed or 2-day-old copies. Files page "Who opens these folders": one name + password (Samba user, nologin) closes guest access; keel/keel stays only until a name is set. Not yet tested on real hardware.
+- Sidebar now follows Cerebro’s sections: everyday rows, a flyout for Disks / Repair, Guide/Settings/Sign in above Notes, `aside { overflow: hidden }`. Install is only on the live USB image (`/api/health` `can_install`). Look stays sea-glass.
+- Repair ISO built on Ubuntu WSL: `dist/baremetal/release/keel-amd64-repair.iso`. Remaster checksum now hashes the basename in use (`keel-amd64-repair.iso` in repair mode), not always the install ISO name.
 
 ## Next
 
-- Copy the new ISO onto Ventoy and reinstall on the Samsung disk so Settings can save the GitHub token and Install shows live progress.
-- Boot the installer in a disposable VM before the next real disk
-- Build `keel-amd64-repair.iso` on Linux/WSL: `sudo KEEL_REPAIR=1 ./packaging/baremetal/remaster-official.sh`. Boot that USB once to replace `/usr/bin/keel` and `/usr/lib/keel/web` without wiping `/var/lib/keel`. The installer is off on that image.
+- Box is already on 0.1.5. Skip the repair USB unless a later update needs it.
+- Install v0.1.6 from Settings once GitHub finishes the signed release. Then on the box: Disks → give WD 500 GB Files, Seagate 500 GB Nightly copy, Netac 720 GB Third copy, Toshiba 500 GB Software and Inbox; leave the NVMe for app databases. Then Files → choose the name and password.
+- Check `/etc/apt/sources.list` on the installed box has `deb.debian.org` lines; if yes, Podman and Tailscale can be installed online from Keel (no USB). Container images always download from the internet.
+- Plug the Yottamaster into the Keel box in JBOD/Normal (not the enclosure’s RAID). NVMe is OS/apps; USB bays are bulk files. Do not put ZFS on the USB bridge.
+- Overlay stays the away door for the same share. Do not expose SMB to the public internet.
+- Do not wipe rok. OpenCloud on rok can stay until files are copied or mounted as a foreign folder.
+- Copy the install ISO onto Ventoy and reinstall on the Samsung disk only when a full disk install is wanted.
 - Whole-disk A/B updates (RAUC) after the single-disk installer has been proven
 - Mount a foreign NFS/SMB folder into the Keel share (files that still live on rok)
 - Show overlay address next to each share once the overlay is enrolled
@@ -55,7 +68,11 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 - Overlay is how files work away from home. Keel prefers Headscale and supports Tailscale clients. Same share. Never stop it to save watts. Brand can change; the job cannot.
 - Power advisor: even while Active, score busy vs parked and explain each save
 - Ship the rok LXC set (including currently stopped guests); not a plugin bazaar
-- Storage may stay on rok/TrueNAS (foreign mount). keel replaces the rest, not the bits, until we have a dedicated NAS box.
+- **Apps (2026-10-14):** use existing apps, not Keel rewrites. Run them as Podman containers, each a systemd unit (Quadlet); no Docker daemon. Download only when chosen (first-start “What will you use Keel for?” ticks, or Apps → Install). Versions are pinned and signed with the Keel release; Keel sets up folder, NVMe database, ports, Away address, first account, and shows a phone QR. Containers see only the folders Keel grants. Remove keeps data. App updates ride Keel releases with rollback.
+- **Folders (shares built in step 1; subfolders are the user's to make):** five shares — Documents (private: Bills and Taxes, Financial and Banking, Identity, Legal and Residency, Education and Professional History, Requests and applications, Travel), Work (Business, NGOs, Projects, Presentation, Design and communication, AI Knowledge), Media (Photos, Videos, Music), Software (Apps, Games, Office; no backup), Inbox (was Temp; no backup). Optional Family share if others use Keel. Photos are files in Media. Immich, later, only shows those picture files; it does not hold them.
+- **Order (2026-10-15):** file management first. Disks and the shared folders, then a way to see and move the files, then Tailscale so the same folders work away from home. Catalog apps wait. Immich is not the first app.
+- **OpenCloud (2026-10-15):** not a Keel app. Files already lists, makes, moves, and copies on the Keel disks, and a PC opens the same folders. OpenCloud on rok stays only until those files are copied. A phone that cannot open a shared folder can later put a file in and take one out from Files, on those same folders.
+- Storage may stay on rok/TrueNAS (foreign mount). keel replaces the rest, not the bits, until we have a dedicated NAS box. The Yottamaster on the Keel computer is that data box: NVMe is OS and apps; USB bays are bulk files. Enclosure mode is JBOD/Normal so Linux sees each disk; protection is SnapRAID or a second copy, not the enclosure’s RAID and not ZFS over USB. Snapshots and RAID are not a backup; a second copy still has to live somewhere else.
 - Admin chrome stays on screen; lists scroll. Same as AI Suite.
 - Listing ZFS inside Proxmox/TrueNAS: sign in on Pools. Password stays in the GUI on this PC, never in git or chat. keel stores name + host only.
 - Overlay provider boundary now exists at `GET /api/overlay`; Headscale is the default declared provider, with Tailscale client compatibility. Windows reports unavailable rather than simulating Linux state.

@@ -4,6 +4,11 @@ let installBound = false;
 async function loadInstaller() {
   const target = document.querySelector('#installer-status');
   try {
+    const health = await fetch('/api/health', { credentials: 'same-origin' }).then((r) => r.json());
+    if (!health.can_install) {
+      location.replace('/');
+      return;
+    }
     const response = await fetch('/api/installer');
     const info = await response.json();
     const disks = (info.disks || []).map(d => `${d.name} — ${d.model || 'unknown model'} — ${formatBytes(d.size)}`).join('<br>');

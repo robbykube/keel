@@ -35,10 +35,39 @@
     <header>
       <h1>Disks</h1>
     </header>
-    <p class="lede">Keep files that already live on another computer, or use the disks in this one. <a href="/guide.html#pool">What this means.</a></p>
+    <p class="lede">Give each disk in this computer one job, or keep files that already live on another computer. <a href="/guide.html#pool">What this means.</a></p>
     <div class="work-split">
       <div class="work-col">
         <div class="pane">
+          <h2>In this computer</h2>
+          <p class="meta">New disks show up here a few seconds after you plug them in. Keel only changes a disk after you type its name.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Disk</th><th>Size</th><th>What it holds</th><th></th></tr>
+              </thead>
+              <tbody id="diskrows"></tbody>
+            </table>
+          </div>
+          <form class="form use-form" id="useform" hidden>
+            <p class="meta wide" id="usewhich"></p>
+            <label class="wide">Use it for <select id="userole"></select></label>
+            <p class="meta wide" id="userolewhat"></p>
+            <label class="wide">Type <span id="usename"></span> to erase everything on it <input id="useconfirm" autocomplete="off" spellcheck="false" /></label>
+            <div class="actions wide">
+              <button type="submit" class="danger" id="usego">Erase and use</button>
+              <button type="button" id="usecancel">Cancel</button>
+            </div>
+          </form>
+          <p class="meta" id="diskstatus"></p>
+          <h2>Copies</h2>
+          <p class="meta" id="copystatus">Checking…</p>
+          <button type="button" id="copynow" hidden>Copy now</button>
+        </div>
+      </div>
+      <div class="work-col">
+        <div class="pane">
+          <h2>On another computer</h2>
           <form class="form look" id="lookform">
             <label class="wide">Look around (type a name or number — not a search of every machine)
               <input name="host" id="host" placeholder="name or number of that computer" />
@@ -71,9 +100,6 @@
             <button type="submit">List files</button>
           </form>
           <div class="found" id="listing" hidden></div>
-        </div>
-      </div>
-      <div class="work-col">
         <form class="form" id="form">
           <label>Name for these files <input name="name" required placeholder="files" /></label>
           <label>Where are the files?
@@ -96,10 +122,12 @@
             <tbody id="rows"></tbody>
           </table>
         </div>
+        </div>
       </div>
     </div>
   </main>
   <script src="/platform.js"></script>
   <script src="/pools.js"></script>
+  <script src="/disks.js"></script>
 </body>
 </html>

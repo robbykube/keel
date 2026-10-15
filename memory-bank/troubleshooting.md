@@ -69,7 +69,7 @@ Copying the live system onto the disk is not the whole install. Left alone, the 
 
 ## The installed box cannot take a Settings update
 
-A USB **repair** image updates only `/usr/bin/keel` and `/usr/lib/keel/web`. It does not run the disk installer. Build it with `sudo KEEL_REPAIR=1 ./packaging/baremetal/remaster-official.sh`. The file is `dist/baremetal/release/keel-amd64-repair.iso`. Boot that USB once, wait until the screen says to remove it, then restart from the disk.
+A USB **repair** image updates only `/usr/bin/keel` and `/usr/lib/keel/web`. It does not run the disk installer. Build it with `sudo KEEL_REPAIR=1 ./packaging/baremetal/remaster-official.sh`. The current file is `dist/baremetal/release/keel-amd64-repair.iso` (SHA-256 `06959ff94a0ce489d6aed83d802f0bbab7262c9905809287887503da6537ac0b`, Keel 0.1.5). Boot that USB once, wait until the screen says to remove it, then restart from the disk.
 
 ## Settings says a release is available but the signature is not valid
 

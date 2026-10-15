@@ -48,38 +48,38 @@ fn from_loopback(request: &Request) -> bool {
         .unwrap_or(false)
 }
 
-pub async fn require_admin(request: Request, next: Next) -> Response {
+fn session_from(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(COOKIE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|cookies| {
+            cookies
+                .split(';')
+                .find_map(|cookie| cookie.trim().strip_prefix("keel_session="))
+                .map(str::to_string)
+        })
+}
+
+fn is_authorized(request: &Request) -> bool {
     let expected = match std::env::var("KEEL_ADMIN_TOKEN") {
         Ok(token) if !token.trim().is_empty() => token,
-        _ => return next.run(request).await,
+        _ => return true,
     };
-
-    if loopback_trusted() && from_loopback(&request) {
-        return next.run(request).await;
+    if loopback_trusted() && from_loopback(request) {
+        return true;
     }
-
-    let authorized = request
+    request
         .headers()
         .get(AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.strip_prefix("Bearer "))
         .map(|token| token == expected)
         .unwrap_or(false)
-        || request
-            .headers()
-            .get(COOKIE)
-            .and_then(|value| value.to_str().ok())
-            .map(|cookies| {
-                cookies.split(';').any(|cookie| {
-                    cookie
-                        .trim()
-                        .strip_prefix("keel_session=")
-                        .is_some_and(|value| credential_ok(value, &expected))
-                })
-            })
-            .unwrap_or(false);
+        || session_from(request.headers()).is_some_and(|value| credential_ok(&value, &expected))
+}
 
-    if authorized {
+pub async fn require_admin(request: Request, next: Next) -> Response {
+    if is_authorized(&request) {
         next.run(request).await
     } else {
         (
@@ -386,6 +386,26 @@ pub async fn answer_sign_in(
     }
     decide(&id, body.allow).map_err(|error| (StatusCode::CONFLICT, error))?;
     Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+/// What the sidebar shows. The Keel screen itself is always signed in; a
+/// browser elsewhere is signed in only while its session cookie is valid.
+pub async fn session_state(request: Request) -> Json<serde_json::Value> {
+    let signed_in = is_authorized(&request);
+    let can_sign_out = signed_in && session_from(request.headers()).is_some() && token_configured();
+    Json(serde_json::json!({ "signed_in": signed_in, "can_sign_out": can_sign_out }))
+}
+
+pub async fn sign_out(headers: HeaderMap) -> (HeaderMap, Json<serde_json::Value>) {
+    if let Some(session) = session_from(&headers) {
+        gate().sessions.remove(&session);
+    }
+    let mut reply = HeaderMap::new();
+    reply.insert(
+        SET_COOKIE,
+        HeaderValue::from_static("keel_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"),
+    );
+    (reply, Json(serde_json::json!({ "ok": true })))
 }
 
 pub fn token_configured() -> bool {

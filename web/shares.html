@@ -35,31 +35,57 @@
     <header>
       <h1>Files</h1>
     </header>
-    <p class="lede">This is the name other computers use to open the files.</p>
-    <details class="why">
-      <summary>Open these from another computer</summary>
-      <p>On the Keel computer, File Explorer can open the folder like a network drive. Paste the address (it starts with two backslashes). For this house network the name is <code>keel</code> and the password is <code>keel</code>. That is open on purpose until Keel has real sign-in. Do not put this on the public internet.</p>
-    </details>
-    <p class="meta" id="access"></p>
-    <div class="work-split">
-      <div class="work-col">
-        <form class="form" id="form">
-          <label>Name people will see <input name="name" required placeholder="photos" /></label>
-          <label>Which disks <select name="pool" id="pool"></select></label>
-          <label class="wide">Folder <input name="path" placeholder="leave blank for all of them" /></label>
-          <button type="submit">Add</button>
-        </form>
-        <p class="meta" id="status"></p>
+    <p class="lede" id="lede">Open a folder and see what is in it.</p>
+    <div class="notes-split">
+      <div class="roster-col">
+        <div class="roster scroll" id="folders"></div>
+        <details class="why">
+          <summary>Who opens these folders</summary>
+          <p class="meta" id="ownerwhy">Checking…</p>
+          <form class="form" id="ownerform">
+            <label>Name <input id="ownername" autocomplete="username" spellcheck="false" placeholder="your first name, small letters" /></label>
+            <label>Password <input id="ownerpass" type="password" autocomplete="new-password" /></label>
+            <label>Same password again <input id="ownerpass2" type="password" autocomplete="new-password" /></label>
+            <button type="submit" id="ownergo">Use this name</button>
+          </form>
+          <p class="meta" id="ownerstatus"></p>
+        </details>
+        <details class="why">
+          <summary>Open these from another computer</summary>
+          <p>In File Explorer, paste the address into the address bar (it starts with two backslashes). Until you choose a name above, anyone on this house network can open the folders. After you choose one, Windows asks for that name and password once; tick Remember my credentials.</p>
+          <p class="meta" id="access"></p>
+        </details>
+        <details class="why">
+          <summary>Add another name</summary>
+          <form class="form" id="form">
+            <label>Name people will see <input name="name" required placeholder="photos" /></label>
+            <label>Which disks <select name="pool" id="pool"></select></label>
+            <label class="wide">Folder <input name="path" placeholder="leave blank for all of them" /></label>
+            <button type="submit">Add</button>
+          </form>
+          <p class="meta" id="addstatus"></p>
+        </details>
       </div>
       <div class="work-col">
+        <p class="crumb" id="crumb"></p>
+        <form class="folder-tools" id="newfolder">
+          <label>New folder <input id="newname" placeholder="Bills and Taxes" /></label>
+          <button type="submit">Make folder</button>
+        </form>
+        <p class="meta" id="status"></p>
         <div class="table-wrap scroll">
           <table>
             <thead>
-              <tr><th>Name</th><th>Address</th><th>Ready</th></tr>
+              <tr><th>Name</th><th></th><th>Size</th><th></th></tr>
             </thead>
             <tbody id="rows"></tbody>
           </table>
         </div>
+        <p class="pending-bar" id="pending" hidden>
+          <span id="pendingtext"></span>
+          <button type="button" id="put">Put it here</button>
+          <button type="button" id="cancel">Cancel</button>
+        </p>
       </div>
     </div>
   </main>

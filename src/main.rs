@@ -5,6 +5,7 @@ mod catalog;
 mod config;
 mod discover;
 mod files;
+mod folders;
 mod github_connect;
 mod installer;
 mod inventory;
@@ -13,7 +14,9 @@ mod model;
 mod overlay;
 mod remote;
 mod services;
+mod copies;
 mod smb;
+mod storage;
 mod store;
 mod updates;
 
@@ -132,6 +135,12 @@ async fn main() {
         )
         .route("/api/settings/github-app", get(github_app_setup))
         .route("/api/auth/login", post(auth::login))
+        .route("/api/auth/session", get(auth::session_state))
+        .route("/api/auth/logout", post(auth::sign_out))
+        .route(
+            "/api/restart",
+            post(restart).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route(
             "/api/auth/requests",
             get(auth::sign_in_requests).post(auth::create_sign_in),
@@ -142,6 +151,19 @@ async fn main() {
         )
         .route("/api/system", get(system))
         .route("/api/disks", get(disks))
+        .route("/api/storage", get(storage_view))
+        .route(
+            "/api/storage/prepare",
+            post(storage_prepare).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/storage/owner",
+            post(storage_owner).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/storage/copy-now",
+            post(storage_copy_now).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/installer", get(installer_status))
         .route(
             "/api/installer/progress",
@@ -158,6 +180,26 @@ async fn main() {
         .route(
             "/api/shares",
             get(shares).post(shares_create.layer(axum::middleware::from_fn(auth::require_admin))),
+        )
+        .route(
+            "/api/folders",
+            get(folders_home).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/folders/list",
+            get(folders_list).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/folders/mkdir",
+            post(folders_mkdir).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/folders/copy",
+            post(folders_copy).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/folders/move",
+            post(folders_move).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route("/api/power", get(power))
         .route(
@@ -227,11 +269,14 @@ async fn main() {
         )
         .with_state({
             let mut store = Store::load();
+            crate::storage::ensure_shares(&mut store);
             crate::smb::bootstrap(&mut store);
-            AppState {
+            let state = AppState {
                 inventory: Inventory::detect(),
                 store: Arc::new(Mutex::new(store)),
-            }
+            };
+            tokio::spawn(watch_disks(state.clone()));
+            state
         })
         .fallback_service(ServeDir::new(web))
         // Everything keel serves is local and live. A cached GUI is always
@@ -282,6 +327,7 @@ async fn health() -> Json<Health> {
         version: env!("CARGO_PKG_VERSION"),
         uptime_ms: STARTED.get().map(|t| t.elapsed().as_millis()).unwrap_or(0),
         inventory: Inventory::detect().label(),
+        can_install: crate::installer::available(),
     })
 }
 
@@ -368,6 +414,99 @@ async fn shares_create(
     Ok(Json(view))
 }
 
+async fn folders_home(
+    State(state): State<AppState>,
+) -> Json<crate::folders::FolderHome> {
+    let shares = state.store.lock().await.shares.clone();
+    Json(
+        tokio::task::spawn_blocking(move || crate::folders::home(&shares))
+            .await
+            .expect("folder list"),
+    )
+}
+
+async fn folders_list(
+    State(state): State<AppState>,
+    Query(query): Query<crate::folders::ListQuery>,
+) -> Result<Json<crate::folders::Listing>, (StatusCode, Json<serde_json::Value>)> {
+    let shares = state.store.lock().await.shares.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        crate::folders::list(&shares, &query.share, &query.path)
+    })
+    .await
+    .unwrap_or_else(|_| Err("Keel could not open that folder. Reload the page.".into()));
+    match result {
+        Ok(listing) => Ok(Json(listing)),
+        Err(message) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": message })),
+        )),
+    }
+}
+
+async fn folders_mkdir(
+    State(state): State<AppState>,
+    Json(req): Json<crate::folders::MakeRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let shares = state.store.lock().await.shares.clone();
+    let name = req.name.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        let path = crate::folders::make_folder(&shares, &req.share, &req.path, &req.name)?;
+        crate::storage::give_to_owner(&path);
+        Ok(format!("{name} is ready."))
+    })
+    .await
+    .unwrap_or_else(|_| Err("Keel could not make that folder. Try again.".into()));
+    storage_reply(result)
+}
+
+async fn folders_copy(
+    State(state): State<AppState>,
+    Json(req): Json<crate::folders::TransferRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    folder_transfer(state, req, false).await
+}
+
+async fn folders_move(
+    State(state): State<AppState>,
+    Json(req): Json<crate::folders::TransferRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    folder_transfer(state, req, true).await
+}
+
+async fn folder_transfer(
+    state: AppState,
+    req: crate::folders::TransferRequest,
+    remove_source: bool,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let shares = state.store.lock().await.shares.clone();
+    let verb = if remove_source { "Moved." } else { "Copied." };
+    let result = tokio::task::spawn_blocking(move || {
+        let path = if remove_source {
+            crate::folders::move_item(
+                &shares,
+                &req.from_share,
+                &req.from_path,
+                &req.to_share,
+                &req.to_path,
+            )
+        } else {
+            crate::folders::copy_item(
+                &shares,
+                &req.from_share,
+                &req.from_path,
+                &req.to_share,
+                &req.to_path,
+            )
+        }?;
+        crate::storage::give_to_owner(&path);
+        Ok(verb.to_string())
+    })
+    .await
+    .unwrap_or_else(|_| Err("Keel could not finish that. Try again.".into()));
+    storage_reply(result)
+}
+
 fn power_state() -> Power {
     let idle = IDLE.load(Ordering::Relaxed);
     Power {
@@ -394,17 +533,119 @@ async fn power_active() -> Json<Power> {
     Json(power_state())
 }
 
-async fn shutdown() -> (StatusCode, Json<serde_json::Value>) {
+fn power_command(verb: &str, done: &str, word: &str) -> (StatusCode, Json<serde_json::Value>) {
     if !cfg!(target_os = "linux") {
         return (
             StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "ok": false, "message": "Shutdown is available on the Keel Linux appliance, not this development host." })),
+            Json(serde_json::json!({ "ok": false, "message": format!("{word} is available on the Keel Linux appliance, not this development host.") })),
         );
     }
-    match std::process::Command::new("systemctl").args(["poweroff"]).spawn() {
-        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "message": "Keel is shutting down." }))),
-        Err(error) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "ok": false, "message": format!("Could not start shutdown: {error}") }))),
+    match std::process::Command::new("systemctl").arg(verb).spawn() {
+        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "message": done }))),
+        Err(error) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "ok": false, "message": format!("Could not start {}: {error}", word.to_lowercase()) }))),
     }
+}
+
+async fn shutdown() -> (StatusCode, Json<serde_json::Value>) {
+    power_command("poweroff", "Keel is shutting down.", "Shutdown")
+}
+
+async fn restart() -> (StatusCode, Json<serde_json::Value>) {
+    power_command("reboot", "Keel is restarting. This page comes back in about a minute.", "Restart")
+}
+
+/// Once a minute: offer or hide folders when a disk comes or goes, and start
+/// the daily copy when it is due.
+async fn watch_disks(state: AppState) {
+    let mut seen: Vec<bool> = Vec::new();
+    loop {
+        tokio::time::sleep(Duration::from_secs(60)).await;
+        let now: Vec<bool> = crate::storage::ROLES
+            .iter()
+            .map(|role| crate::storage::mounted(role.id))
+            .collect();
+        if now != seen {
+            seen = now;
+            let shares = state.store.lock().await.shares.clone();
+            let _ = tokio::task::spawn_blocking(move || crate::smb::apply(&shares)).await;
+        }
+        if crate::copies::due() {
+            let _ = tokio::task::spawn_blocking(crate::copies::run_now).await;
+        }
+    }
+}
+
+async fn storage_view(State(state): State<AppState>) -> Json<crate::storage::StorageView> {
+    let disks = state.inventory.disks().await;
+    Json(
+        tokio::task::spawn_blocking(move || crate::storage::view(disks))
+            .await
+            .expect("storage view"),
+    )
+}
+
+fn storage_reply(result: Result<String, String>) -> (StatusCode, Json<serde_json::Value>) {
+    match result {
+        Ok(message) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "message": message }))),
+        Err(message) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": message })),
+        ),
+    }
+}
+
+async fn storage_prepare(
+    State(state): State<AppState>,
+    Json(req): Json<crate::storage::PrepareRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let disks = state.inventory.disks().await;
+    let result = tokio::task::spawn_blocking(move || crate::storage::prepare(&req, &disks))
+        .await
+        .unwrap_or_else(|_| Err("The disk job stopped unexpectedly.".into()));
+    if result.is_ok() {
+        let mut store = state.store.lock().await;
+        crate::storage::ensure_shares(&mut store);
+        let shares = store.shares.clone();
+        drop(store);
+        let _ = tokio::task::spawn_blocking(move || crate::smb::apply(&shares)).await;
+    }
+    storage_reply(result)
+}
+
+async fn storage_owner(
+    State(state): State<AppState>,
+    Json(req): Json<crate::storage::OwnerRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let shares = state.store.lock().await.shares.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        let dirs: Vec<String> = shares
+            .iter()
+            .filter(|share| !share.read_only && crate::smb::available(share))
+            .map(|share| share.path.clone())
+            .filter(|path| path.starts_with('/'))
+            .collect();
+        let result = crate::storage::set_owner(&req, &dirs);
+        if result.is_ok() {
+            crate::smb::apply(&shares);
+        }
+        result
+    })
+    .await
+    .unwrap_or_else(|_| Err("Setting the name stopped unexpectedly.".into()));
+    storage_reply(result)
+}
+
+async fn storage_copy_now() -> (StatusCode, Json<serde_json::Value>) {
+    if !crate::copies::can_run() {
+        return storage_reply(Err(
+            "Copy needs the Files disk and at least one copy disk connected.".into(),
+        ));
+    }
+    if crate::copies::running() {
+        return storage_reply(Err("A copy is already running.".into()));
+    }
+    tokio::task::spawn_blocking(crate::copies::run_now);
+    storage_reply(Ok("Copy started. This page shows when it is done.".into()))
 }
 
 async fn catalog_list() -> Json<Vec<Guest>> {
@@ -415,12 +656,16 @@ async fn catalog_list() -> Json<Vec<Guest>> {
 async fn issues_list(State(state): State<AppState>) -> Json<IssuesReport> {
     let idle = IDLE.load(Ordering::Relaxed);
     let store = state.store.lock().await;
-    Json(crate::issues::report(
+    let mut report = crate::issues::report(
         idle,
         state.inventory,
-        store.pools.len(),
+        store.pools.len() + crate::storage::prepared_roles().len(),
         store.shares.len(),
-    ))
+    );
+    let extra = crate::storage::issues();
+    report.red |= extra.iter().any(|issue| issue.severity == "red");
+    report.items.splice(0..0, extra);
+    Json(report)
 }
 
 async fn repair_run(Json(req): Json<RepairRequest>) -> Json<RepairResult> {
