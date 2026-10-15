@@ -209,6 +209,24 @@ async function loadShares() {
     : "No name yet. Add one, then open it from another computer.";
 }
 
+$("newsection").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const name = $("sectionname").value.trim();
+  $("sectionstatus").textContent = "Adding…";
+  const res = await fetch("/api/folders/section", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  const data = await readJson(res);
+  $("sectionstatus").textContent = data.message || "Keel could not add that section.";
+  if (!data.ok) return;
+  $("sectionname").value = "";
+  await loadHome();
+  await loadShares().catch(() => {});
+});
+
 $("folders").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-share]");
   if (!button) return;

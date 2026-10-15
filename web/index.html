@@ -37,6 +37,19 @@
         <h1 id="title">Home</h1>
       </header>
       <section class="notice" id="notice" hidden></section>
+      <section class="card" id="apps-choice" hidden>
+        <h2 class="home-title">What will you use Keel for?</h2>
+        <p>Pick the ones you want. You can add more later from Apps.</p>
+        <form class="form" id="apps-choice-form">
+          <div id="apps-choice-rows"></div>
+          <div class="actions">
+            <button type="submit" id="apps-use" disabled>Use these</button>
+            <button type="button" id="apps-later">Not now</button>
+          </div>
+        </form>
+        <p class="meta" id="apps-choice-status"></p>
+      </section>
+      <p class="meta" id="apps-again" hidden><button type="button" id="apps-show">Choose apps</button></p>
       <section class="home-grid" id="home"></section>
       <p class="glance" id="rest"></p>
       <details class="why" id="details">

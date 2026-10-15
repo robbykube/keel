@@ -10,52 +10,25 @@
 </head>
 <body>
   <aside>
-    <div class="brand">
-      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-        <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3 14.5 12 5l9 9.5-9 4.5-9-4.5z" />
-        <path fill="none" stroke="currentColor" stroke-width="1.6" d="M12 5v14" />
-      </svg>
-      <span>keel</span>
-    </div>
+    <div class="brand"><span>keel</span></div>
     <nav>
       <a href="/">Home</a>
       <a href="/shares.html">Files</a>
       <a class="active" href="/catalog.html">Apps</a>
       <a href="/overlay.html">Away</a>
-      <a class="quiet" href="/pools.html">Disks</a>
-      <a class="quiet" href="/installer.html">Install</a>
-      <a class="quiet" href="/repair.html">Repair</a>
-      <a class="quiet" href="/notes.html">Notes</a>
-      <a class="quiet" href="/guide.html">Guide</a>
-      <a class="quiet" href="/settings.html">Settings</a>
-      <a class="quiet" href="/login.html">Sign in</a>
     </nav>
   </aside>
   <main>
-    <header>
-      <h1>Apps</h1>
-      <div class="meta" id="mode"></div>
-    </header>
-    <p class="lede">Open an app when you need it. The rest stay closed.</p>
-    <div class="table-wrap scroll">
-    <table>
-      <thead>
-        <tr>
-          <th>App</th>
-          <th>What it does</th>
-          <th>Runs as</th>
-          <th>Status</th>
-          <th>Files</th>
-          <th>When resting</th>
-          <th></th>
-          <th>Why</th>
-        </tr>
-      </thead>
-      <tbody id="rows"></tbody>
-    </table>
+    <div class="scroll">
+      <header><h1>Apps</h1></header>
+      <p class="lede">Open one when you need it. Add another whenever you want.</p>
+      <h2>On this computer</h2>
+      <div id="added"></div>
+      <h2>Add another</h2>
+      <div id="more"></div>
+      <p class="meta" id="status"></p>
     </div>
   </main>
-  <script src="/terms.js"></script>
   <script src="/catalog.js"></script>
 </body>
 </html>

@@ -78,12 +78,14 @@ pub fn apply(shares: &[Share]) {
 }
 
 pub fn valid_share_name(name: &str) -> bool {
-    let name = name.trim();
     !name.is_empty()
-        && name.len() <= 32
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        && name.len() <= 80
+        && name == name.trim()
+        && !name.ends_with('.')
+        && !name.contains("  ")
+        && name.chars().all(|c| {
+            c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ' '
+        })
 }
 
 fn default_share() -> Share {
@@ -154,15 +156,15 @@ fn render_shares_conf(shares: &[Share], root: &Path, owner: Option<&str>) -> Str
                 )
             }
         };
+        let shown = path.display().to_string().replace('"', "");
         out.push_str(&format!(
             "\n[{}]\n\
-             \tpath = {}\n\
+             \tpath = \"{shown}\"\n\
              \tbrowseable = yes\n\
              \tread only = {read_only}\n\
              \tveto files = /lost+found/\n\
              {access}",
             share.name,
-            path.display(),
         ));
     }
     out
@@ -308,8 +310,10 @@ mod tests {
     fn share_names_are_plain() {
         assert!(valid_share_name("files"));
         assert!(valid_share_name("photos-1"));
+        assert!(valid_share_name("Bills and Taxes"));
         assert!(!valid_share_name(""));
-        assert!(!valid_share_name("my files"));
+        assert!(!valid_share_name("my  files"));
+        assert!(!valid_share_name(" trailing "));
         assert!(!valid_share_name("[oops]"));
     }
 
@@ -329,7 +333,7 @@ mod tests {
         assert!(conf.contains("[files]"));
         assert!(conf.contains("guest ok = yes"));
         assert!(conf.contains("read only = no"));
-        assert!(conf.contains("path = /var/lib/keel/files"));
+        assert!(conf.contains("path = \"/var/lib/keel/files\""));
     }
 
     #[test]

@@ -21,8 +21,9 @@ conventions (15 Sep 2026).
 
 Keel’s mapping in `web/chrome.js`:
 
-- Everyday: Home, Files, Away. Apps stays hidden until one is installed
-  (`installed` on an app). Home is the family page: a greeting, one notice,
+- Everyday: Home, Files, Away. Apps stays hidden until one is chosen.
+  Home asks “What will you use Keel for?” until then. After the first choice,
+  Apps stays in the sidebar and more can be added there. Home is the family page: a greeting, one notice,
   then Files, Away, and Disks. No person’s name. No Family/Admin switch.
 - **This computer** is a sidebar title, with Disks and Repair under it, after Sign in.
   Install is only on the live USB image (`can_install`), never in the installed

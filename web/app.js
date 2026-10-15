@@ -148,6 +148,7 @@ function showNotice(lines, href, failing) {
   const box = $("notice");
   if (!lines.length) {
     box.hidden = true;
+    box.replaceChildren();
     return;
   }
   const title = lines.length === 1 ? "1 thing to look at" : `${lines.length} things to look at`;
@@ -164,8 +165,35 @@ function showNotice(lines, href, failing) {
     <a class="button" href="${escapeHtml(href)}">Fix it</a>`;
 }
 
+function showAppChoice(apps) {
+  const box = $("apps-choice");
+  const again = $("apps-again");
+  const rows = $("apps-choice-rows");
+  if (!box || !rows) return;
+  const choices = (Array.isArray(apps) ? apps : []).filter((app) => app.choosable);
+  const any = choices.some((app) => app.installed);
+  const later = sessionStorage.getItem("keel-apps-later") === "1";
+  if (any || !choices.length) {
+    box.hidden = true;
+    again.hidden = true;
+    return;
+  }
+  rows.innerHTML = choices.map((app) => `<label class="check">
+      <input type="checkbox" name="app" value="${escapeHtml(app.id)}">
+      <span><strong>${escapeHtml(app.role)}</strong> ${escapeHtml(app.why)}</span>
+    </label>`).join("");
+  const use = $("apps-use");
+  const refresh = () => {
+    use.disabled = !rows.querySelector("input:checked");
+  };
+  rows.onchange = refresh;
+  refresh();
+  box.hidden = later;
+  again.hidden = !later;
+}
+
 async function load() {
-  const [sys, health, issues, storage, shares, overlay, session] = await Promise.all([
+  const [sys, health, issues, storage, shares, overlay, session, apps] = await Promise.all([
     get("/api/system"),
     get("/api/health"),
     get("/api/issues"),
@@ -173,6 +201,7 @@ async function load() {
     get("/api/shares"),
     get("/api/overlay"),
     get("/api/auth/session"),
+    get("/api/apps"),
   ]);
 
   const s = sys.data;
@@ -199,6 +228,7 @@ async function load() {
     fix = afterSignIn("/repair.html", signedIn);
   }
   showNotice(lines, fix, red.length > 0);
+  showAppChoice(apps.data);
 
   const owner = storage.data.owner || "";
   $("home").innerHTML = [
@@ -229,6 +259,42 @@ async function load() {
   ].join("")}</div>
     <p class="meta">system ${escapeHtml(sys.server)} / ${sys.client}ms</p>`;
 }
+
+$("apps-choice-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const ids = [...$("apps-choice-rows").querySelectorAll("input:checked")].map((input) => input.value);
+  const status = $("apps-choice-status");
+  status.textContent = "Saving.";
+  try {
+    const res = await fetch("/api/apps/choose", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ ids }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      status.textContent = data.message || "Keel could not save that choice.";
+      return;
+    }
+    sessionStorage.removeItem("keel-apps-later");
+    location.reload();
+  } catch (err) {
+    status.textContent = String(err);
+  }
+});
+
+$("apps-later").addEventListener("click", () => {
+  sessionStorage.setItem("keel-apps-later", "1");
+  $("apps-choice").hidden = true;
+  $("apps-again").hidden = false;
+});
+
+$("apps-show").addEventListener("click", () => {
+  sessionStorage.removeItem("keel-apps-later");
+  $("apps-choice").hidden = false;
+  $("apps-again").hidden = true;
+});
 
 load().catch((err) => {
   $("health").textContent = String(err);

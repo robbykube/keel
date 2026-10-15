@@ -85,6 +85,19 @@ impl Store {
         Ok(share)
     }
 
+    pub fn insert_share(&mut self, share: Share) -> Result<Share, String> {
+        if self
+            .shares
+            .iter()
+            .any(|item| item.name.eq_ignore_ascii_case(&share.name))
+        {
+            return Err("That name is already used.".into());
+        }
+        self.shares.push(share.clone());
+        save_shares(&self.shares)?;
+        Ok(share)
+    }
+
     pub fn ensure_default_share(&mut self, share: Share) {
         if self.shares.iter().any(|item| item.name == share.name) {
             return;

@@ -194,6 +194,10 @@ async fn main() {
             post(folders_mkdir).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route(
+            "/api/folders/section",
+            post(folders_section).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
             "/api/folders/copy",
             post(folders_copy).layer(axum::middleware::from_fn(auth::require_admin)),
         )
@@ -228,6 +232,10 @@ async fn main() {
         )
         .route("/api/catalog", get(catalog_list))
         .route("/api/apps", get(apps_list))
+        .route(
+            "/api/apps/choose",
+            post(apps_choose).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route(
             "/api/apps/{id}/action",
             post(app_action).layer(axum::middleware::from_fn(auth::require_admin)),
@@ -442,6 +450,40 @@ async fn folders_list(
             Json(serde_json::json!({ "ok": false, "message": message })),
         )),
     }
+}
+
+#[derive(Deserialize)]
+struct SectionRequest {
+    name: String,
+}
+
+async fn folders_section(
+    State(state): State<AppState>,
+    Json(req): Json<SectionRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let created = tokio::task::spawn_blocking(move || crate::storage::add_section(&req.name))
+        .await
+        .unwrap_or_else(|_| Err("Keel could not make that section. Try again.".into()));
+    let share = match created {
+        Ok(share) => share,
+        Err(message) => return storage_reply(Err(message)),
+    };
+    let saved = {
+        let mut store = state.store.lock().await;
+        store.insert_share(share.clone())
+    };
+    if let Err(message) = saved {
+        let path = share.path;
+        let _ = tokio::task::spawn_blocking(move || std::fs::remove_dir(path)).await;
+        return storage_reply(Err(message));
+    }
+    let shares = state.store.lock().await.shares.clone();
+    let message = format!(
+        "{} is ready. A computer opens it the same way as Documents.",
+        share.name
+    );
+    let _ = tokio::task::spawn_blocking(move || crate::smb::apply(&shares)).await;
+    storage_reply(Ok(message))
 }
 
 async fn folders_mkdir(
@@ -804,6 +846,21 @@ async fn installer_plan(
 async fn apps_list() -> Json<Vec<crate::apps::AppManifest>> {
     let idle = IDLE.load(Ordering::Relaxed);
     Json(crate::apps::manifests(idle))
+}
+
+async fn apps_choose(
+    Json(req): Json<crate::apps::ChooseRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    tokio::task::spawn_blocking(move || crate::apps::choose(&req.ids))
+        .await
+        .unwrap_or_else(|_| Err("Keel could not save that choice.".into()))
+        .map(|ids| Json(serde_json::json!({ "ok": true, "ids": ids })))
+        .map_err(|message| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "ok": false, "message": message })),
+            )
+        })
 }
 
 async fn app_action(

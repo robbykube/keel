@@ -323,6 +323,37 @@ pub fn prepare(request: &PrepareRequest, disks: &[Disk]) -> Result<String, Strin
     Ok(format!("{} is ready for {}.", disk_words(&target.disk), job.title))
 }
 
+/// A section beside Documents, Work, and Media. It lives on the Files disk,
+/// so the nightly copy includes it, and a computer opens it by this name.
+pub fn add_section(name: &str) -> Result<Share, String> {
+    let name = name.trim();
+    if !crate::folders::valid_entry_name(name) || !crate::smb::valid_share_name(name) {
+        return Err("Use a name with letters, numbers, and spaces. Leave out symbols.".into());
+    }
+    if name.eq_ignore_ascii_case("files") || name.eq_ignore_ascii_case("copies") {
+        return Err("That name is already used.".into());
+    }
+    if !cfg!(target_os = "linux") {
+        return Err("New sections are added on the Keel computer.".into());
+    }
+    if !mounted("files") {
+        return Err("Set up the Files disk first. Documents, Work, and Media live there.".into());
+    }
+    let dir = mount_point("files").join(name);
+    if dir.exists() {
+        return Err("That section is already there.".into());
+    }
+    std::fs::create_dir(&dir).map_err(|_| "Keel could not make that section. Try again.".to_string())?;
+    give_to_owner(&dir);
+    Ok(Share {
+        name: name.to_string(),
+        path: dir.to_string_lossy().into(),
+        protocol: "smb".into(),
+        pool: "Files".into(),
+        read_only: false,
+    })
+}
+
 /// Shares for every prepared disk. Existing shares with the same name are
 /// left alone, so a renamed or removed folder does not come back by itself.
 pub fn ensure_shares(store: &mut Store) {
@@ -579,6 +610,18 @@ exit 0
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extra_section_names_stay_plain() {
+        let rejected = |name| match add_section(name) {
+            Err(message) => message,
+            Ok(_) => panic!("{name} was accepted"),
+        };
+        assert!(rejected("").contains("letters"));
+        assert!(rejected("files").contains("already used"));
+        assert!(rejected("Copies").contains("already used"));
+        assert!(rejected("A/B").contains("letters"));
+    }
 
     #[test]
     fn owner_names_are_plain_and_not_system_accounts() {
