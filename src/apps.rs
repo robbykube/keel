@@ -52,18 +52,6 @@ pub fn manifests(idle: bool) -> Vec<AppManifest> {
             "The private path to the GUI and files away from home.",
         ),
         (
-            "scanopy",
-            "Analytics",
-            "native",
-            false,
-            &[],
-            &[],
-            &["/var/lib/scanopy"],
-            "systemd",
-            "park",
-            "Installed for the curated Keel catalog; closed until requested.",
-        ),
-        (
             "technitium",
             "DNS",
             "native",
@@ -257,8 +245,10 @@ mod tests {
     #[test]
     fn every_manifest_has_a_runtime_and_policy() {
         let apps = manifests(true);
-        assert_eq!(apps.len(), 10);
-        assert!(apps.iter().all(|app| app.id != "opencloud" && app.id != "pbs"));
+        assert_eq!(apps.len(), 9);
+        assert!(apps
+            .iter()
+            .all(|app| app.id != "opencloud" && app.id != "pbs" && app.id != "scanopy"));
         assert!(apps
             .iter()
             .all(|app| !app.runtime.is_empty() && !app.idle_policy.is_empty()));

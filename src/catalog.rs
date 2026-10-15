@@ -3,7 +3,6 @@ use crate::model::Guest;
 pub fn guests(idle: bool) -> Vec<Guest> {
     let units = [
         (100, "tailscale", "overlay", true, false),
-        (101, "scanopy", "analytics", false, true),
         (102, "technitium", "dns", false, false),
         (103, "vaultwarden", "passwords", false, false),
         (105, "jitsi", "video", false, true),

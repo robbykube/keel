@@ -5,7 +5,6 @@ Come with as much of this lab as possible. **Have** ≠ **run**. Stopped-on-rok 
 | Role | rok ID | Idle |
 | --- | --- | --- |
 | Tailscale | 100 | **Running** — overlay + file path from away |
-| Scanopy | 101 | Stopped until Active |
 | Technitium DNS | 102 | Stopped until Active |
 | Vaultwarden | 103 | Stopped until Active |
 | Jitsi | 105 | Stopped until Active |
