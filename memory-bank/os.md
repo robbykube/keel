@@ -55,6 +55,8 @@ app ships.
 | --- | --- |
 | Effective | Disks → pool → share; catalog on demand; overlay floor so files work away; Guide that tells the truth |
 | Quick | Fast install (copy a baked root), fast boot (few units), fast GUI, idle watts |
+
+**Startup (2026-10-15):** the page is late because the Debian live base still starts printing, Bluetooth, `wpa_supplicant`, Avahi, cron, and sensors, and `keel.service` waits for `network-online.target` and Samba before the program runs. The screen then waits for `/api/health` and starts Chromium from an empty profile under `/run`. Stop the extras. Start Keel when the disk is mounted, and let Samba and the network come up beside it. The repair USB replaces the program and the pages only, so it does not change this. The smaller kiosk browser in `size.md` is the remaining cut, and it shortens install as well.
 | Accurate | Live unit state, real `lsblk`, checksummed image, clock sync *after* boot, advisor evidence not guesses |
 
 **SMART is not implemented.** Nothing in `src/` calls `smartctl`; the Dashboard
@@ -98,7 +100,7 @@ change.
 
 **Catalog:** separate image/stream. Installed, stopped. Not in the one-minute root.
 
-**Do not take:** GNOME/KDE, snap, cloud-init, cups, avahi-by-default, popularity-contest, unattended-upgrades that block boot, `Recommends` flood (`apt --no-install-recommends`), extra syslog stacks, a local display manager.
+**Do not take:** GNOME/KDE, snap, cloud-init, cups, avahi-by-default, popularity-contest, unattended-upgrades that block boot, `Recommends` flood (`apt --no-install-recommends`), extra syslog stacks, a local display manager. Wi-Fi and Bluetooth are not Keel features. The Debian live base still starts `bluetooth.service` and `wpa_supplicant.service`, and it includes some Wi-Fi firmware (Intel files are in the image). There is no NetworkManager and no page to join a network or pair a device. The computer is meant to use a cable. Printing (`cups`) and `avahi-daemon` also start because they came with that base; they are not chosen Keel services.
 
 A kiosk compositor is not a desktop. `cage` draws one window and has no
 launcher, no file manager, no settings app, and no way for a user to reach a

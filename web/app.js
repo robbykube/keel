@@ -25,113 +25,209 @@ async function get(path) {
   return { data, client, server };
 }
 
-function diskGlance(pools, storage) {
-  const ready = (storage.roles || []).filter((r) => r.ready).length;
-  const total = ready + pools.length;
-  const disks = total
-    ? `<a href="/pools.html">${total} disks in use</a>`
-    : `<a href="/pools.html">no disks yet</a>`;
-  const c = storage.copies || {};
-  if (storage.copy_running) return `${disks} · <a href="/pools.html">copying now</a>`;
-  if (!c.last_run_ms) return disks;
-  const day = new Date(c.last_run_ms).toLocaleDateString([], { month: "short", day: "numeric" });
-  return `${disks} · <a href="/pools.html">${c.ok ? "copied" : "copy had problems"} ${day}</a>`;
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function plainSize(n) {
+  if (!n) return { number: "—", unit: "" };
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let x = n;
+  while (x >= 1000 && i < units.length - 1) {
+    x /= 1000;
+    i++;
+  }
+  const digits = i && x < 10 ? 1 : 0;
+  return { number: x.toFixed(digits), unit: units[i] };
+}
+
+function greeting(date) {
+  const hour = date.getHours();
+  if (hour < 5 || hour >= 17) return "Good evening";
+  if (hour < 12) return "Good morning";
+  return "Good afternoon";
+}
+
+function afterSignIn(path, signedIn) {
+  return signedIn ? path : `/login.html?next=${encodeURIComponent(path)}`;
+}
+
+function smbUrl(unc) {
+  const match = String(unc).match(/^\\\\([^\\]+)\\(.+)$/);
+  if (!match) return unc;
+  return `smb://${match[1]}/${match[2].replace(/\\/g, "/")}`;
+}
+
+function filesShare(shares) {
+  const list = Array.isArray(shares) ? shares : [];
+  return list.find((share) => share.name === "files") || list[0] || null;
 }
 
 function card(k, v) {
   return `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`;
 }
 
-// Where to reach this machine from another computer.
-//
-// Someone standing at the appliance sees a working screen and is then told to
-// open it from their own PC. Without this they have no way to find out where,
-// because the appliance shows no terminal and answers to no name on the
-// network. This is the only place that address appears.
-function showReach(s) {
-  const box = $("reach");
-  if (!box) return;
+function filesCard(share) {
+  const ready = Boolean(share && share.ready && share.lan && share.lan[0]);
+  const path = ready ? share.lan[0] : "";
+  const mac = path ? smbUrl(path) : "";
+  const body = ready
+    ? `<div class="path-box"><code>${escapeHtml(path)}</code><button type="button" class="copy-button" id="copy-path" data-path="${escapeHtml(path)}" aria-label="Copy the files address">Copy <span aria-hidden="true">↗</span></button></div>
+       <dl>
+         <div class="pair"><dt>Windows</dt><dd>Paste into File Explorer</dd></div>
+         <div class="pair"><dt>Mac</dt><dd>Finder → Go → Connect to Server, ${escapeHtml(mac)}</dd></div>
+         <div class="pair"><dt>Phone</dt><dd>Files app → Connect to server → same address</dd></div>
+       </dl>`
+    : `<p>The family folder is not ready on this computer yet.</p>
+       <a class="button push" href="/shares.html">Open Files</a>`;
+  return `<article class="card home-card">
+    <div class="home-card-head">
+      <h2 class="home-title"><span class="home-icon" aria-hidden="true">⌁</span><span>Files</span></h2>
+      <span class="pill ${ready ? "ok" : ""}">${ready ? "Ready" : "Not set up"}</span>
+    </div>
+    <p>Open the family folder from any computer in the house.</p>
+    ${body}
+  </article>`;
+}
 
-  const addresses = Array.isArray(s.addresses) ? s.addresses : [];
-  if (!addresses.length) {
-    // Say so plainly rather than hiding. A machine with no address is the
-    // reason someone cannot reach it, and that is worth telling them.
-    box.innerHTML = `
-      <div class="reach-k">Open from another computer</div>
-      <div class="reach-v">No network address yet</div>
-      <div class="reach-sub">Check the network cable. This machine cannot be reached from another computer until it has an address.</div>`;
-    box.hidden = false;
+function awayCard(overlay, owner) {
+  const state = overlay && overlay.state;
+  const ready = state === "connected";
+  const who = owner
+    ? `${owner} connects Keel once`
+    : "The person who set up this computer connects Keel once";
+  const pill = ready ? "Ready" : state === "unavailable" ? "Not on this computer" : "Not set up";
+  return `<article class="card home-card">
+    <div class="home-card-head">
+      <h2 class="home-title"><span class="home-icon" aria-hidden="true">◎</span><span>Away</span></h2>
+      <span class="pill ${ready ? "ok" : ""}">${escapeHtml(pill)}</span>
+    </div>
+    <p>Open the same files when you are not at home. Only the phones and laptops you trust can reach them.</p>
+    <ol class="steps">
+      <li><span>1</span>${escapeHtml(who)}</li>
+      <li><span>2</span>Use the same address anywhere</li>
+    </ol>
+    <a class="button push" href="/overlay.html">How Away works</a>
+  </article>`;
+}
+
+function disksCard(storage, failing) {
+  const disks = (storage.disks || []).map((row) => row.disk ? { ...row.disk, holds: row.holds } : row);
+  const total = disks.reduce((sum, disk) => sum + (disk.size || 0), 0);
+  const size = plainSize(total);
+  const rows = disks.map((disk) => {
+    const name = disk.model || disk.name || "Disk";
+    const extra = disk.transport === "usb" ? " · USB" : "";
+    const shown = plainSize(disk.size);
+    return `<div class="disk-row">
+      <div class="name">${escapeHtml(name)}</div>
+      <div class="size">${escapeHtml(shown.number)} ${escapeHtml(shown.unit)}</div>
+      <div class="holds">${escapeHtml(disk.holds || "")}${escapeHtml(extra)}</div>
+    </div>`;
+  }).join("");
+  const headline = disks.length
+    ? `<p class="display">${escapeHtml(size.number)} <span>${escapeHtml(size.unit)}</span></p><p>in this computer</p>`
+    : `<p>No disks yet.</p>`;
+  return `<article class="card home-card">
+    <div class="home-card-head">
+      <h2 class="home-title"><span class="home-icon" aria-hidden="true">▣</span><span>Disks</span></h2>
+      <span class="pill ${failing ? "bad" : ""}">${failing ? "Needs a look" : (disks.length === 1 ? "1 disk" : `${disks.length} disks`)}</span>
+    </div>
+    ${headline}
+    ${disks.length ? '<p class="card-note">Capacity inventory · usage is reported by the device.</p>' : ''}
+    <div class="disk-list">${rows}</div>
+  </article>`;
+}
+
+function showNotice(lines, href, failing) {
+  const box = $("notice");
+  if (!lines.length) {
+    box.hidden = true;
     return;
   }
-
-  const port = location.port || "9478";
-  const rows = addresses
-    .map((ip) => `<div class="reach-v">http://${ip}:${port}/</div>`)
-    .join("");
-  const files = addresses.map((ip) => `<code>\\\\${ip}\\files</code>`).join(" ");
-
-  box.innerHTML = `
-    <div class="reach-k">Open from another computer</div>
-    ${rows}
-    <div class="reach-sub">Files from Windows File Explorer: ${files}</div>`;
+  const title = lines.length === 1 ? "1 thing to look at" : `${lines.length} things to look at`;
+  box.className = failing ? "notice bad" : "notice";
   box.hidden = false;
+  box.innerHTML = `
+    <div class="notice-main">
+      <span class="notice-dot" aria-hidden="true"></span>
+      <div>
+        <p class="notice-title">${escapeHtml(title)}</p>
+        <p>${lines.map(escapeHtml).join(" ")}</p>
+      </div>
+    </div>
+    <a class="button" href="${escapeHtml(href)}">Fix it</a>`;
 }
 
 async function load() {
-  const [sys, disks, health, issues, power, pools, shares, storage] = await Promise.all([
+  const [sys, health, issues, storage, shares, overlay, session] = await Promise.all([
     get("/api/system"),
-    get("/api/disks"),
     get("/api/health"),
     get("/api/issues"),
-    get("/api/power"),
-    get("/api/pools"),
-    get("/api/shares"),
     get("/api/storage"),
+    get("/api/shares"),
+    get("/api/overlay"),
+    get("/api/auth/session"),
   ]);
 
-  $("health").textContent = issues.data.red
-    ? "red — Repair"
-    : `${health.data.inventory} · v${health.data.version}`;
-  $("timing").textContent = `system ${sys.server} / ${sys.client}ms · disks ${disks.server} / ${disks.client}ms`;
-
   const s = sys.data;
-  showReach(s);
-  $("cards").innerHTML = [
-    card("Host", s.hostname),
+  const signedIn = Boolean(session.data.signed_in);
+  const now = new Date();
+  $("kicker").textContent = `${now.toLocaleDateString([], { weekday: "long" })} · ${s.hostname || "Keel"}`;
+  $("title").textContent = greeting(now);
+  $("health").textContent = issues.data.red
+    ? "Needs a look"
+    : `v${health.data.version}`;
+  $("rest").innerHTML = `<a href="/sleep.html">Let this computer rest</a> when you are done.`;
+
+  const filesRole = (storage.data.roles || []).find((role) => role.id === "files");
+  const lines = [];
+  let fix = afterSignIn("/pools.html", signedIn);
+  if (!filesRole || !filesRole.ready) {
+    lines.push(s.platform === "linux"
+      ? "No disk has been picked for files yet. Files are saved on the system disk for now."
+      : "No disk has been picked for files yet.");
+  }
+  const red = (issues.data.items || []).filter((item) => item.severity === "red");
+  if (red.length) {
+    red.forEach((item) => lines.push(item.title));
+    fix = afterSignIn("/repair.html", signedIn);
+  }
+  showNotice(lines, fix, red.length > 0);
+
+  const owner = storage.data.owner || "";
+  $("home").innerHTML = [
+    filesCard(filesShare(shares.data)),
+    awayCard(overlay.data, owner),
+    disksCard(storage.data, red.length > 0),
+  ].join("");
+
+  const copy = document.getElementById("copy-path");
+  if (copy) {
+    copy.addEventListener("click", async () => {
+      const path = copy.getAttribute("data-path") || "";
+      try {
+        await navigator.clipboard.writeText(path);
+        copy.textContent = "Copied";
+      } catch {
+        copy.textContent = "Select the address and copy it";
+      }
+      window.setTimeout(() => { copy.textContent = "Copy"; }, 1600);
+    });
+  }
+
+  $("detail-body").innerHTML = `<div class="cards">${[
     card("CPU", `${pct(s.cpu_pct)} · ${s.cores} cores`),
     card("Memory", `${bytes(s.mem_used)} / ${bytes(s.mem_total)}`),
     card(`Daemon <a class="term" href="/guide.html#rss">RSS</a>`, bytes(s.daemon_rss)),
-  ].join("");
-
-  const nIssues = issues.data.items.length;
-  const glance = [
-    `<a href="/sleep.html">${power.data.mode === "idle" ? "Resting" : "Apps can open"}</a>`,
-    diskGlance(pools.data, storage.data),
-    shares.data.length
-      ? `<a href="/shares.html">${shares.data.length} files</a>`
-      : `<a href="/shares.html">no files yet</a>`,
-    nIssues
-      ? `<a href="/repair.html">${nIssues} on Repair</a>`
-      : `<a href="/repair.html">Repair quiet</a>`,
-    `<a href="/overlay.html">Away</a>`,
-    `<a href="/notes.html">Notes</a>`,
-  ];
-  $("glance").innerHTML = glance.join(" · ");
-
-  $("disks").innerHTML = disks.data
-    .map((d) => {
-      const media = d.rotational ? "HDD" : "SSD";
-      const cls = d.rotational ? "hdd" : "ssd";
-      return `<tr>
-        <td><code>${d.name}</code></td>
-        <td>${d.model || "—"}</td>
-        <td>${bytes(d.size)}</td>
-        <td>${d.transport || "—"}</td>
-        <td class="${cls}">${media}</td>
-        <td>${d.mount || "—"}</td>
-      </tr>`;
-    })
-    .join("");
+    card("Version", escapeHtml(health.data.version)),
+  ].join("")}</div>
+    <p class="meta">system ${escapeHtml(sys.server)} / ${sys.client}ms</p>`;
 }
 
 load().catch((err) => {

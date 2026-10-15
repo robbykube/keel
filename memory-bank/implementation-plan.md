@@ -91,11 +91,12 @@ The first release is not a general Linux distribution, a hypervisor, or an app-s
 
 ## Immediate build slice
 
-1. Add provider-neutral overlay types and configuration.
-2. Add `/api/overlay` as read-only status, initially reporting an explicit development/unsupported state rather than pretending Headscale is connected.
-3. Add a Guide section explaining Headscale-first self-hosting and Tailscale compatibility.
-4. Add tests for provider parsing and share address selection.
-5. Then implement Linux status via the local `tailscale` CLI and Headscale enrollment.
+The box is installed and still on 0.1.5. Signed v0.1.7 rolled back from Settings.
+
+1. The repair image is built (2026-10-15, SHA-256 `c0102c3fdaded192a3716ba2e47748112007d15d0b179fbfd1a391ea557f0814`). Copy it to Ventoy and boot it once. Leave `/var/lib/keel` alone.
+2. On the box: give the data disks their jobs, then set one folder name.
+3. In the code: stop returning the folder password, require a session for admin reads off the Keel screen, and escape the remaining pages.
+4. After the folders are on the data disks: SMART and free space, then the house-network firewall.
 
 ## Definition of the first real demo
 

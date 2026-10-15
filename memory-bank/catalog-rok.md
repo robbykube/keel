@@ -15,3 +15,5 @@ Come with as much of this lab as possible. **Have** ≠ **run**. Stopped-on-rok 
 | Open Archiver | 111 | Stopped until Active |
 
 On keel they are **packages + systemd**, not LXCs. rok IDs are the lab map only. CPU save = stopped units, not container tax.
+
+OpenCloud (104), Proxmox Backup Server (107), and Scanopy (101) stay facts about rok. They are not Keel apps. Files, Nightly copy, and Third copy cover those jobs. A map, if one is needed, is Keel’s own page.

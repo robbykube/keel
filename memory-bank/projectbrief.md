@@ -2,7 +2,7 @@
 
 **keel** is an **appliance OS**: Linux you install on the NAS box, with a browser GUI, the rok catalog baked in, and opinionated idle/power. Not a desktop (Omarchy), not a hypervisor (Proxmox).
 
-What exists in this repo today is the **control plane** (daemon + GUI). The ISO / installer comes after that is real.
+What exists in this repo today is the control plane (daemon + GUI) and a Debian live image that can install Keel on a whole disk. The installed box at home is still that appliance. PXE and a second root slot are not built.
 
 Two ways onto a machine:
 
@@ -29,14 +29,18 @@ Windows is for building the GUI and for `keelctl`, not the NAS OS.
 - lab-rok.md (this homelab’s Proxmox inventory)
 - catalog-rok.md (ship-with apps, including rok’s stopped LXCs)
 - guide-and-power.md (Guide, idle floor, advisor)
-- os.md (Debian appliance layers; ISO later)
+- os.md (Debian appliance layers; the live image installs the box)
 - health-and-repair.md (local issues + one-click Fix; AI later)
 - setup-and-report.md (few-question setup)
 - storage-backends.md (keep data on Proxmox/TrueNAS; keel is the rest)
 - words.md (plain language for the GUI)
 - ui.md (Cerebro interaction/layout intents; Keel keeps its own look)
+- updates.md (signed program updates; whole-disk A/B still a design)
+- envisaged.md (later pillars, not the current slice)
+- os-strategy.md (Debian image, not a from-scratch OS)
+- size.md (what a later cut might remove)
 
-The product is the OS. This repo’s v0 is the GUI daemon; ISO later. Existing Linux is a bootstrap path, not the end state.
+The product is the OS. This repo’s image installs it. Existing Linux is a bootstrap path, not the end state.
 
 ## Out of scope (v0)
 

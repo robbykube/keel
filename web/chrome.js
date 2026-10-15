@@ -17,6 +17,22 @@ const SUPPORT = [
 ];
 const NOTES = [["/notes.html", "Notes"]];
 
+const NAV_ICONS = {
+  Home: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>',
+  Files: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5h6l2 2h9v8.8a1.2 1.2 0 0 1-1.2 1.2H4.7a1.2 1.2 0 0 1-1.2-1.2z"/></svg>',
+  Apps: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>',
+  Away: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5a13 13 0 0 1 0 17M12 3.5a13 13 0 0 0 0 17"/></svg>',
+  Guide: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5A3.5 3.5 0 0 1 19 8v11.5H8.5A3.5 3.5 0 0 0 5 23z"/><path d="M5 4.5v15A3.5 3.5 0 0 1 8.5 16H19M8 8h7M8 11.5h7"/></svg>',
+  Notes: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12a1.5 1.5 0 0 1 1.5 1.5v14a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V5A1.5 1.5 0 0 1 6 3.5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
+};
+
+const BRAND_ICON = '<svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="13" rx="2.5"/><path d="M7 9.5h10M7 13h5"/></svg>';
+
+const initialTheme = (() => {
+  try { return localStorage.getItem("keel-theme") || "dark"; } catch { return "dark"; }
+})();
+document.documentElement.dataset.theme = initialTheme === "light" ? "light" : "dark";
+
 let flyoutChromeInstalled = false;
 
 const currentPath = () => location.pathname || "/";
@@ -30,10 +46,30 @@ const isActive = (href) => {
 const navLink = (href, label, extraClass = "") => {
   const link = document.createElement("a");
   link.href = href;
-  link.textContent = label;
+  link.innerHTML = `${NAV_ICONS[label] || ""}<span class="nav-label">${label}</span>`;
   link.className = [extraClass, isActive(href) ? "active" : ""].filter(Boolean).join(" ");
   if (isActive(href)) link.setAttribute("aria-current", "page");
   return link;
+};
+
+const themeControl = () => {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "theme-toggle";
+  button.setAttribute("aria-label", "Switch colour theme");
+  const paint = () => {
+    const light = document.documentElement.dataset.theme === "light";
+    button.innerHTML = `${light ? '<svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>' : '<svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 15.5A8 8 0 0 1 8.5 4.5 8.5 8.5 0 1 0 19.5 15.5z"/></svg>'}<span>${light ? "Light" : "Dark"}</span>`;
+    button.setAttribute("aria-pressed", String(light));
+  };
+  button.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("keel-theme", next); } catch { /* private browsing */ }
+    paint();
+  });
+  paint();
+  return button;
 };
 
 const closeFlyout = (flyout) => {
@@ -191,18 +227,24 @@ const powerMenu = (session) => {
     menu.appendChild(button);
   };
 
-  if (session.can_sign_out) {
-    item("Sign out", async () => {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
+  if (!session.signed_in) {
+    item("Sign in", () => {
       window.location.href = "/login.html";
     });
+  } else {
+    if (session.can_sign_out) {
+      item("Sign out", async () => {
+        await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
+        window.location.href = "/login.html";
+      });
+    }
+    item("Restart", (button) =>
+      powerAction(button, "/api/restart", "Restart Keel? Files and apps stop for about a minute, then come back.", "Restarting…", "Restart could not start."),
+    );
+    item("Shut down", (button) =>
+      powerAction(button, "/api/shutdown", "Shut down Keel? You will need to turn the computer on again to use it.", "Shutting down…", "Shutdown could not start."),
+    "danger");
   }
-  item("Restart", (button) =>
-    powerAction(button, "/api/restart", "Restart Keel? Files and apps stop for about a minute, then come back.", "Restarting…", "Restart could not start."),
-  );
-  item("Shut down", (button) =>
-    powerAction(button, "/api/shutdown", "Shut down Keel? You will need to turn the computer on again to use it.", "Shutting down…", "Shutdown could not start."),
-  "danger");
 
   const close = () => {
     menu.hidden = true;
@@ -226,24 +268,33 @@ const powerMenu = (session) => {
   return wrap;
 };
 
-const installKeelChrome = (showInstall = false, session = { signed_in: false, can_sign_out: false }) => {
+const installKeelChrome = (showInstall = false, session = { signed_in: false, can_sign_out: false }, showApps = false) => {
   const nav = document.querySelector("nav");
   const aside = document.querySelector("aside");
   if (!nav || !aside) return;
 
-  const flyouts = document.createElement("div");
-  flyouts.className = "nav-flyouts";
-  flyouts.appendChild(navFlyout("This computer", computerNav(showInstall)));
-  nav.replaceChildren(
-    ...PRIMARY.map(([href, label]) => navLink(href, label)),
-    flyouts,
-  );
+  const brand = aside.querySelector(".brand");
+  if (brand && !brand.querySelector(".brand-mark")) brand.insertAdjacentHTML("afterbegin", BRAND_ICON);
+
+  const everyday = PRIMARY.filter(([href]) => href !== "/catalog.html" || showApps || isActive(href));
+  const computer = computerNav(showInstall);
+  const showComputer = session.signed_in || computer.some(([href]) => isActive(href));
+  const children = everyday.map(([href, label]) => navLink(href, label));
+  if (showComputer) {
+    const flyouts = document.createElement("div");
+    flyouts.className = "nav-flyouts";
+    flyouts.appendChild(navFlyout("This computer", computer));
+    children.push(flyouts);
+  }
+  nav.replaceChildren(...children);
   nav.setAttribute("aria-label", "Everyday");
 
-  aside.querySelectorAll(".sidebar-support, .sidebar-utility, .power").forEach((node) => node.remove());
-  const supportItems = session.signed_in
-    ? SUPPORT.filter(([href]) => href !== "/login.html" || isActive(href))
-    : SUPPORT;
+  aside.querySelectorAll(".sidebar-support, .sidebar-utility, .power, .theme-toggle").forEach((node) => node.remove());
+  const supportItems = SUPPORT.filter(([href]) => {
+    if (href === "/login.html") return !session.signed_in || isActive(href);
+    if (href === "/settings.html") return session.signed_in || isActive(href);
+    return true;
+  });
   const support = sectionLinks("sidebar-support", "Guide and settings", supportItems);
   const utility = sectionLinks("sidebar-utility", "Notes", NOTES);
   const foot = aside.querySelector(".aside-foot");
@@ -254,6 +305,7 @@ const installKeelChrome = (showInstall = false, session = { signed_in: false, ca
     aside.append(support, utility);
   }
   aside.appendChild(powerMenu(session));
+  aside.appendChild(themeControl());
   installFlyoutChrome();
   installFlyoutHandlers(aside);
 };
@@ -262,11 +314,12 @@ const bootChrome = () => {
   installKeelChrome(false);
   const json = (path) =>
     fetch(path, { credentials: "same-origin" }).then((response) => response.json()).catch(() => ({}));
-  Promise.all([json("/api/health"), json("/api/auth/session")]).then(([health, session]) => {
+  Promise.all([json("/api/health"), json("/api/auth/session"), json("/api/apps")]).then(([health, session, apps]) => {
+    const installed = Array.isArray(apps) && apps.some((app) => app.installed);
     installKeelChrome(Boolean(health.can_install), {
       signed_in: Boolean(session.signed_in),
       can_sign_out: Boolean(session.can_sign_out),
-    });
+    }, installed);
   });
 };
 

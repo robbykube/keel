@@ -31,30 +31,19 @@
     <div class="aside-foot" id="health"></div>
   </aside>
   <main>
-    <header>
-      <h1 id="title">Home</h1>
-      <div class="meta" id="timing"></div>
-    </header>
-    <p class="lede">Open <a href="/shares.html">Files</a>, or open an <a href="/catalog.html">app</a>. <a href="/sleep.html">Let this computer rest</a> when you are done.</p>
-    <div class="reach" id="reach" data-only="linux" hidden></div>
-    <p class="glance" id="glance"></p>
-    <section class="cards" id="cards"></section>
-    <p class="meta" data-only="windows">This PC is for trying the screen. Files stay on the other computer.</p>
-    <h2>Disks in this machine</h2>
-    <div class="table-wrap scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Model</th>
-            <th>Size</th>
-            <th>Bus</th>
-            <th>Media</th>
-            <th>Mount</th>
-          </tr>
-        </thead>
-        <tbody id="disks"></tbody>
-      </table>
+    <div class="scroll">
+      <p class="kicker" id="kicker"></p>
+      <header>
+        <h1 id="title">Home</h1>
+      </header>
+      <section class="notice" id="notice" hidden></section>
+      <section class="home-grid" id="home"></section>
+      <p class="glance" id="rest"></p>
+      <details class="why" id="details">
+        <summary>Details</summary>
+        <div id="detail-body"></div>
+      </details>
+      <p class="meta" data-only="windows">This PC is for trying the screen. Files stay on the other computer.</p>
     </div>
   </main>
   <script src="/platform.js"></script>

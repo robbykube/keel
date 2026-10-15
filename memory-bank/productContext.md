@@ -8,7 +8,7 @@ keel exists so we can cut work that does not serve “store files, share them, s
 
 1. Install the appliance (or push keel onto Debian).
 2. First boot: hostname, pool disks, admin, join Tailscale (or the overlay we ship) so files work away. No settings tour.
-3. Dashboard is green/red. Repair is a sentence plus a safe Fix. Do not live in Settings.
+3. Home answers three questions: where the files are, whether they open away from home, and whether the disks are all right. Repair is a sentence plus a safe Fix. Do not live in Settings.
 
 ## GUI-first rule
 

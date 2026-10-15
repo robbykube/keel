@@ -13,6 +13,8 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Rest | The computer stays on and apps stay closed. Away stays connected |
 | On another computer | Files stay on Proxmox or TrueNAS; keel does not wipe them |
 | Disks in this machine | Files would live on drives in the keel box |
+| 1 thing to look at | Home’s notice. Sea-glass. Fix it opens Sign in, then Disks. It does not erase |
+| in this computer | How much the disks hold. Not free space, until free space is measured |
 | Look around | Check one computer you name. Not a search of every machine |
 | Open / closed | Like a computer: the app is on disk; running only when you need it |
 | Away | Same files, not on the house Wi‑Fi. The overlay is how you reach them |

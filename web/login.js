@@ -6,6 +6,11 @@ const showToken = document.getElementById("show-token");
 const localLogin = document.getElementById("local-login");
 const askKeel = document.getElementById("ask-keel");
 const onThisComputer = ["127.0.0.1", "localhost", "::1"].includes(window.location.hostname);
+
+const afterSignIn = () => {
+  const next = new URLSearchParams(location.search).get("next") || "/";
+  return /^\/[A-Za-z0-9._~/-]*$/.test(next) ? next : "/";
+};
 let waiting = null;
 
 if (onThisComputer) {
@@ -51,7 +56,7 @@ askKeel.addEventListener("click", async () => {
       const poll = await fetch(`/api/auth/requests/${id}`, { credentials: "same-origin" });
       const view = await poll.json().catch(() => ({}));
       if (view.state === "allowed") {
-        window.location.href = "/";
+        window.location.href = afterSignIn();
         return;
       }
       if (view.state === "denied") {
@@ -85,7 +90,7 @@ form.addEventListener("submit", async (event) => {
     });
     const data = await res.text();
     if (!res.ok) throw new Error(data || "Sign-in failed. Ask the Keel computer, or type the token again.");
-    window.location.href = "/";
+    window.location.href = afterSignIn();
   } catch (err) {
     status.textContent = String(err.message || err);
   }

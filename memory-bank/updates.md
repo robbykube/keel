@@ -24,11 +24,19 @@ What works now:
   box only counts a signed `vX.Y.Z` release. Private release files are
   downloaded from the GitHub API as raw bytes, not as JSON.
 - Install saves the current program, pages, and `/var/lib/keel` settings, then
-  switches to the new program. The new program is marked runnable (`0755`).
-  Unpack alone leaves a normal file, systemd still says the restart worked,
-  and the health check then restores the previous version. If the new version
-  does not answer `/api/health`, or the power goes out before that answer, the
-  boot service `keel-update-rollback.service` restores the saved copy.
+  switches to the new program. From 0.1.7 on, the new program is marked
+  runnable (`0755`). The 0.1.5 installer does not do that. Unpack leaves a
+  normal file, systemd still says the restart worked, and the health check
+  restores the previous version. Proven 2026-10-15: Settings installed signed
+  v0.1.7 and the screen said “Keel 0.1.7 did not answer.” Retrying Settings
+  from 0.1.5 hits the same wall. The hop is the repair image built
+  2026-10-15 (`dist/baremetal/release/keel-amd64-repair.iso`, SHA-256
+  `c0102c3fdaded192a3716ba2e47748112007d15d0b179fbfd1a391ea557f0814`),
+  which already contains the permission fix (`install -m 0755` in
+  `repair-installed`). After that program is the one running, the next
+  Settings update can mark itself runnable. If the new version does not
+  answer `/api/health`, or the power goes out before that answer, the boot
+  service `keel-update-rollback.service` restores the saved copy.
 - Settings written by a newer Keel than this binary understands stop startup
   instead of being guessed.
 

@@ -2,8 +2,8 @@
 
 Keel’s admin face is a browser. Interaction and layout follow Cerebro
 (`E:\Personal Projects\cerebro`), which already settled these on real screens.
-Keel keeps its own look (sea-glass on deep water). Do not copy Cerebro’s warm
-yellow `#f3c548` as the NAS accent.
+Keel uses a warm neutral surface with a restrained brass accent: calm enough
+for an appliance, but clearer and more welcoming than a generic admin console.
 
 Source: Cerebro `productContext.md` “How it should feel” and current window
 conventions (15 Sep 2026).
@@ -20,14 +20,18 @@ conventions (15 Sep 2026).
 
 Keel’s mapping in `web/chrome.js`:
 
-- Everyday: Home, Files, Apps, Away
-- Menu to the right, **This computer**: Disks and Repair. Install is only on
-  the live USB image (`can_install`), never in the installed app. The row names
-  the page you are on when it belongs to that menu.
-- Support: Guide, Settings, Sign in
+- Everyday: Home, Files, Away. Apps stays hidden until one is installed
+  (`installed` on an app). Home is the family page: a greeting, one notice,
+  then Files, Away, and Disks. No person’s name. No Family/Admin switch.
+- Menu to the right, **This computer**: Disks and Repair, after Sign in.
+  Install is only on the live USB image (`can_install`), never in the installed
+  app. The row names the page you are on when it belongs to that menu.
+- Support: Guide stays. Settings and Sign in follow the session. Sign in is
+  there until you are signed in; Settings appears after that.
 - Notes at the bottom, then health and a Power button (icon + word). Its menu
-  opens upward: Sign out (only for a browser session), Restart, Shut down.
-  Restart and Shut down confirm first.
+  opens upward. Signed in: Sign out (only for a browser session), Restart,
+  Shut down. Until then the menu is Sign in, so someone in the house cannot
+  shut the computer down from the page. Restart and Shut down confirm first.
 - Sign in hides from the sidebar once signed in (`/api/auth/session`).
 - Rest stays a Home link, not a sidebar row
 - **One window.** Not a browser tab per subsystem. Dashboard, Shares, Overlay,
@@ -54,10 +58,32 @@ Keel’s mapping in `web/chrome.js`:
   this over machine names.
 - Short forms (`lsblk`, RSS) stay Guide links.
 
+## Design pieces
+
+The look is one list of names in `web/style.css` (`:root`). A page does not
+invent its own font size, gap, radius, or color.
+
+- **Color:** `--bg`, `--panel`, `--text`, `--muted`, `--accent` (brass),
+  `--copper` for labels, `--success`, `--warn`, `--red` for a real failure.
+  The shared chrome includes a persisted dark/light theme toggle; both themes
+  retain the same contrast, spacing, and status meaning.
+- **Space:** `--space-1` (4px) through `--space-6` (28px). Gaps and stacks
+  use these. Control padding is `--pad-control`. Card padding is `--pad-card`.
+  Both are built from that scale.
+- **Type:** `--font` and `--font-mono`. Sizes are `--text-2xs` through
+  `--text-display`. Eyebrows (`h2`, kickers, table heads) share `--text-2xs`
+  and `--track-label`. A card title (`h2.home-title`) uses `--text-xl` and is
+  left out of that eyebrow rule.
+- **Shape:** `--radius` for panels, `--radius-control` for buttons and fields,
+  `--shadow-card` for raised surfaces.
+- **Power** stays the sidebar button (icon and word). Signed in, its menu is
+  Sign out, Restart, and Shut down. Until then the menu is Sign in. Do not
+  draw a second power control on a page.
+
 ## Colour and status (intent, not palette)
 
-- Accent is for interactive highlight and live/ok work. Keel’s accent stays
-  sea-glass, not Cerebro yellow.
+- Accent is for interactive highlight and live/ok work. Healthy status uses
+  green, attention uses brass, and only a real repair uses red.
 - An optional service that is not running reads **grey**, not red. Red is a
   failure that needs Repair. “Overlay not enrolled yet” is grey.
 - Scroll bars are thin and themed (track quiet, thumb warm/accent on hover).

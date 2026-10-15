@@ -1,5 +1,13 @@
 # Troubleshooting
 
+## The screen stays on the loading picture after the USB is chosen
+
+The repair USB hides boot text on purpose. From the menu until the page appears, the screen is blank or still shows the computer’s own loading picture, and the cursor is hidden. Reading the system off the USB takes a few minutes. This PC could not reach `192.168.0.191:9478` during that wait (15 Oct 2026). If the page has not appeared after about five minutes, hold the power button, remove the USB, and start from the Samsung disk. The disk is unchanged unless the screen already said to remove the USB.
+
+## Red lines on the black screen while Keel starts
+
+The installed disk boots with `quiet` only (`/etc/default/grub`). That still prints kernel errors, then the page covers them. The USB image adds `loglevel=3`, so the same lines stay off the USB screen. Linux already keeps them: `/var/log/journal` is on the disk, so they survive a restart. The release image has no SSH, and the recovery console is not a sign-in set up for copying that log. A photo is the capture until Repair can show the lines and a Copy button.
+
 ## The appliance screen is black
 
 `journalctl -u keel-kiosk` on the recovery console (`Ctrl+Alt+F3`) says which of
@@ -69,11 +77,11 @@ Copying the live system onto the disk is not the whole install. Left alone, the 
 
 ## The installed box cannot take a Settings update
 
-A USB **repair** image updates only `/usr/bin/keel` and `/usr/lib/keel/web`. It does not run the disk installer. Build it with `sudo KEEL_REPAIR=1 ./packaging/baremetal/remaster-official.sh`. The current file is `dist/baremetal/release/keel-amd64-repair.iso` (SHA-256 `06959ff94a0ce489d6aed83d802f0bbab7262c9905809287887503da6537ac0b`, Keel 0.1.5). Boot that USB once, wait until the screen says to remove it, then restart from the disk.
+A USB **repair** image updates only `/usr/bin/keel` and `/usr/lib/keel/web`. It does not run the disk installer. Build it with `sudo KEEL_REPAIR=1 ./packaging/baremetal/remaster-official.sh`. The file `dist/baremetal/release/keel-amd64-repair.iso` built 2026-10-15 (SHA-256 `c0102c3fdaded192a3716ba2e47748112007d15d0b179fbfd1a391ea557f0814`) is this working copy: Keel 0.1.7 with permission to run, plus the current pages. Copy it to Ventoy, boot it once, wait until the screen says to remove it, then restart from the disk. A leftover copy of the 2026-10-13 image (SHA-256 `06959ff94a0ce489d6aed83d802f0bbab7262c9905809287887503da6537ac0b`) would put 0.1.5 back.
 
 ## Settings says the new Keel did not start, so the previous version was restored
 
-The installer unpacked the new program as a normal file, without permission to run. systemd still reports that the restart worked. Nothing answers `/api/health`, so the restore script puts the previous program back (that script does set permission to run). Retrying Settings hits the same wall until a Keel that sets the permission is already running. The box stays on the previous version.
+The installer unpacked the new program as a normal file, without permission to run. systemd still reports that the restart worked. Nothing answers `/api/health`, so the restore script puts the previous program back (that script does set permission to run). This happened for 0.1.6 and again for 0.1.7 on 2026-10-15. Retrying Settings hits the same wall until a Keel that sets the permission is already running. The box stays on the previous version. Use a new repair USB for that hop.
 
 ## Settings says a release is available but the signature is not valid
 
