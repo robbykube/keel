@@ -145,32 +145,60 @@ impl Store {
     }
 
     pub fn remember_host(&mut self, host: &str, username: &str, realm: &str) {
+        let _ = self.remember(host, username, realm, None);
+    }
+
+    /// Keep this computer and what answered last time. The password is not stored.
+    pub fn remember_look(
+        &mut self,
+        host: &str,
+        why: &str,
+        hits: &[crate::discover::LookHit],
+    ) -> Result<(), String> {
+        self.remember(host, "", "", Some((why, hits)))
+    }
+
+    fn remember(
+        &mut self,
+        host: &str,
+        username: &str,
+        realm: &str,
+        seen: Option<(&str, &[crate::discover::LookHit])>,
+    ) -> Result<(), String> {
         let host = host.trim();
         if host.is_empty() {
-            return;
+            return Err("type a computer name or number".into());
         }
         let prev = self
             .saved_remote
             .hosts
             .iter()
-            .find(|h| h.host.eq_ignore_ascii_case(host))
+            .find(|item| item.host.eq_ignore_ascii_case(host))
             .cloned();
         self.saved_remote
             .hosts
-            .retain(|h| !h.host.eq_ignore_ascii_case(host));
+            .retain(|item| !item.host.eq_ignore_ascii_case(host));
         let username = if username.trim().is_empty() {
             prev.as_ref()
-                .map(|p| p.username.clone())
+                .map(|item| item.username.clone())
                 .unwrap_or_default()
         } else {
             username.trim().to_string()
         };
         let realm = if realm.trim().is_empty() {
-            prev.map(|p| p.realm)
-                .filter(|r| !r.is_empty())
+            prev.as_ref()
+                .map(|item| item.realm.clone())
+                .filter(|item| !item.is_empty())
                 .unwrap_or_else(|| "pam".into())
         } else {
             realm.trim().to_string()
+        };
+        let (why, hits) = if let Some((why, hits)) = seen {
+            (why.to_string(), hits.to_vec())
+        } else if let Some(prev) = prev {
+            (prev.why, prev.hits)
+        } else {
+            (String::new(), Vec::new())
         };
         self.saved_remote.hosts.insert(
             0,
@@ -178,9 +206,11 @@ impl Store {
                 host: host.to_string(),
                 username,
                 realm,
+                why,
+                hits,
             },
         );
-        let _ = save_remote(&self.saved_remote);
+        save_remote(&self.saved_remote)
     }
 
     pub fn remember_remote(&mut self, req: &LoginRequest) {

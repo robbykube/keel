@@ -804,6 +804,10 @@ fn replace_file(from: &Path, to: &Path) -> Result<(), String> {
             .unwrap_or("keel")
     ));
     fs::copy(from, &temp).map_err(|error| format!("could not stage {}: {error}", to.display()))?;
+    // Unpack creates the program as a normal file. systemd will say the
+    // restart worked, then the program never answers, and the old Keel is
+    // restored. The restore script already sets this bit; the install must too.
+    mark_executable(&temp)?;
     sync_file(&temp)?;
     match fs::rename(&temp, to) {
         Ok(()) => Ok(()),
@@ -932,6 +936,9 @@ fn extract_package(bytes: &[u8], dest: &Path) -> Result<(), String> {
         let mut output = File::create(&target).map_err(|error| error.to_string())?;
         std::io::copy(&mut entry, &mut output)
             .map_err(|error| format!("could not unpack {}: {error}", relative.display()))?;
+        if relative == Path::new("keel") {
+            mark_executable(&target)?;
+        }
     }
     if !dest.join("keel").is_file() || !dest.join("web").is_dir() {
         return Err("The package does not contain the Keel program and its pages.".into());
@@ -1107,7 +1114,63 @@ async fn wait_for_version(expected: &str) -> Result<(), String> {
             return Ok(());
         }
     }
-    Err(format!("Keel {expected} did not answer."))
+    Err(format!(
+        "Keel {expected} did not answer.{}",
+        explain_startup_log(&recent_service_log())
+    ))
+}
+
+fn recent_service_log() -> String {
+    let Ok(output) = Command::new("journalctl")
+        .args(["-u", "keel.service", "-n", "40", "--no-pager", "-o", "cat"])
+        .output()
+    else {
+        return String::new();
+    };
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+/// Turn the service log into one plain sentence. Empty when it does not say why.
+fn explain_startup_log(log: &str) -> String {
+    let lower = log.to_lowercase();
+    if lower.contains("203/exec") || lower.contains("permission denied") {
+        return " The new program was saved without permission to run.".into();
+    }
+    if let Some(line) = log.lines().rev().find(|line| {
+        let line = line.to_lowercase();
+        line.contains("panic") || line.contains("overflowed its stack") || line.contains("fatal runtime error")
+    }) {
+        let line = line.trim();
+        let line = if line.len() > 180 {
+            &line[..180]
+        } else {
+            line
+        };
+        return format!(" {line}");
+    }
+    String::new()
+}
+
+fn mark_executable(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = fs::metadata(path)
+            .map_err(|error| format!("could not read permissions for {}: {error}", path.display()))?
+            .permissions();
+        permissions.set_mode(permissions.mode() | 0o755);
+        fs::set_permissions(path, permissions).map_err(|error| {
+            format!(
+                "could not allow {} to run: {error}",
+                path.display()
+            )
+        })?;
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
+    Ok(())
 }
 
 fn github_client() -> Result<reqwest::Client, String> {
@@ -1482,7 +1545,20 @@ mod tests {
         fs::write(&source, b"new").unwrap();
         replace_file(&source, &dest).unwrap();
         assert_eq!(fs::read(&dest).unwrap(), b"new");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&dest).unwrap().permissions().mode();
+            assert_eq!(mode & 0o111, 0o111);
+        }
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_program_without_permission_to_run_is_explained() {
+        let log = "keel.service: Main process exited, code=exited, status=203/EXEC";
+        assert!(super::explain_startup_log(log).contains("permission to run"));
+        assert!(super::explain_startup_log("listening").is_empty());
     }
 
     #[test]

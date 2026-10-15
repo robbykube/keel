@@ -17,7 +17,7 @@ pub fn opportunities(idle: bool, cpu_pct: f32) -> Vec<Opportunity> {
         out.push(Opportunity {
             id: "demand-catalog",
             title: "Do not run the whole catalog just because you are Active",
-            why: "Active means we can start what you need. Jitsi with zero conferences, Immich with no jobs, PBS outside a backup window can stay stopped. Park unused work while you are still using the box.",
+            why: "Active means we can start what you need. Jitsi with zero conferences and Immich with no jobs can stay stopped. The nightly copy runs on its own and then stops. Park unused work while you are still using the box.",
             phase: "active",
             safe_while_working: true,
             auto: true,

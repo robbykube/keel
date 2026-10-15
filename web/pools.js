@@ -2,6 +2,7 @@ const $ = (id) => document.getElementById(id);
 const NAMES_KEY = "keel-their-names";
 let lastPlaces = [];
 let lastListing = null;
+let savedHosts = [];
 
 function showTheirNames() {
   return localStorage.getItem(NAMES_KEY) === "1";
@@ -35,24 +36,63 @@ async function load() {
   await renderRecents();
 }
 
+function recognized(host) {
+  const names = (host.hits || []).filter((hit) => hit.open).map((hit) => hit.name);
+  return names.length ? names.join(" · ") : "Nothing answered last time";
+}
+
+function renderHits(report) {
+  const open = (report.hits || []).filter((hit) => hit.open);
+  const closed = (report.hits || []).filter((hit) => !hit.open);
+  return (
+    `<p class="prose">${escapeHtml(report.why || "")}</p>` +
+    (open.length
+      ? open
+          .map(
+            (hit) =>
+              `<article class="opp"><h3>${escapeHtml(hit.name)}</h3><p>${escapeHtml(hit.hint)}</p>${
+                hit.fill
+                  ? `<button type="button" data-fill="${encodeURIComponent(hit.fill)}">Use this folder</button>`
+                  : ""
+              }</article>`
+          )
+          .join("")
+      : `<p class="prose">Nothing answered. Wrong name, the computer is off, or a firewall is in the way. Try the address you already use in the browser.</p>`) +
+    (closed.length ? `<p class="meta">Nothing else answered.</p>` : "")
+  );
+}
+
+function showSaved(host) {
+  $("host").value = host.host || "";
+  if (host.username) $("user").value = host.username;
+  if (host.realm) $("realm").value = host.realm;
+  $("found").hidden = false;
+  $("found").innerHTML = renderHits({
+    hits: host.hits || [],
+    why: host.why || "Saved from the last look. The password is not kept.",
+  });
+  $("status").textContent = `${host.host} — saved from last time.`;
+}
+
 async function renderRecents() {
-  const saved = await fetch("/api/look/saved").then((r) => r.json()).catch(() => ({ hosts: [] }));
-  const hosts = saved.hosts || [];
+  const saved = await fetch("/api/look/saved", { credentials: "same-origin" }).then((r) => r.json()).catch(() => ({ hosts: [] }));
+  savedHosts = saved.hosts || [];
   const box = $("recents");
-  if (!hosts.length) {
+  if (!savedHosts.length) {
     box.hidden = true;
     box.innerHTML = "";
     return;
   }
   box.hidden = false;
   box.innerHTML =
-    `<p class="meta">Remembered — click, then sign in again (password is not kept)</p>` +
-    hosts
+    `<p class="meta">Saved computers. What answered is kept, so you do not look again. The password is not kept.</p>` +
+    savedHosts
       .map(
-        (h) =>
+        (host) =>
           `<div class="recent-row">
-            <button type="button" class="use" data-use="${encodeURIComponent(h.host)}" data-user="${encodeURIComponent(h.username || "")}" data-realm="${encodeURIComponent(h.realm || "pam")}">${escapeHtml(h.host)}</button>
-            <button type="button" data-forget="${encodeURIComponent(h.host)}">Delete</button>
+            <button type="button" class="use" data-show="${encodeURIComponent(host.host)}">${escapeHtml(host.host)} <span class="meta">${escapeHtml(recognized(host))}</span></button>
+            <button type="button" data-again="${encodeURIComponent(host.host)}">Look again</button>
+            <button type="button" data-forget="${encodeURIComponent(host.host)}">Delete</button>
           </div>`
       )
       .join("");
@@ -93,6 +133,7 @@ $("lookform").addEventListener("submit", async (e) => {
   $("found").hidden = false;
   const res = await fetch("/api/look", {
     method: "POST",
+    credentials: "same-origin",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ host }),
   });
@@ -102,27 +143,9 @@ $("lookform").addEventListener("submit", async (e) => {
     return;
   }
   const report = await res.json();
-  $("status").textContent = `looked at ${report.host}`;
+  $("status").textContent = report.note || `Looked at ${report.host}.`;
+  $("found").innerHTML = renderHits(report);
   await renderRecents();
-  const open = report.hits.filter((h) => h.open);
-  const closed = report.hits.filter((h) => !h.open);
-  $("found").innerHTML =
-    `<p class="prose">${report.why}</p>` +
-    (open.length
-      ? open
-          .map(
-            (h) =>
-              `<article class="opp"><h3>${escapeHtml(h.name)}</h3><p>${escapeHtml(h.hint)}</p>${
-                h.fill
-                  ? `<button type="button" data-fill="${encodeURIComponent(h.fill)}">Use this folder</button>`
-                  : ""
-              }</article>`
-          )
-          .join("")
-      : `<p class="prose">Nothing answered. Wrong name, the computer is off, or a firewall is in the way. Try the address you already use in the browser.</p>`) +
-    (closed.length
-      ? `<p class="meta">Nothing else answered.</p>`
-      : "");
 });
 
 $("signinform").addEventListener("submit", async (e) => {
@@ -164,27 +187,37 @@ function useAddress(fill, name) {
   src.focus();
 }
 
+async function lookAt(host) {
+  $("host").value = host;
+  $("lookform").requestSubmit();
+}
+
 $("recents").addEventListener("click", async (e) => {
-  const forget = e.target.dataset && e.target.dataset.forget;
+  const button = e.target.closest("button");
+  if (!button) return;
+  const forget = button.dataset.forget;
   if (forget) {
     const host = decodeURIComponent(forget);
     if (!confirm(`Forget ${host}?`)) return;
     await fetch("/api/look/forget", {
       method: "POST",
+      credentials: "same-origin",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ host }),
     });
     await renderRecents();
     return;
   }
-  const use = e.target.dataset && e.target.dataset.use;
-  if (!use) return;
-  $("host").value = decodeURIComponent(use);
-  const user = e.target.dataset.user ? decodeURIComponent(e.target.dataset.user) : "";
-  const realm = e.target.dataset.realm ? decodeURIComponent(e.target.dataset.realm) : "pam";
-  if (user) $("user").value = user;
-  if (realm) $("realm").value = realm;
-  $("host").focus();
+  const again = button.dataset.again;
+  if (again) {
+    await lookAt(decodeURIComponent(again));
+    return;
+  }
+  const show = button.dataset.show;
+  if (!show) return;
+  const name = decodeURIComponent(show);
+  const host = savedHosts.find((item) => item.host === name);
+  if (host) showSaved(host);
 });
 
 $("found").addEventListener("click", (e) => {

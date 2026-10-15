@@ -8,10 +8,8 @@ Come with as much of this lab as possible. **Have** ≠ **run**. Stopped-on-rok 
 | Scanopy | 101 | Stopped until Active |
 | Technitium DNS | 102 | Stopped until Active |
 | Vaultwarden | 103 | Stopped until Active |
-| OpenCloud | 104 | Stopped until Active. File app; keel is pools/SMB. |
 | Jitsi | 105 | Stopped until Active |
 | Immich | 106 | Stopped until Active |
-| Proxmox Backup Server | 107 | Stopped until Active |
 | Nginx Proxy Manager | 108 | Stopped until Active |
 | Papra | 109 | Stopped until Active |
 | Proxmox Mail Gateway | 110 | Stopped until Active |

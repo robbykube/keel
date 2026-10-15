@@ -71,6 +71,10 @@ Copying the live system onto the disk is not the whole install. Left alone, the 
 
 A USB **repair** image updates only `/usr/bin/keel` and `/usr/lib/keel/web`. It does not run the disk installer. Build it with `sudo KEEL_REPAIR=1 ./packaging/baremetal/remaster-official.sh`. The current file is `dist/baremetal/release/keel-amd64-repair.iso` (SHA-256 `06959ff94a0ce489d6aed83d802f0bbab7262c9905809287887503da6537ac0b`, Keel 0.1.5). Boot that USB once, wait until the screen says to remove it, then restart from the disk.
 
+## Settings says the new Keel did not start, so the previous version was restored
+
+The installer unpacked the new program as a normal file, without permission to run. systemd still reports that the restart worked. Nothing answers `/api/health`, so the restore script puts the previous program back (that script does set permission to run). Retrying Settings hits the same wall until a Keel that sets the permission is already running. The box stays on the previous version.
+
 ## Settings says a release is available but the signature is not valid
 
 Keel 0.1.1 and 0.1.2 asked GitHub for the signed files with a JSON header. GitHub then sent asset metadata instead of `SHA256SUMS.sig`, and Settings treated that as a bad signature. The v0.1.2 files themselves verify. 0.1.3 downloads the files as raw bytes. A 0.1.1 or 0.1.2 box cannot install that fix from Settings; copy `v0.1.3` onto the machine once, then later updates work.

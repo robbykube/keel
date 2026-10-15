@@ -8,7 +8,7 @@ Stay a curated appliance. Do not become TrueNAS, Unraid CA, or a second Proxmox.
 2. **Warm-on-demand catalog** — hitting `photos.*` starts Immich; empty Jitsi stays down. Idle floor remains Tailscale + keel so files still open from away.
 3. **Intranet doctor** — one page: LAN IP:port, Tailscale IP, Technitium name, NPM name, hairpin test, 22/445/9478. The usual homelab failure, made obvious.
 4. **Integrity without a science project** — snapshots on a clock, scrub on a clock, SMART as health, one “yesterday’s files” restore. Not every ZFS knob.
-5. **Backup as a window** — wake PBS, run, park. Same pattern as power advisor.
+5. **Backup as a window** — the nightly copy runs, then stops. Same pattern as the power advisor. Proxmox Backup Server is not a Keel app.
 6. **Shares that explain ACLs** — guest / user / group in words, copy-paste `\\lan-ip\share` **and** `\\tailscale-ip\share` (or MagicDNS). Same door at home and away.
 7. **Watt + latency budget on the dashboard** — RAPL or a cheap meter if we have it; daemon RSS; API timing. Speed and energy as one product.
 8. **One Update** — Omarchy-style: catalog + keel + host patches, rollback if the pool is fine.

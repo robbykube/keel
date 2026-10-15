@@ -870,10 +870,18 @@ async fn look_around(
     State(state): State<AppState>,
     Json(req): Json<crate::discover::LookRequest>,
 ) -> Result<Json<crate::discover::LookReport>, (StatusCode, String)> {
-    let report = crate::discover::look(&req.host)
+    let mut report = crate::discover::look(&req.host)
         .await
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    state.store.lock().await.remember_host(&report.host, "", "");
+    report.note = match state
+        .store
+        .lock()
+        .await
+        .remember_look(&report.host, &report.why, &report.hits)
+    {
+        Ok(()) => "Saved. This page shows what answered, so you do not look again.".into(),
+        Err(err) => format!("Keel saw that computer but could not save it. {err}"),
+    };
     Ok(Json(report))
 }
 

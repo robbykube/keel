@@ -24,9 +24,11 @@ What works now:
   box only counts a signed `vX.Y.Z` release. Private release files are
   downloaded from the GitHub API as raw bytes, not as JSON.
 - Install saves the current program, pages, and `/var/lib/keel` settings, then
-  switches to the new program. If the new version does not answer
-  `/api/health`, or the power goes out before that answer, the boot service
-  `keel-update-rollback.service` restores the saved copy.
+  switches to the new program. The new program is marked runnable (`0755`).
+  Unpack alone leaves a normal file, systemd still says the restart worked,
+  and the health check then restores the previous version. If the new version
+  does not answer `/api/health`, or the power goes out before that answer, the
+  boot service `keel-update-rollback.service` restores the saved copy.
 - Settings written by a newer Keel than this binary understands stop startup
   instead of being guessed.
 

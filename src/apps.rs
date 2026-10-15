@@ -88,18 +88,6 @@ pub fn manifests(idle: bool) -> Vec<AppManifest> {
             "A password service with persistent, explicitly backed-up data.",
         ),
         (
-            "opencloud",
-            "Files",
-            "container",
-            false,
-            &[9200],
-            &["samba"],
-            &["/var/lib/opencloud"],
-            "http",
-            "keep_warm",
-            "A file app layered over Keel storage; SMB remains a core OS path.",
-        ),
-        (
             "jitsi",
             "Video",
             "container",
@@ -122,18 +110,6 @@ pub fn manifests(idle: bool) -> Vec<AppManifest> {
             "http",
             "on_demand",
             "Photo browsing can be warm while heavy workers sleep between jobs.",
-        ),
-        (
-            "pbs",
-            "Backup",
-            "native",
-            false,
-            &[8007],
-            &[],
-            &["/var/lib/pbs"],
-            "http",
-            "scheduled",
-            "Wake only for a declared backup window.",
         ),
         (
             "npm",
@@ -281,7 +257,8 @@ mod tests {
     #[test]
     fn every_manifest_has_a_runtime_and_policy() {
         let apps = manifests(true);
-        assert_eq!(apps.len(), 12);
+        assert_eq!(apps.len(), 10);
+        assert!(apps.iter().all(|app| app.id != "opencloud" && app.id != "pbs"));
         assert!(apps
             .iter()
             .all(|app| !app.runtime.is_empty() && !app.idle_policy.is_empty()));

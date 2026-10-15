@@ -9,7 +9,7 @@ pub struct LookRequest {
     pub host: String,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct LookHit {
     pub port: u16,
     pub name: String,
@@ -23,6 +23,8 @@ pub struct LookReport {
     pub host: String,
     pub hits: Vec<LookHit>,
     pub why: String,
+    /// Empty when the computer was saved. A sentence when it could not be.
+    pub note: String,
 }
 
 struct Probe {
@@ -159,6 +161,7 @@ pub async fn look(host: &str) -> Result<LookReport, String> {
         host,
         hits,
         why: "We only check the computer you typed. We do not search every machine on the house network. An open website is not yet a folder of files. Sign in, or paste a shared folder path if you already have one.".into(),
+        note: String::new(),
     })
 }
 

@@ -4,7 +4,7 @@ use reqwest::header::{HeaderMap, HeaderValue, COOKIE};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::discover::normalize_host;
+use crate::discover::{normalize_host, LookHit};
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
@@ -24,6 +24,11 @@ pub struct SavedRemote {
     pub username: String,
     #[serde(default)]
     pub realm: String,
+    /// What answered the last time Keel looked. Kept so the page can show it again.
+    #[serde(default)]
+    pub why: String,
+    #[serde(default)]
+    pub hits: Vec<LookHit>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -455,11 +460,20 @@ async fn tn_login(
 
 #[cfg(test)]
 mod tests {
-    use super::pve_user;
+    use super::{pve_user, SavedRemotes};
 
     #[test]
     fn realm_appended_once() {
         assert_eq!(pve_user("root", "pam"), "root@pam");
         assert_eq!(pve_user("root@pam", "pam"), "root@pam");
+    }
+
+    #[test]
+    fn an_older_saved_computer_still_loads() {
+        let saved: SavedRemotes =
+            serde_json::from_str(r#"{"hosts":[{"host":"rok","username":"root","realm":"pam"}]}"#)
+                .unwrap();
+        assert_eq!(saved.hosts[0].host, "rok");
+        assert!(saved.hosts[0].hits.is_empty());
     }
 }
