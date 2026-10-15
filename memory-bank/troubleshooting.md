@@ -8,6 +8,10 @@ Reported 2026-10-15 evening. The repair USB got far enough that the update looke
 
 The repair USB hides boot text on purpose. From the menu until the page appears, the screen is blank or still shows the computer’s own loading picture, and the cursor is hidden. Reading the system off the USB takes a few minutes. This PC could not reach `192.168.0.191:9478` during that wait (15 Oct 2026). If the page has not appeared after about five minutes, hold the power button, remove the USB, and start from the Samsung disk. The disk is unchanged unless the screen already said to remove the USB.
 
+## Settings says the download failed while decoding the response
+
+The check can succeed and still stop on Install. 0.1.8 allows 20 seconds for the whole file, then reports a stopped read as “download failed: error decoding response body.” The signature files are small, so they pass, and the package is the one that stops. 0.1.11 allows the file to finish and names the reason underneath that sentence. A retry from 0.1.8 can still hit the same 20 second stop.
+
 ## Red lines on the black screen while Keel starts
 
 The installed disk boots with `quiet` only (`/etc/default/grub`). That still prints kernel errors, then the page covers them. The USB image adds `loglevel=3`, so the same lines stay off the USB screen. Linux already keeps them: `/var/log/journal` is on the disk, so they survive a restart. The release image has no SSH, and the recovery console is not a sign-in set up for copying that log. A photo is the capture until Repair can show the lines and a Copy button.

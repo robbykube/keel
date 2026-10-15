@@ -33,6 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
+- **v0.1.11 (2026-10-15):** The GitHub download may take the time the file needs. A stopped read names its reason instead of only “error decoding response body.” The box that reported that sentence was still 0.1.8.
 - **v0.1.10 (2026-10-15):** Light or dark is on Settings. Home’s scrollbar sits on the right edge of the window. Sleep stays off Power.
 - **Repair ISO (2026-10-15):** `dist/baremetal/release/keel-amd64-repair.iso`, SHA-256 `c0102c3fdaded192a3716ba2e47748112007d15d0b179fbfd1a391ea557f0814`. The payload program is mode `0755`. The family Home is in the copied pages. No physical disk was written.
 - **v0.1.7 Settings install rolled back (2026-10-15):** the box stayed on 0.1.5. The signed release is on GitHub. The hop off 0.1.5 is the repair USB above, not another Settings click.

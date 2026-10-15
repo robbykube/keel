@@ -600,7 +600,7 @@ async fn read_limited_with_progress(
         .header(ACCEPT, HeaderValue::from_static("application/octet-stream"))
         .send()
         .await
-        .map_err(|error| format!("download failed: {error}"))?;
+        .map_err(download_error)?;
     if !allowed_download_url(response.url()) {
         return Err("The download was redirected away from GitHub.".into());
     }
@@ -611,11 +611,7 @@ async fn read_limited_with_progress(
         ));
     }
     let mut body = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|error| format!("download failed: {error}"))?
-    {
+    while let Some(chunk) = response.chunk().await.map_err(download_error)? {
         if body.len().saturating_add(chunk.len()) > limit {
             return Err("The download is larger than Keel accepts.".into());
         }
@@ -1202,12 +1198,31 @@ fn mark_executable(path: &Path) -> Result<(), String> {
 
 fn github_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
-        .timeout(Duration::from_secs(20))
+        .connect_timeout(Duration::from_secs(20))
+        .read_timeout(Duration::from_secs(60))
+        .timeout(Duration::from_secs(10 * 60))
+        .http1_only()
         .user_agent(format!("keel/{}", env!("CARGO_PKG_VERSION")))
         .default_headers(github_headers()?)
         .redirect(reqwest::redirect::Policy::limited(4))
         .build()
         .map_err(|error| error.to_string())
+}
+
+/// Reqwest reports a stopped download as "error decoding response body".
+/// The useful reason is the cause underneath that sentence.
+fn download_error(error: reqwest::Error) -> String {
+    let mut detail = error.to_string();
+    let mut source = std::error::Error::source(&error);
+    while let Some(inner) = source {
+        let text = inner.to_string();
+        if !detail.contains(&text) {
+            detail.push_str(": ");
+            detail.push_str(&text);
+        }
+        source = inner.source();
+    }
+    format!("download failed: {detail}")
 }
 
 fn github_headers() -> Result<HeaderMap, String> {
