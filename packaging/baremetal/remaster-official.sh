@@ -362,7 +362,7 @@ xorriso -indev "${BASE_ISO}" -outdev "${OUTPUT_ISO}" \
 echo "Created: ${OUTPUT_ISO}"
 echo "Checksum: ${OUTPUT_ISO}.sha256"
 if [[ "${REPAIR_MODE}" == "1" ]]; then
-  echo "This is a non-destructive repair image: it updates /usr/bin/keel and /usr/lib/keel/web only."
+  echo "This is a non-destructive repair image: it updates the program, the pages, and the restore script."
 else
   echo "Copy the ISO file to the large Ventoy data partition."
 fi

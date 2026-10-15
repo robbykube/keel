@@ -450,10 +450,16 @@ async fn apply_verified_release_inner() -> Result<String, String> {
             "The update was not installed. The previous version is still in place. {error}"
         ));
     }
+    // The boot restore is ordered before Keel and sees the unfinished-update
+    // marker. A restart would run it and put the old program back before this
+    // new one can answer. A runtime mask lasts until reboot, so a power cut
+    // still restores.
+    let _ = hold_boot_rollback();
     write_update_progress("running", "restarting", 92, "Restarting Keel.");
     if let Err(error) = restart_keel() {
         let _ = run_rollback_script();
         let _ = restart_keel();
+        release_boot_rollback();
         return Err(format!(
             "Keel did not restart. The previous version was restored. {error}"
         ));
@@ -468,12 +474,14 @@ async fn apply_verified_release_inner() -> Result<String, String> {
     if let Err(error) = wait_for_version(expected_version).await {
         let _ = run_rollback_script();
         let _ = restart_keel();
+        release_boot_rollback();
         let message =
             format!("The new Keel did not start, so the previous version was restored. {error}");
         write_result(&message);
         return Err(message);
     }
     clear_pending();
+    release_boot_rollback();
     let message = format!("Keel {expected_version} is running. The previous version is still available if you need it.");
     write_result(&message);
     Ok(message)
@@ -1062,8 +1070,27 @@ fn sync_file(path: &Path) -> Result<(), String> {
     file.sync_all().map_err(|error| error.to_string())
 }
 
+fn hold_boot_rollback() -> Result<(), String> {
+    let status = Command::new("systemctl")
+        .args(["mask", "--runtime", "keel-update-rollback.service"])
+        .status()
+        .map_err(|error| format!("could not hold the restore service: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("could not hold the restore service.".into())
+    }
+}
+
+fn release_boot_rollback() {
+    let _ = Command::new("systemctl")
+        .args(["unmask", "--runtime", "keel-update-rollback.service"])
+        .status();
+}
+
 fn run_rollback_script() -> Result<(), String> {
     let output = Command::new("/usr/lib/keel/rollback-update")
+        .arg("--now")
         .output()
         .map_err(|error| format!("could not start the restore program: {error}"))?;
     if output.status.success() {

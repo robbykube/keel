@@ -2,7 +2,23 @@
 # Restore the Keel program and settings saved before the last update.
 # This script is shell on purpose: it has to run when the new Keel binary
 # does not start. It does not download anything and it does not choose a disk.
+#
+# It is also ordered before keel.service, so a restart during an update starts
+# it too. Restoring then puts the old program back before the new one can
+# answer. At boot the system is still starting, and a power cut returns through
+# that same boot. Once the computer is up, only Keel itself (--now, or a
+# restore it launches) should put the previous program back.
 set -euo pipefail
+
+if [[ "${1:-}" != "--now" ]]; then
+  parent="$(ps -o comm= -p "${PPID}" 2>/dev/null || true)"
+  parent="${parent##*/}"
+  state="$(systemctl is-system-running 2>/dev/null || true)"
+  if [[ "${parent}" != "keel" && ( "${state}" == "running" || "${state}" == "degraded" ) ]]; then
+    echo "Keel is already up. Not restoring during a restart."
+    exit 0
+  fi
+fi
 
 PREV=/var/lib/keel/updates/previous
 if [[ ! -f "${PREV}/keel" ]]; then

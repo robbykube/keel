@@ -132,8 +132,7 @@ nav {
 }
 nav a,
 .sidebar-support a,
-.sidebar-utility a,
-.nav-flyout-menu a {
+.sidebar-utility a {
   color: var(--text);
   text-decoration: none;
   padding: var(--pad-control);
@@ -142,16 +141,13 @@ nav a,
 }
 nav a.active,
 .sidebar-support a.active,
-.sidebar-utility a.active,
-.nav-flyout-toggle.active,
-.nav-flyout-menu a.active {
+.sidebar-utility a.active {
   background: var(--accent-dim);
   color: var(--accent);
 }
 nav a:hover,
 .sidebar-support a:hover,
-.sidebar-utility a:hover,
-.nav-flyout-menu a:hover { background: var(--panel-2); }
+.sidebar-utility a:hover { background: var(--panel-2); }
 nav a.quiet:not(.active),
 .sidebar-support a.quiet:not(.active),
 .sidebar-utility a.quiet:not(.active) { color: var(--muted); }
@@ -159,77 +155,35 @@ nav a.muted { color: var(--muted); cursor: default; }
 nav a.muted:hover { background: transparent; }
 nav a:focus-visible,
 .sidebar-support a:focus-visible,
-.sidebar-utility a:focus-visible,
-.nav-flyout-toggle:focus-visible,
-.nav-flyout-menu a:focus-visible {
+.sidebar-utility a:focus-visible {
   outline: var(--space-0) solid var(--accent);
   outline-offset: var(--space-0);
 }
 nav a:focus:not(:focus-visible),
 .sidebar-support a:focus:not(:focus-visible),
-.sidebar-utility a:focus:not(:focus-visible),
-.nav-flyout-toggle:focus:not(:focus-visible),
-.nav-flyout-menu a:focus:not(:focus-visible) { outline: none; }
+.sidebar-utility a:focus:not(:focus-visible) { outline: none; }
 
-.nav-flyouts {
+.nav-group {
   display: grid;
   gap: var(--space-0);
   padding: var(--space-3) 0 0;
   border-top: 1px solid var(--line);
 }
-.nav-flyout-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: var(--pad-control);
-  border: 0;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.nav-flyout-toggle:hover { background: var(--panel-2); color: var(--text); border-color: transparent; }
-.nav-flyout-toggle > span { flex: 0 0 auto; }
-.nav-flyout-toggle small {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
+.nav-group-title {
+  margin: 0;
+  padding: var(--space-1) var(--space-3) var(--space-0);
+  color: var(--copper);
   font-size: var(--text-2xs);
-  text-align: right;
+  font-weight: 600;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
 }
-.nav-flyout-toggle::after {
-  content: "›";
-  margin-left: auto;
-  color: var(--muted);
-  font-size: var(--text-xl);
-  line-height: 1;
-}
-.nav-flyout-toggle small + *,
-.nav-flyout-toggle:has(small)::after { margin-left: 0; }
-.nav-flyout.is-open > .nav-flyout-toggle { background: var(--panel-2); color: var(--text); }
-.nav-flyout-menu,
 .power-menu {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-menu);
   box-shadow: var(--shadow-menu);
 }
-.nav-flyout-menu {
-  position: fixed;
-  z-index: 40;
-  display: none;
-  min-width: 180px;
-  padding: var(--space-2);
-  gap: var(--space-0);
-}
-.nav-flyout.is-open > .nav-flyout-menu { display: grid; }
-.nav-flyout-menu a { white-space: nowrap; }
 
 .sidebar-support,
 .sidebar-utility {
@@ -677,8 +631,7 @@ button.danger:hover:not(:disabled) { background: var(--red); color: var(--panel)
     overflow: auto;
   }
   nav { flex-direction: row; flex-wrap: wrap; flex: 0 1 auto; }
-  .nav-flyouts { padding: 0; border: 0; }
-  .nav-flyout-toggle::after { content: "▾"; }
+  .nav-group { padding: 0; border: 0; }
   .sidebar-support,
   .sidebar-utility { padding: 0; border: 0; }
   .aside-foot { margin: 0 0 0 auto; border: 0; padding-top: var(--space-2); }
@@ -912,8 +865,7 @@ aside {
 nav { gap: 5px; }
 nav a,
 .sidebar-support a,
-.sidebar-utility a,
-.nav-flyout-menu a {
+.sidebar-utility a {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -924,9 +876,7 @@ nav a,
 }
 nav a.active,
 .sidebar-support a.active,
-.sidebar-utility a.active,
-.nav-flyout-toggle.active,
-.nav-flyout-menu a.active {
+.sidebar-utility a.active {
   color: var(--text);
   background: var(--accent-dim);
   border-color: var(--line);
@@ -934,8 +884,7 @@ nav a.active,
 }
 nav a:hover,
 .sidebar-support a:hover,
-.sidebar-utility a:hover,
-.nav-flyout-menu a:hover { color: var(--text); background: var(--panel-2); }
+.sidebar-utility a:hover { color: var(--text); background: var(--panel-2); }
 .nav-icon,
 .theme-icon {
   flex: 0 0 auto;
@@ -948,10 +897,7 @@ nav a:hover,
   stroke-linejoin: round;
 }
 .nav-label { min-width: 0; }
-.nav-flyout-toggle > span:not(.nav-label) { flex: 0 0 auto; }
-.nav-flyout-toggle .nav-icon { display: none; }
-.nav-flyout-toggle { min-height: 42px; }
-.nav-flyout-menu { padding: 7px; background: var(--panel); border-color: var(--line-strong); }
+.nav-group-title { padding-left: 12px; }
 .sidebar-support, .sidebar-utility { gap: 5px; }
 .aside-foot { padding: 14px 12px 0; margin-top: 0; }
 .power { margin-top: 2px; }
@@ -1078,11 +1024,9 @@ html[data-theme="light"] .home-card:hover { box-shadow: 0 20px 38px rgba(93, 78,
   nav a { flex: 1 0 68px; justify-content: center; flex-direction: column; gap: 4px; min-height: 58px; padding: 7px 8px; font-size: 11px; }
   nav a.active { box-shadow: inset 0 -3px 0 var(--accent); }
   nav .nav-icon { width: 17px; height: 17px; }
-  .nav-flyouts { flex: 0 0 auto; padding: 0; border: 0; }
-  .nav-flyout-toggle { min-width: 68px; min-height: 58px; padding: 7px 8px; justify-content: center; flex-direction: column; gap: 4px; text-align: center; }
-  .nav-flyout-toggle::after { display: none; }
-  .nav-flyout-toggle > span:first-child::before { content: "⋯"; display: block; color: currentColor; font-size: 19px; line-height: 17px; }
-  .nav-flyout-toggle > span:first-child { font-size: 0; }
+  .nav-group { flex: 0 0 auto; padding: 0 0 0 4px; border: 0; border-left: 1px solid var(--line); }
+  .nav-group-title { padding: 0 8px; }
+  .nav-group a { flex-direction: row; min-height: 34px; min-width: 72px; justify-content: flex-start; font-size: 12px; box-shadow: none; }
   .sidebar-support { grid-area: support; display: flex; padding: 0; border: 0; }
   .sidebar-utility { grid-area: utility; display: flex; padding: 0; border: 0; }
   .sidebar-support a, .sidebar-utility a { min-height: 34px; padding: 6px 8px; font-size: 12px; }

@@ -33,8 +33,6 @@ const initialTheme = (() => {
 })();
 document.documentElement.dataset.theme = initialTheme === "light" ? "light" : "dark";
 
-let flyoutChromeInstalled = false;
-
 const currentPath = () => location.pathname || "/";
 
 const isActive = (href) => {
@@ -72,105 +70,15 @@ const themeControl = () => {
   return button;
 };
 
-const closeFlyout = (flyout) => {
-  flyout.classList.remove("is-open");
-  flyout.querySelector(".nav-flyout-toggle")?.setAttribute("aria-expanded", "false");
-};
-
-const installFlyoutHandlers = (root) => {
-  root.querySelectorAll(".nav-flyout").forEach((flyout) => {
-    const toggle = flyout.querySelector(".nav-flyout-toggle");
-    const menu = flyout.querySelector(".nav-flyout-menu");
-    if (!toggle || !menu) return;
-    const items = () => [...menu.querySelectorAll("a")];
-    let closeTimer = 0;
-    const open = () => {
-      window.clearTimeout(closeTimer);
-      document.querySelectorAll(".nav-flyout.is-open").forEach((other) => {
-        if (other !== flyout) closeFlyout(other);
-      });
-      flyout.classList.add("is-open");
-      toggle.setAttribute("aria-expanded", "true");
-      const row = toggle.getBoundingClientRect();
-      const asideBox = flyout.closest("aside")?.getBoundingClientRect();
-      const mobile = window.matchMedia("(max-width: 960px)").matches;
-      if (mobile) {
-        menu.style.left = `${Math.max(8, row.left)}px`;
-        menu.style.top = `${row.bottom + 4}px`;
-      } else {
-        menu.style.left = `${(asideBox?.right ?? row.right) + 4}px`;
-        menu.style.top = `${Math.max(8, Math.min(row.top - 7, window.innerHeight - menu.offsetHeight - 8))}px`;
-      }
-    };
-    flyout.addEventListener("mouseenter", open);
-    flyout.addEventListener("mouseleave", () => {
-      closeTimer = window.setTimeout(() => closeFlyout(flyout), 220);
-    });
-    toggle.addEventListener("click", (event) => {
-      open();
-      if (event.detail === 0) {
-        (items().find((item) => item.classList.contains("active")) ?? items()[0])?.focus();
-      }
-    });
-    menu.addEventListener("keydown", (event) => {
-      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-      event.preventDefault();
-      const list = items();
-      const at = list.indexOf(document.activeElement);
-      list[(at + (event.key === "ArrowDown" ? 1 : list.length - 1) + list.length) % list.length]?.focus();
-    });
-    flyout.addEventListener("focusout", (event) => {
-      if (!flyout.contains(event.relatedTarget)) closeFlyout(flyout);
-    });
-  });
-};
-
-const installFlyoutChrome = () => {
-  if (flyoutChromeInstalled) return;
-  flyoutChromeInstalled = true;
-  document.addEventListener("pointerdown", (event) => {
-    document.querySelectorAll(".nav-flyout.is-open").forEach((flyout) => {
-      if (!flyout.contains(event.target)) closeFlyout(flyout);
-    });
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    document.querySelectorAll(".nav-flyout.is-open").forEach((flyout) => {
-      const hadFocus = flyout.contains(document.activeElement);
-      closeFlyout(flyout);
-      if (hadFocus) flyout.querySelector(".nav-flyout-toggle")?.focus();
-    });
-  });
-};
-
-const navFlyout = (label, items) => {
-  const wrap = document.createElement("div");
-  wrap.className = "nav-flyout";
-  const current = items.find(([href]) => isActive(href));
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = `nav-flyout-toggle${current ? " active" : ""}`;
-  toggle.setAttribute("aria-haspopup", "menu");
-  toggle.setAttribute("aria-expanded", "false");
-  const name = document.createElement("span");
-  name.textContent = label;
-  toggle.appendChild(name);
-  if (current) {
-    const small = document.createElement("small");
-    small.textContent = current[1];
-    toggle.appendChild(small);
-  }
-  const menu = document.createElement("div");
-  menu.className = "nav-flyout-menu";
-  menu.setAttribute("role", "menu");
-  menu.setAttribute("aria-label", label);
-  items.forEach(([href, name]) => {
-    const link = navLink(href, name);
-    link.setAttribute("role", "menuitem");
-    menu.appendChild(link);
-  });
-  wrap.append(toggle, menu);
-  return wrap;
+const computerGroup = (items) => {
+  const group = document.createElement("div");
+  group.className = "nav-group";
+  const title = document.createElement("p");
+  title.className = "nav-group-title";
+  title.textContent = "This computer";
+  group.appendChild(title);
+  items.forEach(([href, label]) => group.appendChild(navLink(href, label)));
+  return group;
 };
 
 const sectionLinks = (className, ariaLabel, items) => {
@@ -280,12 +188,7 @@ const installKeelChrome = (showInstall = false, session = { signed_in: false, ca
   const computer = computerNav(showInstall);
   const showComputer = session.signed_in || computer.some(([href]) => isActive(href));
   const children = everyday.map(([href, label]) => navLink(href, label));
-  if (showComputer) {
-    const flyouts = document.createElement("div");
-    flyouts.className = "nav-flyouts";
-    flyouts.appendChild(navFlyout("This computer", computer));
-    children.push(flyouts);
-  }
+  if (showComputer) children.push(computerGroup(computer));
   nav.replaceChildren(...children);
   nav.setAttribute("aria-label", "Everyday");
 
@@ -306,8 +209,6 @@ const installKeelChrome = (showInstall = false, session = { signed_in: false, ca
   }
   aside.appendChild(powerMenu(session));
   aside.appendChild(themeControl());
-  installFlyoutChrome();
-  installFlyoutHandlers(aside);
 };
 
 const bootChrome = () => {

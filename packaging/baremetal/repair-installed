@@ -60,6 +60,20 @@ cp -a "$PAYLOAD/web/." "$TARGET_MOUNT/usr/lib/keel/web/"
 find "$TARGET_MOUNT/usr/lib/keel/web" -type d -exec chmod 0755 {} +
 find "$TARGET_MOUNT/usr/lib/keel/web" -type f -exec chmod 0644 {} +
 
+write_progress running 82 "Keeping a restart from undoing the next update..."
+if [ -f /usr/lib/keel/rollback-update ]; then
+  install -D -m 0755 /usr/lib/keel/rollback-update \
+    "$TARGET_MOUNT/usr/lib/keel/rollback-update"
+fi
+if [ -f /etc/systemd/system/keel-update-rollback.service ]; then
+  install -D -m 0644 /etc/systemd/system/keel-update-rollback.service \
+    "$TARGET_MOUNT/etc/systemd/system/keel-update-rollback.service"
+fi
+rm -f "$TARGET_MOUNT/etc/systemd/system/keel.service.wants/keel-update-rollback.service"
+install -d -m 0755 "$TARGET_MOUNT/etc/systemd/system/multi-user.target.wants"
+ln -sfn ../keel-update-rollback.service \
+  "$TARGET_MOUNT/etc/systemd/system/multi-user.target.wants/keel-update-rollback.service"
+
 write_progress running 90 "Finishing the update..."
 sync
 write_progress done 100 "Update complete. Remove the USB and restart the computer."

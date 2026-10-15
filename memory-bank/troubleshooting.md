@@ -1,5 +1,9 @@
 # Troubleshooting
 
+## The computer only starts while the USB is in
+
+Reported 2026-10-15 evening. The repair USB got far enough that the update looked finished, Settings could not install the GitHub update, and with the USB removed the machine stays on its loading picture. This PC could not reach `192.168.0.191:9478`. The repair copy does not change the boot program. A GitHub update is refused while `/run/live/medium` exists, so it cannot be applied from the USB session. Start from the Samsung disk using the firmware boot menu. If that disk's own page never appears, boot the repair USB again. It does not wipe the disk.
+
 ## The screen stays on the loading picture after the USB is chosen
 
 The repair USB hides boot text on purpose. From the menu until the page appears, the screen is blank or still shows the computer’s own loading picture, and the cursor is hidden. Reading the system off the USB takes a few minutes. This PC could not reach `192.168.0.191:9478` during that wait (15 Oct 2026). If the page has not appeared after about five minutes, hold the power button, remove the USB, and start from the Samsung disk. The disk is unchanged unless the screen already said to remove the USB.
@@ -81,7 +85,9 @@ A USB **repair** image updates only `/usr/bin/keel` and `/usr/lib/keel/web`. It 
 
 ## Settings says the new Keel did not start, so the previous version was restored
 
-The installer unpacked the new program as a normal file, without permission to run. systemd still reports that the restart worked. Nothing answers `/api/health`, so the restore script puts the previous program back (that script does set permission to run). This happened for 0.1.6 and again for 0.1.7 on 2026-10-15. Retrying Settings hits the same wall until a Keel that sets the permission is already running. The box stays on the previous version. Use a new repair USB for that hop.
+0.1.5 unpacked the new program as a normal file, without permission to run. systemd still reports that the restart worked. Nothing answers `/api/health`, so the restore script puts the previous program back. 0.1.6 and 0.1.7 from Settings hit that wall.
+
+0.1.7 does mark the new program runnable. The 2026-10-15 USB put that 0.1.7 on the disk. Settings then tried 0.1.8 and still said “The new Keel did not start, so the previous version was restored. Keel 0.1.8 did not answer.” The restore service is ordered before Keel and starts again on that restart, because the unfinished-update marker is already written. It puts 0.1.7 back before 0.1.8 can answer. The restore script now leaves the new program in place once the computer is up. A power cut still restores, because the next start is a boot, not a restart. The repair USB copies that script and moves the service off Keel’s restart.
 
 ## Settings says a release is available but the signature is not valid
 

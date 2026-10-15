@@ -10,4 +10,6 @@ ExecStart=/usr/lib/keel/rollback-update
 TimeoutStartSec=120
 
 [Install]
-WantedBy=keel.service
+# Boot only. WantedBy=keel.service made every restart run this restore, which
+# put the previous program back before the new one could answer.
+WantedBy=multi-user.target
