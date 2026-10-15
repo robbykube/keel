@@ -11,8 +11,9 @@ conventions (15 Sep 2026).
 ## Window
 
 - **The window is the frame.** The page does not grow a document scrollbar.
-  Chrome stays put. One scroll region per view; a list/detail split scrolls
-  each side inside itself. Why boxes start closed and scroll in themselves.
+  Chrome stays put. One scroll region per view, and its scrollbar sits on the
+  right edge of the window. A list/detail split scrolls each side inside
+  itself. Why boxes start closed and scroll in themselves.
 - **The sidebar never scrolls.** Primary rows stay visible. Extra destinations
   open from a short menu to the right (Cerebro: Work / Research / Library),
   not a long stacked list. Guide and Settings sit above Notes. Notes stays at
@@ -65,7 +66,7 @@ invent its own font size, gap, radius, or color.
 
 - **Color:** `--bg`, `--panel`, `--text`, `--muted`, `--accent` (brass),
   `--copper` for labels, `--success`, `--warn`, `--red` for a real failure.
-  The shared chrome includes a persisted dark/light theme toggle; both themes
+  Light or dark lives on Settings, remembered in this browser. Both themes
   retain the same contrast, spacing, and status meaning.
 - **Space:** `--space-1` (4px) through `--space-6` (28px). Gaps and stacks
   use these. Control padding is `--pad-control`. Card padding is `--pad-card`.

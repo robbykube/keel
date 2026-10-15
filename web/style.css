@@ -918,9 +918,12 @@ nav a:hover,
 }
 .theme-toggle:hover { color: var(--text); background: var(--panel-2); border-color: var(--line); }
 .theme-toggle[aria-pressed="true"] { color: var(--accent); }
+#theme-slot { margin: 0 0 var(--space-5); }
+#theme-slot .theme-toggle { width: auto; }
 
-main { padding: 42px 52px 28px; }
-.scroll { width: min(100%, 1120px); margin: 0 auto; padding: 0 0 24px; }
+main { padding: 42px 0 28px; }
+main > :not(.scroll) { padding-left: 52px; padding-right: 52px; }
+main > .scroll { align-self: stretch; width: auto; max-width: none; margin: 0; padding: 0 52px 24px; }
 header { margin-bottom: 28px; }
 h1 { font-size: clamp(32px, 3.3vw, 40px); font-weight: 420; letter-spacing: -.045em; }
 .kicker { margin-bottom: 8px; letter-spacing: .16em; }
@@ -1011,8 +1014,8 @@ html[data-theme="light"] .home-card:hover { box-shadow: 0 20px 38px rgba(93, 78,
   body { display: grid; grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   aside {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: "brand theme power" "nav nav nav" "support support utility" "foot foot foot";
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "brand power" "nav nav nav" "support support utility" "foot foot foot";
     align-items: center;
     gap: 10px 12px;
     max-height: none;
@@ -1035,10 +1038,9 @@ html[data-theme="light"] .home-card:hover { box-shadow: 0 20px 38px rgba(93, 78,
   .power { grid-area: power; margin: 0; }
   .power-toggle { width: auto; min-height: 38px; padding: 8px; }
   .power-toggle span { display: none; }
-  .theme-toggle { grid-area: theme; width: auto; min-height: 38px; padding: 8px; }
-  .theme-toggle span { display: none; }
-  main { padding: 28px 16px 18px; }
-  .scroll { padding-bottom: 16px; }
+  main { padding: 28px 0 18px; }
+  main > :not(.scroll) { padding-left: 16px; padding-right: 16px; }
+  main > .scroll { padding: 0 16px 16px; }
   header { margin-bottom: 22px; }
   .notice { align-items: stretch; flex-direction: column; padding: 22px 20px; }
   .notice .button { width: 100%; }

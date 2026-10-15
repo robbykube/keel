@@ -208,7 +208,8 @@ const installKeelChrome = (showInstall = false, session = { signed_in: false, ca
     aside.append(support, utility);
   }
   aside.appendChild(powerMenu(session));
-  aside.appendChild(themeControl());
+  const themeSlot = document.getElementById("theme-slot");
+  if (themeSlot && !themeSlot.querySelector(".theme-toggle")) themeSlot.appendChild(themeControl());
 };
 
 const bootChrome = () => {

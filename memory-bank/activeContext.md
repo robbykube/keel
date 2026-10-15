@@ -7,7 +7,7 @@ able to install Keel on a whole dedicated computer from Windows without an
 existing target OS. USB is the first transport; PXE/iPXE and BMC virtual
 media are planned transports. A VM remains the safe test environment.
 
-GUI shell: **window is the frame**. Sidebar everyday rows are Home, Files, and Away. Apps stays hidden until one is installed. **This computer** is a sidebar title, with Disks and Repair under it, after Sign in. Install is only on the live USB image, not in the installed app. Guide stays above Notes. Settings appears after Sign in; Sign in hides once `/api/auth/session` says signed in (the Keel screen always is). Notes stays at the bottom, then health and a **Power** button (icon). Signed in, its menu is Sign out (browser sessions only), Restart, Shut down. Until then the menu is Sign in. Home greets you, names one thing to look at, and shows Files, Away, and Disks. Fix it opens Sign in, then Disks. Rest is a Home link.
+GUI shell: **window is the frame**. Sidebar everyday rows are Home, Files, and Away. Apps stays hidden until one is installed. **This computer** is a sidebar title, with Disks and Repair under it, after Sign in. Install is only on the live USB image, not in the installed app. Guide stays above Notes. Settings appears after Sign in; Sign in hides once `/api/auth/session` says signed in (the Keel screen always is). Notes stays at the bottom, then health and a **Power** button (icon). Signed in, its menu is Sign out (browser sessions only), Restart, Shut down. Until then the menu is Sign in. Light or dark is on Settings, not in the sidebar. Home greets you, names one thing to look at, and shows Files, Away, and Disks. Fix it opens Sign in, then Disks. Rest is a Home link.
 
 Apps today: the Apps page lists the catalog, but the image ships no app programs and no `keel-app@.service`, so Start does nothing yet. Status there is computed from Rest/Active, not read from systemd. The Tailscale client is also not in the image, so Away cannot enroll from Keel yet. Samba (`\\ip\files`) is the only file path Keel itself serves. Sessions live in RAM, so a Keel restart or update signs browsers out.
 
@@ -33,6 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
+- **v0.1.10 (2026-10-15):** Light or dark is on Settings. Home’s scrollbar sits on the right edge of the window. Sleep stays off Power.
 - **Repair ISO (2026-10-15):** `dist/baremetal/release/keel-amd64-repair.iso`, SHA-256 `c0102c3fdaded192a3716ba2e47748112007d15d0b179fbfd1a391ea557f0814`. The payload program is mode `0755`. The family Home is in the copied pages. No physical disk was written.
 - **v0.1.7 Settings install rolled back (2026-10-15):** the box stayed on 0.1.5. The signed release is on GitHub. The hop off 0.1.5 is the repair USB above, not another Settings click.
 - **Design levers (2026-10-15):** eyebrows share one size and tracking. Card titles are `h2.home-title` and are left out of that rule. Buttons and sea-glass links share `--pad-control`. Menus share one surface. `--pad-control` and `--pad-card` are built from the space scale.
@@ -53,7 +54,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 - Later, once the password is gone and the folders sit on the data disks: SMART and free space (a short bar means filling up; red means failing), firewall for the house network and Away only, a phone alert when something is red, HTTPS, then one folder login per person.
 - Check `/etc/apt/sources.list` on the installed box has `deb.debian.org` lines; if yes, Podman and Tailscale can be installed online from Keel (no USB). Container images always download from the internet.
 - Plug the Yottamaster into the Keel box in JBOD/Normal (not the enclosure’s RAID). NVMe is OS/apps; USB bays are bulk files. Do not put ZFS on the USB bridge.
-- Overlay stays the away door for the same share. Do not expose SMB to the public internet.
+- Overlay stays the away door for the same share. Do not expose SMB to the public internet. Sleep stays off the Power menu: suspending the computer drops Away, and a wake packet only works on the house network. Rest still parks apps while the computer stays reachable.
 - Do not wipe rok. OpenCloud on rok can stay until files are copied or mounted as a foreign folder.
 - Copy the install ISO onto Ventoy and reinstall on the Samsung disk only when a full disk install is wanted.
 - Whole-disk A/B updates (RAUC) after the single-disk installer has been proven
