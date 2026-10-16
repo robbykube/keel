@@ -127,7 +127,7 @@ err=$(mktemp)
 fetch() {
   if ! /usr/bin/curl -4 -fsSL --retry 3 --max-time 60 "$1" -o "$2" 2>"$err"; then
     detail=$(tail -n 1 "$err" 2>/dev/null || true)
-    say "Keel could not download the Away program. ${detail:-Check the network and try again.}"
+    say "Keel could not download the Away program for ${VERSION_CODENAME}. ${detail:-Check the network and try again.}"
   fi
   chmod 0644 "$2"
 }
@@ -151,7 +151,9 @@ pub fn install_client() -> Result<String, String> {
     if !cfg!(target_os = "linux") {
         return Err("Away installs on the Keel computer.".into());
     }
-    crate::storage::host(INSTALL_SCRIPT, &[], None)?;
+    // The script goes on stdin. systemd-run expands ${...} on the command
+    // line, which would erase the Debian codename and request a missing file.
+    crate::storage::host("exec /bin/bash -s", &[], Some(INSTALL_SCRIPT))?;
     Ok("The Away program is ready. Paste the one-time key and press Connect.".into())
 }
 

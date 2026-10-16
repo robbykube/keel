@@ -33,6 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
+- **v0.1.15 (2026-10-16):** Away’s Tailscale download keeps the Debian name in the address. Passing the script on the command line dropped that name, and Tailscale answered 404.
 - **v0.1.14 (2026-10-16):** Away’s Tailscale download uses IPv4, leaves the signing key readable, and repeats the real reason when the download stops.
 - **v0.1.13 (2026-10-16):** Away can install the Tailscale program. It is not in the Home app list, and it does not install until someone presses Install. Connect still needs the one-time key.
 - **v0.1.12 (2026-10-15):** Home asks which apps to use until one is chosen. Apps then stays in the sidebar so more can be added. An empty Home notice takes no space. A Files disk can gain another section beside Documents, Work, and Media.
