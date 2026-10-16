@@ -110,6 +110,61 @@ const powerAction = async (button, path, ask, busy, fallback) => {
   }
 };
 
+const moreMenu = (groups) => {
+  const wrap = document.createElement("div");
+  wrap.className = "more";
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "more-toggle";
+  toggle.setAttribute("aria-haspopup", "menu");
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.textContent = "More";
+  const panel = document.createElement("div");
+  panel.className = "more-panel";
+  panel.setAttribute("role", "menu");
+  panel.hidden = true;
+  let current = false;
+  groups.forEach((group) => {
+    if (!group.items.length) return;
+    const block = document.createElement("div");
+    block.className = "more-group";
+    if (group.title) {
+      const title = document.createElement("p");
+      title.className = "nav-group-title";
+      title.textContent = group.title;
+      block.appendChild(title);
+    }
+    group.items.forEach(([href, label]) => {
+      if (isActive(href)) current = true;
+      block.appendChild(navLink(href, label, "quiet"));
+    });
+    panel.appendChild(block);
+  });
+  if (current) toggle.classList.add("active");
+  const close = () => {
+    panel.hidden = true;
+    toggle.setAttribute("aria-expanded", "false");
+    wrap.closest("aside")?.classList.remove("more-open");
+  };
+  toggle.addEventListener("click", () => {
+    panel.hidden = !panel.hidden;
+    const open = !panel.hidden;
+    toggle.setAttribute("aria-expanded", String(open));
+    wrap.closest("aside")?.classList.toggle("more-open", open);
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (!wrap.contains(event.target)) close();
+  });
+  wrap.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      close();
+      toggle.focus();
+    }
+  });
+  wrap.append(toggle, panel);
+  return wrap;
+};
+
 const powerMenu = (session) => {
   const wrap = document.createElement("div");
   wrap.className = "power";
@@ -192,7 +247,7 @@ const installKeelChrome = (showInstall = false, session = { signed_in: false, ca
   nav.replaceChildren(...children);
   nav.setAttribute("aria-label", "Everyday");
 
-  aside.querySelectorAll(".sidebar-support, .sidebar-utility, .power, .theme-toggle").forEach((node) => node.remove());
+  aside.querySelectorAll(".sidebar-support, .sidebar-utility, .power, .theme-toggle, .more").forEach((node) => node.remove());
   const supportItems = SUPPORT.filter(([href]) => {
     if (href === "/login.html") return !session.signed_in || isActive(href);
     if (href === "/settings.html") return session.signed_in || isActive(href);
@@ -207,6 +262,11 @@ const installKeelChrome = (showInstall = false, session = { signed_in: false, ca
   } else {
     aside.append(support, utility);
   }
+  const moreGroups = [];
+  if (showComputer) moreGroups.push({ title: "This computer", items: computer });
+  moreGroups.push({ title: "", items: supportItems });
+  moreGroups.push({ title: "", items: NOTES });
+  aside.appendChild(moreMenu(moreGroups));
   aside.appendChild(powerMenu(session));
   const themeSlot = document.getElementById("theme-slot");
   if (themeSlot && !themeSlot.querySelector(".theme-toggle")) themeSlot.appendChild(themeControl());

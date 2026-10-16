@@ -42,6 +42,7 @@ Keel’s mapping in `web/chrome.js`:
   apart. A form sits beside its list when there is room (Shares, Pools).
 - **Save is never below the fold.**
 - An install or a download shows one sentence and a bar. The sentence names the step. Tool output stays off the page.
+- On a small screen the top bar stays put and does not scroll. Home, Files, and Away share that row. Disks, Repair, Guide, Settings, and Notes open from More. Page columns stack, and the page content is the one scroll.
 
 ## Save-button rule
 

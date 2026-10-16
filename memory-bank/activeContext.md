@@ -33,6 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
+- **v0.1.17 (2026-10-16):** On a small screen the top links stay in one row and do not scroll. Home, Files, and Away share that row. Disks, Repair, Guide, Settings, and Notes open from More. Page columns stack under that bar.
 - **v0.1.16 (2026-10-16):** Install and download show one sentence and a bar. Away moves through download, package list, install, and start. A Keel update shows the bar as soon as Install update is pressed, including while the file is still downloading.
 - **v0.1.15 (2026-10-16):** Away’s Tailscale download keeps the Debian name in the address. Passing the script on the command line dropped that name, and Tailscale answered 404.
 - **v0.1.14 (2026-10-16):** Away’s Tailscale download uses IPv4, leaves the signing key readable, and repeats the real reason when the download stops.
