@@ -33,6 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
+- **v0.1.19 (2026-10-16):** On a phone, Files scrolls as one page. The folder list and the file list no longer keep their own scroll.
 - **v0.1.18 (2026-10-16):** The big disk number stays how much the disks hold. A bar under each mounted disk is the room left. A short bar says Filling up. Red means that disk’s own report says it is failing. A disk that does not answer, and a disk in a USB box, are not called failing. The first open may install `smartmontools` in the background.
 - **v0.1.17 (2026-10-16):** On a small screen the top links stay in one row and do not scroll. Home, Files, and Away share that row. Disks, Repair, Guide, Settings, and Notes open from More. Page columns stack under that bar.
 - **v0.1.16 (2026-10-16):** Install and download show one sentence and a bar. Away moves through download, package list, install, and start. A Keel update shows the bar as soon as Install update is pressed, including while the file is still downloading.

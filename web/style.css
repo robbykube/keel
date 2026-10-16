@@ -1145,7 +1145,17 @@ html[data-theme="light"] .home-card:hover { box-shadow: 0 20px 38px rgba(93, 78,
   .power-menu { bottom: auto; top: calc(100% + 6px); }
   .power-toggle { width: auto; min-height: 38px; padding: 8px; }
   .power-toggle span { display: none; }
-  main:not(:has(.scroll)) { overflow: auto; }
+  main { overflow: auto; }
+  .scroll,
+  .table-wrap,
+  .table-wrap.scroll,
+  .why[open] {
+    overflow: visible;
+    flex: none;
+    min-height: auto;
+    max-height: none;
+  }
+  .editor textarea { min-height: 14rem; flex: none; }
   .work-split, .guide-split, .notes-split {
     display: flex;
     flex-direction: column;
