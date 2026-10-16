@@ -33,6 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
+- **v0.1.14 (2026-10-16):** Away’s Tailscale download uses IPv4, leaves the signing key readable, and repeats the real reason when the download stops.
 - **v0.1.13 (2026-10-16):** Away can install the Tailscale program. It is not in the Home app list, and it does not install until someone presses Install. Connect still needs the one-time key.
 - **v0.1.12 (2026-10-15):** Home asks which apps to use until one is chosen. Apps then stays in the sidebar so more can be added. An empty Home notice takes no space. A Files disk can gain another section beside Documents, Work, and Media.
 - **v0.1.11 (2026-10-15):** The GitHub download may take the time the file needs. A stopped read names its reason instead of only “error decoding response body.” The box that reported that sentence was still 0.1.8.

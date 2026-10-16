@@ -119,18 +119,26 @@ case "${VERSION_CODENAME:-}" in
   bookworm|trixie) ;;
   *) say "This computer's Debian cannot install Away yet." ;;
 esac
+if [[ ! -x /usr/bin/curl ]]; then
+  say "The download tool is not on this computer."
+fi
 install -d -m 0755 /usr/share/keyrings /etc/apt/sources.list.d
-if ! curl -fsSL "https://pkgs.tailscale.com/stable/debian/${VERSION_CODENAME}.noarmor.gpg" -o /usr/share/keyrings/tailscale-archive-keyring.gpg; then
-  say "Keel could not download the Away program. Check the network and try again."
-fi
-if ! curl -fsSL "https://pkgs.tailscale.com/stable/debian/${VERSION_CODENAME}.tailscale-keyring.list" -o /etc/apt/sources.list.d/tailscale.list; then
-  say "Keel could not download the Away program. Check the network and try again."
-fi
+err=$(mktemp)
+fetch() {
+  if ! /usr/bin/curl -4 -fsSL --retry 3 --max-time 60 "$1" -o "$2" 2>"$err"; then
+    detail=$(tail -n 1 "$err" 2>/dev/null || true)
+    say "Keel could not download the Away program. ${detail:-Check the network and try again.}"
+  fi
+  chmod 0644 "$2"
+}
+fetch "https://pkgs.tailscale.com/stable/debian/${VERSION_CODENAME}.noarmor.gpg" /usr/share/keyrings/tailscale-archive-keyring.gpg
+fetch "https://pkgs.tailscale.com/stable/debian/${VERSION_CODENAME}.tailscale-keyring.list" /etc/apt/sources.list.d/tailscale.list
 log=$(mktemp)
-if ! apt-get update >"$log" 2>&1; then
-  say "Keel could not download the Away program. Check the network and try again."
+if ! apt-get update -o Acquire::ForceIPv4=true >"$log" 2>&1; then
+  detail=$(grep -E 'Err:|^E:' "$log" | tail -n 1 || true)
+  say "Keel could not download the Away program. ${detail:-Check the network and try again.}"
 fi
-if ! DEBIAN_FRONTEND=noninteractive apt-get install -y tailscale >"$log" 2>&1; then
+if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -o Acquire::ForceIPv4=true tailscale >"$log" 2>&1; then
   say "Keel could not install the Away program. Try again."
 fi
 if ! systemctl enable --now tailscaled >"$log" 2>&1; then
@@ -342,6 +350,8 @@ mod tests {
         let script = super::INSTALL_SCRIPT;
         assert!(script.contains("pkgs.tailscale.com/stable/debian/${VERSION_CODENAME}.noarmor.gpg"));
         assert!(script.contains("bookworm|trixie"));
+        assert!(script.contains("Acquire::ForceIPv4=true"));
+        assert!(script.contains("chmod 0644"));
         assert!(!script.contains("auth-key"));
         assert!(!script.contains("tskey-"));
     }
