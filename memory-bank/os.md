@@ -63,6 +63,8 @@ app ships.
 
 **Locked page.** Away’s “Lock the page” asks Tailscale for a free certificate for this computer’s Away name, then Keel itself serves `https://that-name`. Nothing stands in front of Keel. The Keel screen stays on `http://127.0.0.1:9478`. The certificate is remembered and the locked page comes back when Keel starts. HTTPS certificates must be turned on for that Away network first.
 
+**Phone.** Repair’s “Send to the phone” lets the free ntfy app subscribe to this computer on the Tailscale address, port 9479, topic `keel`. Keel sends one message when a disk is red (failing, or a prepared disk missing). A short bar, an unknown disk, and a USB-box reading do not send. The listener binds the Tailscale address only. The choice is remembered. On an iPhone the app shows the message when opened. An Android phone can show it while Away is connected.
+
 **Idle disks.** A button on Disks asks one spinning disk in the USB box to sleep. The check does not wake a disk that is already asleep. If it is already asleep, Keel leaves the box to do that and does not set its own timer. If the box ignores the request, the disks stay spinning.
 
 **SMART** is read with `smartctl`. A sleeping disk is left asleep. A missing answer stays unknown, and that is not called a failure. A disk in a USB box still shows the room left. A SMART reading from that box is not shown as failing, because the box often answers for itself. `smartmontools` is named in `keel-packages.list` but the remaster does not use that list, so an installed computer may not have it yet. The first time disk health is read, Keel installs that package if it is missing. The big Home number stays capacity. The bar is the room left.

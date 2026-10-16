@@ -14,6 +14,7 @@ mod issues;
 mod locked;
 mod model;
 mod overlay;
+mod phone;
 mod people;
 mod remote;
 mod services;
@@ -265,6 +266,10 @@ async fn main() {
             "/api/overlay/lock",
             post(overlay_lock).layer(axum::middleware::from_fn(auth::require_admin)),
         )
+        .route(
+            "/api/phone",
+            get(phone_view).post(phone_on).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/catalog", get(catalog_list))
         .route("/api/apps", get(apps_list))
         .route(
@@ -345,7 +350,8 @@ async fn main() {
     }
     let listener = TcpListener::bind(addr).await.expect("bind");
     let tls_app = app.clone();
-    tokio::spawn(crate::locked::serve(tls_app));
+            tokio::spawn(crate::locked::serve(tls_app));
+            tokio::spawn(crate::phone::serve());
     eprintln!("keel listening on http://{addr}");
     if crate::auth::loopback_trusted() {
         eprintln!("keel trusts loopback requests without a token (local console)");
@@ -680,6 +686,22 @@ async fn watch_disks(state: AppState) {
         }
         if crate::copies::due() {
             let _ = tokio::task::spawn_blocking(crate::copies::run_now).await;
+        }
+        if crate::phone::wanted() {
+            let text = tokio::task::spawn_blocking(|| {
+                let reds: Vec<crate::phone::Note> = crate::storage::issues()
+                    .into_iter()
+                    .filter(|issue| issue.severity == "red")
+                    .map(|issue| crate::phone::note(&issue.title, &issue.why, &issue.evidence))
+                    .collect();
+                crate::phone::take_new(&reds)
+            })
+            .await
+            .ok()
+            .flatten();
+            if let Some(text) = text {
+                crate::phone::publish(&text);
+            }
         }
     }
 }
@@ -1158,6 +1180,41 @@ async fn overlay_install() -> Result<Json<serde_json::Value>, (StatusCode, Json<
                 Json(serde_json::json!({ "ok": false, "message": message })),
             )
         })
+}
+
+async fn phone_view() -> Json<serde_json::Value> {
+    Json(crate::phone::view())
+}
+
+async fn phone_on() -> Json<serde_json::Value> {
+    let setup = tokio::task::spawn_blocking(crate::phone::enable)
+        .await
+        .unwrap_or_else(|_| Err("The phone stayed as it was.".into()));
+    match setup {
+        Ok(message) => {
+            crate::phone::kick();
+            if crate::firewall::wanted() {
+                let addresses = local_addresses();
+                let _ = tokio::task::spawn_blocking(move || crate::firewall::enable(&addresses)).await;
+            }
+            let pending = tokio::task::spawn_blocking(|| {
+                let reds: Vec<crate::phone::Note> = crate::storage::issues()
+                    .into_iter()
+                    .filter(|issue| issue.severity == "red")
+                    .map(|issue| crate::phone::note(&issue.title, &issue.why, &issue.evidence))
+                    .collect();
+                crate::phone::take_new(&reds)
+            })
+            .await
+            .ok()
+            .flatten();
+            if let Some(text) = pending {
+                crate::phone::publish(&text);
+            }
+            Json(serde_json::json!({ "ok": true, "message": message }))
+        }
+        Err(message) => Json(serde_json::json!({ "ok": false, "message": message })),
+    }
 }
 
 async fn overlay_lock() -> Json<serde_json::Value> {

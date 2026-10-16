@@ -23,6 +23,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Try it on one disk | Ask one spinning disk in the USB box to sleep. If it is already asleep, Keel leaves the box to do that |
 | Only the house and Away | The page and the folders answer on this network and on Away. The Keel screen still works. Other computers are refused |
 | Lock the page | The same page at the Away name, with a lock the browser trusts. The password app asks for that address. The Keel screen stays as it is |
+| Send to the phone | When something is red, one message goes to the free ntfy app. The phone must be on Away |
 | Use this | Shared folder or files app a person should pick |
 | Leave this | Disks for other programs, installer files, or the computer itself |
 

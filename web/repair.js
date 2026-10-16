@@ -35,7 +35,30 @@ async function load() {
     const id = e.target.dataset && e.target.dataset.id;
     if (id) repair(id);
   };
+  showPhone();
 }
+
+async function showPhone() {
+  try {
+    const res = await fetch("/api/phone", { credentials: "same-origin" });
+    if (!res.ok || !$("phone") || $("phone").textContent) return;
+    const data = await res.json();
+    if (data.on && data.server) $("phone").textContent = "Server " + data.server + ". Topic " + data.topic + ".";
+  } catch (_) { /* The sentence from the button stays. */ }
+}
+
+$("phonesend").addEventListener("click", async () => {
+  $("phonesend").disabled = true;
+  $("phone").textContent = "Setting up the phone.";
+  try {
+    const res = await fetch("/api/phone", { method: "POST", credentials: "same-origin" });
+    const data = await res.json().catch(() => ({ message: "The phone stayed as it was." }));
+    $("phone").textContent = data.message || "The phone stayed as it was.";
+  } catch (err) {
+    $("phone").textContent = String(err);
+  }
+  $("phonesend").disabled = false;
+});
 
 load().catch((err) => {
   $("banner").textContent = String(err);
