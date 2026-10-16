@@ -35,7 +35,11 @@
       </div>
       <div class="work-col">
         <h2>Connect this computer</h2>
-        <form class="form" id="form">
+        <div id="install-block" hidden>
+          <p>Away uses its own program. It is not in the app list, and it is not installed until you ask.</p>
+          <button type="button" id="install">Install</button>
+        </div>
+        <form class="form" id="form" hidden>
           <label>Connection
             <select id="provider">
               <option value="headscale">A computer you run</option>

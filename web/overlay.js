@@ -9,12 +9,30 @@ function show(status) {
   $("state").textContent = state;
   const control = status.control_url ? `<p class="prose">${status.control_url}</p>` : "";
   $("current").innerHTML = `<div class="k">${provider}</div><div class="v">${address}</div>${control}<p class="prose">${status.why}</p>`;
+  const ready = status.state === "unavailable" || status.client_installed;
+  $("install-block").hidden = ready;
+  $("form").hidden = !status.client_installed;
 }
 
 async function refresh() {
   const res = await fetch("/api/overlay");
   show(await res.json());
 }
+
+$("install").addEventListener("click", async () => {
+  $("install").disabled = true;
+  $("result").textContent = "Installing the Away program.";
+  try {
+    const res = await fetch("/api/overlay/install", { method: "POST", credentials: "same-origin" });
+    const data = await res.json().catch(() => ({ message: "request failed" }));
+    $("result").textContent = data.message || "request failed";
+    if (data.ok) await refresh();
+  } catch (err) {
+    $("result").textContent = String(err);
+  } finally {
+    $("install").disabled = false;
+  }
+});
 
 $("form").addEventListener("submit", async (event) => {
   event.preventDefault();

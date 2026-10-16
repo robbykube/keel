@@ -227,6 +227,10 @@ async fn main() {
         .route("/api/services", get(services_status))
         .route("/api/network/ports", get(network_ports))
         .route(
+            "/api/overlay/install",
+            post(overlay_install).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
             "/api/overlay/enroll",
             post(overlay_enroll).layer(axum::middleware::from_fn(auth::require_admin)),
         )
@@ -1022,6 +1026,7 @@ async fn overlay_status() -> Json<crate::overlay::Status> {
                 control_url: None,
                 overlay_ip: None,
                 dns_name: None,
+                client_installed: false,
                 why: "Could not collect overlay status.".into(),
             }),
     )
@@ -1041,6 +1046,19 @@ async fn network_ports() -> Json<Vec<crate::services::PortStatus>> {
             .await
             .unwrap_or_default(),
     )
+}
+
+async fn overlay_install() -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    tokio::task::spawn_blocking(crate::overlay::install_client)
+        .await
+        .unwrap_or_else(|_| Err("Keel could not install the Away program.".into()))
+        .map(|message| Json(serde_json::json!({ "ok": true, "message": message })))
+        .map_err(|message| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "ok": false, "message": message })),
+            )
+        })
 }
 
 async fn overlay_enroll(

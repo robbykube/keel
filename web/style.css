@@ -740,6 +740,8 @@ a.button {
   border-color: var(--accent);
 }
 a.button:hover { background: var(--accent-dim); }
+#install-block { margin-bottom: var(--space-4); }
+#install-block p { margin: 0 0 var(--space-3); color: var(--muted); }
 #apps-choice { margin-bottom: var(--space-4); }
 #apps-choice p { margin: var(--space-2) 0 0; color: var(--muted); }
 #apps-choice .form { margin-top: var(--space-3); }

@@ -486,7 +486,7 @@ pub fn issues() -> Vec<Issue> {
 
 /// Run a script outside Keel's sandbox and wait for it. The script's last
 /// line on stderr is the sentence shown when it fails.
-fn host(script: &str, args: &[&str], input: Option<&str>) -> Result<(), String> {
+pub(crate) fn host(script: &str, args: &[&str], input: Option<&str>) -> Result<(), String> {
     let mut command = if Path::new("/usr/bin/systemd-run").exists() || Path::new("/bin/systemd-run").exists() {
         let mut c = Command::new("systemd-run");
         c.args(["--quiet", "--wait", "--pipe", "--collect", "--", "/bin/bash", "-c", script, "keel-host"]);

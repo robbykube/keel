@@ -57,6 +57,7 @@ pub struct Status {
     pub control_url: Option<String>,
     pub overlay_ip: Option<String>,
     pub dns_name: Option<String>,
+    pub client_installed: bool,
     pub why: String,
 }
 
@@ -71,26 +72,79 @@ pub fn status() -> Status {
             control_url,
             overlay_ip: None,
             dns_name: None,
+            client_installed: false,
             why: "Away connects on the Keel computer. This Windows copy is only for trying the screen.".into(),
         };
     }
 
     let output = Command::new("tailscale")
         .args(["status", "--json"])
-        .output()
-        .ok();
+        .output();
 
     match output {
-        Some(output) if output.status.success() => parse_status(provider, &output.stdout),
-        Some(_) | None => Status {
+        Ok(output) if output.status.success() => parse_status(provider, &output.stdout),
+        Ok(_) => Status {
             provider,
             state: State::NotConfigured,
             control_url,
             overlay_ip: None,
             dns_name: None,
-            why: "Install and enroll the overlay client. Headscale is the self-hosted-first control plane; Tailscale clients can use either provider.".into(),
+            client_installed: true,
+            why: "The Away program is on this computer, but it is not connected yet.".into(),
+        },
+        Err(_) => Status {
+            provider,
+            state: State::NotConfigured,
+            control_url,
+            overlay_ip: None,
+            dns_name: None,
+            client_installed: false,
+            why: "The Away program is not on this computer yet.".into(),
         },
     }
+}
+
+const INSTALL_SCRIPT: &str = r#"
+set -euo pipefail
+say() { echo "$1" >&2; exit 1; }
+if command -v tailscale >/dev/null 2>&1; then
+  exit 0
+fi
+if [[ ! -r /etc/os-release ]]; then
+  say "Keel could not tell which Debian this computer uses."
+fi
+# shellcheck disable=SC1091
+. /etc/os-release
+case "${VERSION_CODENAME:-}" in
+  bookworm|trixie) ;;
+  *) say "This computer's Debian cannot install Away yet." ;;
+esac
+install -d -m 0755 /usr/share/keyrings /etc/apt/sources.list.d
+if ! curl -fsSL "https://pkgs.tailscale.com/stable/debian/${VERSION_CODENAME}.noarmor.gpg" -o /usr/share/keyrings/tailscale-archive-keyring.gpg; then
+  say "Keel could not download the Away program. Check the network and try again."
+fi
+if ! curl -fsSL "https://pkgs.tailscale.com/stable/debian/${VERSION_CODENAME}.tailscale-keyring.list" -o /etc/apt/sources.list.d/tailscale.list; then
+  say "Keel could not download the Away program. Check the network and try again."
+fi
+log=$(mktemp)
+if ! apt-get update >"$log" 2>&1; then
+  say "Keel could not download the Away program. Check the network and try again."
+fi
+if ! DEBIAN_FRONTEND=noninteractive apt-get install -y tailscale >"$log" 2>&1; then
+  say "Keel could not install the Away program. Try again."
+fi
+if ! systemctl enable --now tailscaled >"$log" 2>&1; then
+  say "The Away program installed, but it did not start."
+fi
+rm -f "$log"
+"#;
+
+pub fn install_client() -> Result<String, String> {
+    if !cfg!(target_os = "linux") {
+        return Err("Away installs on the Keel computer.".into());
+    }
+    crate::storage::host(INSTALL_SCRIPT, &[], None)?;
+    Ok("The Away program is ready. Paste the one-time key and press Connect.".into())
 }
 
 pub fn enroll(req: EnrollRequest) -> EnrollResult {
@@ -153,7 +207,7 @@ pub fn enroll(req: EnrollRequest) -> EnrollResult {
         ),
         Err(_) => failed(
             req.provider,
-            "the overlay client is not installed on this Linux host",
+            "Install the Away program first.",
         ),
     }
 }
@@ -197,7 +251,8 @@ fn parse_status(provider: Provider, raw: &[u8]) -> Status {
                 control_url: None,
                 overlay_ip: None,
                 dns_name: None,
-                why: "The overlay client answered, but its status was not readable.".into(),
+                client_installed: true,
+                why: "The Away program answered, but Keel could not read it.".into(),
             }
         }
     };
@@ -227,7 +282,8 @@ fn parse_status(provider: Provider, raw: &[u8]) -> Status {
             control_url: None,
             overlay_ip,
             dns_name,
-            why: "The overlay client reports a connected node. Keel still tests file and GUI paths separately.".into(),
+            client_installed: true,
+            why: "This computer is connected. The same folders open from a phone or laptop that is connected too.".into(),
         }
     } else {
         Status {
@@ -236,7 +292,8 @@ fn parse_status(provider: Provider, raw: &[u8]) -> Status {
             control_url: None,
             overlay_ip,
             dns_name,
-            why: "The overlay client is installed but not connected to a control plane.".into(),
+            client_installed: true,
+            why: "The Away program is on this computer, but it is not connected yet.".into(),
         }
     }
 }
@@ -278,5 +335,14 @@ mod tests {
         assert_eq!(valid_control_url("http://hs.example"), None);
         assert!(valid_hostname("keel-nas.example"));
         assert!(!valid_hostname("keel nas"));
+    }
+
+    #[test]
+    fn away_install_uses_the_tailscale_package_and_keeps_the_key_out() {
+        let script = super::INSTALL_SCRIPT;
+        assert!(script.contains("pkgs.tailscale.com/stable/debian/${VERSION_CODENAME}.noarmor.gpg"));
+        assert!(script.contains("bookworm|trixie"));
+        assert!(!script.contains("auth-key"));
+        assert!(!script.contains("tskey-"));
     }
 }
