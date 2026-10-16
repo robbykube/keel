@@ -141,6 +141,14 @@
     checkConfirm();
   });
 
+  el("sleeptry").addEventListener("click", async () => {
+    el("sleeptry").disabled = true;
+    el("sleepstatus").textContent = "Asking one disk. This can take a minute the first time.";
+    const reply = await post("/api/storage/sleep-try");
+    el("sleepstatus").textContent = reply.message || "That try did not finish.";
+    el("sleeptry").disabled = false;
+  });
+
   el("copynow").addEventListener("click", async () => {
     el("copynow").disabled = true;
     const reply = await post("/api/storage/copy-now");

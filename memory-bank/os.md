@@ -59,6 +59,8 @@ app ships.
 **Startup (2026-10-15):** the page is late because the Debian live base still starts printing, Bluetooth, `wpa_supplicant`, Avahi, cron, and sensors, and `keel.service` waits for `network-online.target` and Samba before the program runs. The screen then waits for `/api/health` and starts Chromium from an empty profile under `/run`. Stop the extras. Start Keel when the disk is mounted, and let Samba and the network come up beside it. The repair USB replaces the program and the pages only, so it does not change this. The smaller kiosk browser in `size.md` is the remaining cut, and it shortens install as well.
 | Accurate | Live unit state, real `lsblk`, checksummed image, clock sync *after* boot, advisor evidence not guesses |
 
+**Idle disks.** A button on Disks asks one spinning disk in the USB box to sleep. The check does not wake a disk that is already asleep. If it is already asleep, Keel leaves the box to do that and does not set its own timer. If the box ignores the request, the disks stay spinning.
+
 **SMART** is read with `smartctl`. A sleeping disk is left asleep. A missing answer stays unknown, and that is not called a failure. A disk in a USB box still shows the room left. A SMART reading from that box is not shown as failing, because the box often answers for itself. `smartmontools` is named in `keel-packages.list` but the remaster does not use that list, so an installed computer may not have it yet. The first time disk health is read, Keel installs that package if it is missing. The big Home number stays capacity. The bar is the room left.
 
 Speed comes from **less software running**, not from lying. Accuracy comes from **Debian’s kernel + our sensors**, not from reimplementing Linux.

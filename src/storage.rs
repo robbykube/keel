@@ -537,14 +537,52 @@ pub(crate) fn host(script: &str, args: &[&str], input: Option<&str>) -> Result<(
     if output.status.success() {
         return Ok(());
     }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    Err(stderr
+    Err(last_stderr(&output.stderr))
+}
+
+/// Like `host`, but the script's stdout is the result. Use this when the
+/// script must print a word Keel turns into a sentence. A script with `$`
+/// goes on stdin (`exec /bin/bash -s`), because systemd expands `$` on the
+/// command line.
+pub(crate) fn host_text(script: &str, args: &[&str], input: Option<&str>) -> Result<String, String> {
+    let mut command = if Path::new("/usr/bin/systemd-run").exists() || Path::new("/bin/systemd-run").exists() {
+        let mut c = Command::new("systemd-run");
+        c.args(["--quiet", "--wait", "--pipe", "--collect", "--", "/bin/bash", "-c", script, "keel-host"]);
+        c
+    } else {
+        let mut c = Command::new("/bin/bash");
+        c.args(["-c", script, "keel-host"]);
+        c
+    };
+    command
+        .args(args)
+        .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("Keel could not start the disk helper: {error}"))?;
+    if let (Some(text), Some(mut stdin)) = (input, child.stdin.take()) {
+        let _ = stdin.write_all(text.as_bytes());
+    }
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("The disk helper stopped: {error}"))?;
+    if output.status.success() {
+        let text = String::from_utf8_lossy(&output.stdout);
+        return Ok(text.lines().map(str::trim).filter(|line| !line.is_empty()).last().unwrap_or("").to_string());
+    }
+    Err(last_stderr(&output.stderr))
+}
+
+fn last_stderr(stderr: &[u8]) -> String {
+    String::from_utf8_lossy(stderr)
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .last()
         .unwrap_or("The disk helper failed without saying why.")
-        .to_string())
+        .to_string()
 }
 
 const PREPARE_SCRIPT: &str = r#"set -uo pipefail

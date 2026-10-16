@@ -18,6 +18,7 @@ mod services;
 mod copies;
 mod diskhealth;
 mod smb;
+mod spindown;
 mod storage;
 mod store;
 mod updates;
@@ -178,6 +179,10 @@ async fn main() {
         .route(
             "/api/storage/copy-now",
             post(storage_copy_now).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/storage/sleep-try",
+            post(storage_sleep_try).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route("/api/installer", get(installer_status))
         .route(
@@ -720,6 +725,14 @@ async fn storage_owner(
     })
     .await
     .unwrap_or_else(|_| Err("Setting the name stopped unexpectedly.".into()));
+    storage_reply(result)
+}
+
+async fn storage_sleep_try(State(state): State<AppState>) -> (StatusCode, Json<serde_json::Value>) {
+    let disks = state.inventory.disks().await;
+    let result = tokio::task::spawn_blocking(move || crate::spindown::try_once(&disks))
+        .await
+        .unwrap_or_else(|_| Err("The sleep try stopped. The disks stay spinning.".into()));
     storage_reply(result)
 }
 

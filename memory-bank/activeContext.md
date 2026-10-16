@@ -33,6 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
+- **v0.1.21 (2026-10-16):** Disks can try sleep on one spinning disk in the USB box. If that disk is already asleep, Keel leaves the box to do it and does not set a timer. If the box ignores the request, the disks stay spinning.
 - **v0.1.20 (2026-10-16):** A file on the Files page can be downloaded. Sign-in is a name and password for each person. The page records who signed in. The first person is added in Settings on the Keel screen. The admin token remains a recovery sign-in and does not name a person. File Explorer still uses the folder name on the Files page.
 - **v0.1.19 (2026-10-16):** On a phone, Files scrolls as one page. The folder list and the file list no longer keep their own scroll.
 - **v0.1.18 (2026-10-16):** The big disk number stays how much the disks hold. A bar under each mounted disk is the room left. A short bar says Filling up. Red means that disk’s own report says it is failing. A disk that does not answer, and a disk in a USB box, are not called failing. The first open may install `smartmontools` in the background.
