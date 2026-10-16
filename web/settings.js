@@ -101,8 +101,11 @@ function renderUpdate(update) {
   }
 }
 
+let updateHold = false;
+
 function renderUpdateProgress(progress) {
   if (!progress) return;
+  if (updateHold && (progress.state === "idle" || progress.state === "done")) return;
   lastUpdateProgress = progress;
   const panel = $("update-progress");
   const message = $("update-progress-message");
@@ -172,17 +175,27 @@ async function postJson(path, payload) {
 
 async function postUpdate(path, confirmation, question) {
   if (!window.confirm(question)) return;
-  const box = $("updates");
-  box.textContent = "Working…";
+  const starting = path.endsWith("/restore")
+    ? "Restoring the previous Keel."
+    : "Downloading the Keel update.";
+  updateHold = true;
+  renderUpdateProgress({ state: "running", percent: 1, message: starting });
   try {
     const { res, message } = await postJson(path, { confirmation });
-    box.textContent = message;
-    await loadUpdateProgress();
-    if (res.status === 401 || res.status === 403) {
-      box.innerHTML = `${message} <a href="/login.html">Sign in, then try again.</a>`;
+    updateHold = false;
+    if (!res.ok) {
+      stopUpdateProgressPoll();
+      renderUpdateProgress({ state: "error", percent: 0, message: message || "Keel could not continue." });
+      if (res.status === 401 || res.status === 403) {
+        $("update-progress-message").innerHTML = `${message} <a href="/login.html">Sign in, then try again.</a>`;
+      }
+      return;
     }
+    await loadUpdateProgress();
   } catch (error) {
-    box.textContent = String(error);
+    updateHold = false;
+    stopUpdateProgressPoll();
+    renderUpdateProgress({ state: "error", percent: 0, message: String(error.message || error) });
   }
 }
 

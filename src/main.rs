@@ -226,6 +226,7 @@ async fn main() {
         .route("/api/overlay", get(overlay_status))
         .route("/api/services", get(services_status))
         .route("/api/network/ports", get(network_ports))
+        .route("/api/overlay/progress", get(overlay_progress))
         .route(
             "/api/overlay/install",
             post(overlay_install).layer(axum::middleware::from_fn(auth::require_admin)),
@@ -1046,6 +1047,10 @@ async fn network_ports() -> Json<Vec<crate::services::PortStatus>> {
             .await
             .unwrap_or_default(),
     )
+}
+
+async fn overlay_progress() -> Json<crate::overlay::InstallProgress> {
+    Json(crate::overlay::install_progress())
 }
 
 async fn overlay_install() -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {

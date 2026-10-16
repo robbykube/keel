@@ -39,6 +39,12 @@
           <p>Away uses its own program. It is not in the app list, and it is not installed until you ask.</p>
           <button type="button" id="install">Install</button>
         </div>
+        <div id="install-progress" hidden>
+          <p class="install-message" id="install-message" aria-live="polite"></p>
+          <div class="install-bar" id="install-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span id="install-fill"></span>
+          </div>
+        </div>
         <form class="form" id="form" hidden>
           <label>Connection
             <select id="provider">

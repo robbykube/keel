@@ -249,6 +249,12 @@ pub async fn queue_restore(confirmation: &str) -> Result<String, String> {
         return Err("This machine does not have the restore program yet.".into());
     }
     write_request("rollback")?;
+    write_update_progress(
+        "queued",
+        "queued",
+        8,
+        "Restoring the previous Keel.",
+    );
     Ok("Restore requested. Keel will put the previous version back and restart.".into())
 }
 
@@ -488,10 +494,19 @@ async fn apply_verified_release_inner() -> Result<String, String> {
 }
 
 fn restore_previous() -> Result<String, String> {
-    run_rollback_script()?;
-    restart_keel()?;
+    write_update_progress("running", "restoring", 40, "Putting the previous Keel back.");
+    if let Err(error) = run_rollback_script() {
+        write_update_progress("error", "stopped", 0, &error);
+        return Err(error);
+    }
+    write_update_progress("running", "restarting", 80, "Restarting Keel.");
+    if let Err(error) = restart_keel() {
+        write_update_progress("error", "stopped", 0, &error);
+        return Err(error);
+    }
     let message = "The previous Keel is running again.";
     write_result(message);
+    write_update_progress("done", "complete", 100, message);
     Ok(message.into())
 }
 

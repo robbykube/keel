@@ -41,6 +41,7 @@ Keel’s mapping in `web/chrome.js`:
 - **Content fills the width.** Prose keeps a reading measure. Cards sit 16px
   apart. A form sits beside its list when there is room (Shares, Pools).
 - **Save is never below the fold.**
+- An install or a download shows one sentence and a bar. The sentence names the step. Tool output stays off the page.
 
 ## Save-button rule
 

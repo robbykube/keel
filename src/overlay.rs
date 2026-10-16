@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+const PROGRESS_PATH: &str = "/run/keel/away-install.json";
+static INSTALLING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Serialize, serde::Deserialize, Clone, Copy, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -107,6 +111,10 @@ pub fn status() -> Status {
 const INSTALL_SCRIPT: &str = r#"
 set -euo pipefail
 say() { echo "$1" >&2; exit 1; }
+mark() {
+  install -d -m 0755 /run/keel
+  printf '{"state":"running","percent":%s,"message":"%s"}\n' "$1" "$2" > /run/keel/away-install.json
+}
 if command -v tailscale >/dev/null 2>&1; then
   exit 0
 fi
@@ -131,30 +139,111 @@ fetch() {
   fi
   chmod 0644 "$2"
 }
+mark 12 "Downloading the Away program."
 fetch "https://pkgs.tailscale.com/stable/debian/${VERSION_CODENAME}.noarmor.gpg" /usr/share/keyrings/tailscale-archive-keyring.gpg
+mark 28 "Downloading the Away package list."
 fetch "https://pkgs.tailscale.com/stable/debian/${VERSION_CODENAME}.tailscale-keyring.list" /etc/apt/sources.list.d/tailscale.list
 log=$(mktemp)
+mark 44 "Updating the package list."
 if ! apt-get update -o Acquire::ForceIPv4=true >"$log" 2>&1; then
   detail=$(grep -E 'Err:|^E:' "$log" | tail -n 1 || true)
   say "Keel could not download the Away program. ${detail:-Check the network and try again.}"
 fi
+mark 64 "Installing the Away program."
 if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -o Acquire::ForceIPv4=true tailscale >"$log" 2>&1; then
   say "Keel could not install the Away program. Try again."
 fi
+mark 90 "Starting the Away program."
 if ! systemctl enable --now tailscaled >"$log" 2>&1; then
   say "The Away program installed, but it did not start."
 fi
 rm -f "$log"
 "#;
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct InstallProgress {
+    pub state: String,
+    pub percent: u8,
+    pub message: String,
+}
+
+impl InstallProgress {
+    fn idle() -> Self {
+        Self {
+            state: "idle".into(),
+            percent: 0,
+            message: String::new(),
+        }
+    }
+}
+
+pub fn install_progress() -> InstallProgress {
+    if !cfg!(target_os = "linux") {
+        return InstallProgress::idle();
+    }
+    let saved: Option<InstallProgress> = std::fs::read(PROGRESS_PATH)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+    match saved {
+        Some(progress) if progress.state == "running" && !INSTALLING.load(Ordering::Relaxed) => {
+            InstallProgress::idle()
+        }
+        Some(progress) => progress,
+        None if INSTALLING.load(Ordering::Relaxed) => InstallProgress {
+            state: "running".into(),
+            percent: 1,
+            message: "Installing the Away program.".into(),
+        },
+        None => InstallProgress::idle(),
+    }
+}
+
+fn write_install_progress(state: &str, percent: u8, message: &str) {
+    let progress = InstallProgress {
+        state: state.into(),
+        percent,
+        message: message.into(),
+    };
+    let Ok(body) = serde_json::to_vec(&progress) else {
+        return;
+    };
+    let _ = std::fs::create_dir_all("/run/keel");
+    let tmp = format!("{PROGRESS_PATH}.tmp");
+    if std::fs::write(&tmp, body).is_ok() {
+        let _ = std::fs::rename(&tmp, PROGRESS_PATH);
+    }
+}
+
 pub fn install_client() -> Result<String, String> {
     if !cfg!(target_os = "linux") {
         return Err("Away installs on the Keel computer.".into());
     }
+    if INSTALLING
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err("Away is already installing.".into());
+    }
+    let result = install_client_inner();
+    INSTALLING.store(false, Ordering::SeqCst);
+    result
+}
+
+fn install_client_inner() -> Result<String, String> {
+    write_install_progress("running", 2, "Installing the Away program.");
     // The script goes on stdin. systemd-run expands ${...} on the command
     // line, which would erase the Debian codename and request a missing file.
-    crate::storage::host("exec /bin/bash -s", &[], Some(INSTALL_SCRIPT))?;
-    Ok("The Away program is ready. Paste the one-time key and press Connect.".into())
+    match crate::storage::host("exec /bin/bash -s", &[], Some(INSTALL_SCRIPT)) {
+        Ok(()) => {
+            let message = "The Away program is ready. Paste the one-time key and press Connect.";
+            write_install_progress("done", 100, message);
+            Ok(message.into())
+        }
+        Err(message) => {
+            write_install_progress("error", 0, &message);
+            Err(message)
+        }
+    }
 }
 
 pub fn enroll(req: EnrollRequest) -> EnrollResult {
@@ -354,6 +443,8 @@ mod tests {
         assert!(script.contains("bookworm|trixie"));
         assert!(script.contains("Acquire::ForceIPv4=true"));
         assert!(script.contains("chmod 0644"));
+        assert!(script.contains("Downloading the Away program."));
+        assert!(script.contains("Installing the Away program."));
         assert!(!script.contains("auth-key"));
         assert!(!script.contains("tskey-"));
     }
