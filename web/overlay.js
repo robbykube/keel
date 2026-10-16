@@ -9,6 +9,7 @@ function show(status) {
   $("state").textContent = state;
   const control = status.control_url ? `<p class="prose">${status.control_url}</p>` : "";
   $("current").innerHTML = `<div class="k">${provider}</div><div class="v">${address}</div>${control}<p class="prose">${status.why}</p>`;
+  if ($("locked") && status.locked_page) $("locked").textContent = status.locked_page;
   const ready = status.state === "unavailable" || status.client_installed;
   $("install-block").hidden = ready;
   $("form").hidden = !status.client_installed;
@@ -91,6 +92,19 @@ $("install").addEventListener("click", async () => {
     showInstallProgress({ state: "error", percent: 0, message: String(err) });
     $("install").disabled = false;
   }
+});
+
+$("lockpage").addEventListener("click", async () => {
+  $("lockpage").disabled = true;
+  $("locked").textContent = "Locking the page. This can take a minute.";
+  try {
+    const res = await fetch("/api/overlay/lock", { method: "POST", credentials: "same-origin" });
+    const data = await res.json().catch(() => ({ message: "The page stayed as it was." }));
+    $("locked").textContent = data.message || "The page stayed as it was.";
+  } catch (err) {
+    $("locked").textContent = String(err);
+  }
+  $("lockpage").disabled = false;
 });
 
 $("form").addEventListener("submit", async (event) => {

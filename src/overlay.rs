@@ -63,9 +63,17 @@ pub struct Status {
     pub dns_name: Option<String>,
     pub client_installed: bool,
     pub why: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub locked_page: Option<String>,
 }
 
 pub fn status() -> Status {
+    let mut found = collect();
+    found.locked_page = crate::locked::address(found.dns_name.as_deref());
+    found
+}
+
+fn collect() -> Status {
     let config = crate::config::load();
     let provider = config.overlay.provider;
     let control_url = config.overlay.headscale_url.clone();
@@ -78,6 +86,7 @@ pub fn status() -> Status {
             dns_name: None,
             client_installed: false,
             why: "Away connects on the Keel computer. This Windows copy is only for trying the screen.".into(),
+            locked_page: None,
         };
     }
 
@@ -95,6 +104,7 @@ pub fn status() -> Status {
             dns_name: None,
             client_installed: true,
             why: "The Away program is on this computer, but it is not connected yet.".into(),
+            locked_page: None,
         },
         Err(_) => Status {
             provider,
@@ -104,6 +114,7 @@ pub fn status() -> Status {
             dns_name: None,
             client_installed: false,
             why: "The Away program is not on this computer yet.".into(),
+            locked_page: None,
         },
     }
 }
@@ -352,6 +363,7 @@ fn parse_status(provider: Provider, raw: &[u8]) -> Status {
                 dns_name: None,
                 client_installed: true,
                 why: "The Away program answered, but Keel could not read it.".into(),
+                locked_page: None,
             }
         }
     };
@@ -383,6 +395,7 @@ fn parse_status(provider: Provider, raw: &[u8]) -> Status {
             dns_name,
             client_installed: true,
             why: "This computer is connected. The same folders open from a phone or laptop that is connected too.".into(),
+            locked_page: None,
         }
     } else {
         Status {
@@ -393,6 +406,7 @@ fn parse_status(provider: Provider, raw: &[u8]) -> Status {
             dns_name,
             client_installed: true,
             why: "The Away program is on this computer, but it is not connected yet.".into(),
+            locked_page: None,
         }
     }
 }

@@ -11,6 +11,7 @@ mod github_connect;
 mod installer;
 mod inventory;
 mod issues;
+mod locked;
 mod model;
 mod overlay;
 mod people;
@@ -260,6 +261,10 @@ async fn main() {
             "/api/overlay/enroll",
             post(overlay_enroll).layer(axum::middleware::from_fn(auth::require_admin)),
         )
+        .route(
+            "/api/overlay/lock",
+            post(overlay_lock).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/catalog", get(catalog_list))
         .route("/api/apps", get(apps_list))
         .route(
@@ -339,6 +344,8 @@ async fn main() {
         panic!("KEEL_ADMIN_TOKEN is required when KEEL_BIND is not loopback");
     }
     let listener = TcpListener::bind(addr).await.expect("bind");
+    let tls_app = app.clone();
+    tokio::spawn(crate::locked::serve(tls_app));
     eprintln!("keel listening on http://{addr}");
     if crate::auth::loopback_trusted() {
         eprintln!("keel trusts loopback requests without a token (local console)");
@@ -1115,6 +1122,7 @@ async fn overlay_status() -> Json<crate::overlay::Status> {
                 dns_name: None,
                 client_installed: false,
                 why: "Could not collect overlay status.".into(),
+                locked_page: None,
             }),
     )
 }
@@ -1150,6 +1158,23 @@ async fn overlay_install() -> Result<Json<serde_json::Value>, (StatusCode, Json<
                 Json(serde_json::json!({ "ok": false, "message": message })),
             )
         })
+}
+
+async fn overlay_lock() -> Json<serde_json::Value> {
+    let locked = tokio::task::spawn_blocking(crate::locked::lock)
+        .await
+        .unwrap_or_else(|_| Err("The page stayed as it was.".into()));
+    match locked {
+        Ok(message) => {
+            crate::locked::kick();
+            if crate::firewall::wanted() {
+                let addresses = local_addresses();
+                let _ = tokio::task::spawn_blocking(move || crate::firewall::enable(&addresses)).await;
+            }
+            Json(serde_json::json!({ "ok": true, "message": message }))
+        }
+        Err(message) => Json(serde_json::json!({ "ok": false, "message": message })),
+    }
 }
 
 async fn overlay_enroll(
