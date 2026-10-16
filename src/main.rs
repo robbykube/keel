@@ -15,6 +15,7 @@ mod overlay;
 mod remote;
 mod services;
 mod copies;
+mod diskhealth;
 mod smb;
 mod storage;
 mod store;

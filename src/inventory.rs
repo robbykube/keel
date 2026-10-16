@@ -91,7 +91,7 @@ fn error_disk(msg: &str) -> Disk {
     }
 }
 
-fn lsblk_disks() -> Vec<Disk> {
+pub(crate) fn lsblk_disks() -> Vec<Disk> {
     let out = match std::process::Command::new("lsblk")
         .args([
             "-J",
@@ -158,6 +158,7 @@ fn parse_lsblk(raw: &[u8]) -> Result<Vec<Disk>, String> {
             label,
             system,
             empty: !has_children && json_str(d, "fstype").is_empty(),
+            ..Disk::default()
         });
     }
     Ok(disks)

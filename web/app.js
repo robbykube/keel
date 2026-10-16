@@ -116,6 +116,16 @@ function awayCard(overlay, owner) {
   </article>`;
 }
 
+function roomBar(disk) {
+  const total = disk.fs_size || disk.size || 0;
+  if (disk.free == null || !total) return "";
+  const left = Math.max(0, Math.min(100, Math.round((disk.free / total) * 100)));
+  const failing = disk.health === "failing";
+  const filling = left < 15;
+  const word = failing ? "Failing" : filling ? "Filling up" : "";
+  return `<div class="room${failing ? " failing" : ""}" role="img" aria-label="${left}% free"><span style="width:${left}%"></span></div>${word ? `<div class="room-word${failing ? " failing" : ""}">${word}</div>` : ""}`;
+}
+
 function disksCard(storage, failing) {
   const disks = (storage.disks || []).map((row) => row.disk ? { ...row.disk, holds: row.holds } : row);
   const total = disks.reduce((sum, disk) => sum + (disk.size || 0), 0);
@@ -124,10 +134,12 @@ function disksCard(storage, failing) {
     const name = disk.model || disk.name || "Disk";
     const extra = disk.transport === "usb" ? " · USB" : "";
     const shown = plainSize(disk.size);
-    return `<div class="disk-row">
+    const failingDisk = disk.health === "failing";
+    return `<div class="disk-row${failingDisk ? " failing" : ""}">
       <div class="name">${escapeHtml(name)}</div>
       <div class="size">${escapeHtml(shown.number)} ${escapeHtml(shown.unit)}</div>
       <div class="holds">${escapeHtml(disk.holds || "")}${escapeHtml(extra)}</div>
+      ${roomBar(disk)}
     </div>`;
   }).join("");
   const headline = disks.length
@@ -139,7 +151,7 @@ function disksCard(storage, failing) {
       <span class="pill ${failing ? "bad" : ""}">${failing ? "Needs a look" : (disks.length === 1 ? "1 disk" : `${disks.length} disks`)}</span>
     </div>
     ${headline}
-    ${disks.length ? '<p class="card-note">Capacity inventory · usage is reported by the device.</p>' : ''}
+    ${disks.length ? '<p class="card-note">The number above is how much the disks hold. A short bar is a disk filling up.</p>' : ''}
     <div class="disk-list">${rows}</div>
   </article>`;
 }

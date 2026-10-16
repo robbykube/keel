@@ -8,7 +8,7 @@ See the failure in one sentence, see why, press **Fix** when it is safe. Seconds
 
 ## Rules
 
-- Home names one thing to look at, in sea-glass. Red on Repair is a disk that is actually failing. Free space and SMART are not read yet, so Home shows how much the disks hold, not how full they are.
+- Home names one thing to look at, in sea-glass. The big disk number is how much the disks hold. A short bar is the room left on that disk. Red is a disk whose own report says it is failing, or a Keel disk that is not connected. A disk that does not answer is not called failing.
 - Every issue has **evidence** (unit, port, SMART, `lsblk`).
 - **Fix** only if `safe: true` (restart a unit, rebind a port, rescan disks). Destructive work (wipe pool) is never one click.
 - Known playbook on Linux: restart samba, restart Tailscale, open 445/9478 toward LAN **and** the overlay, rescan disks, start a parked unit that should be up in Active. Same buttons, real systemctl later.

@@ -841,6 +841,26 @@ a.button:hover { background: var(--accent-dim); }
 .disk-row .name { font-weight: 600; }
 .disk-row .holds { grid-column: 1; color: var(--muted); font-size: var(--text-xs); }
 .disk-row .size { grid-row: 1 / span 2; font-variant-numeric: tabular-nums; }
+.room {
+  height: 8px;
+  margin-top: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.room > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+}
+.room.failing > span { background: var(--red); }
+.room-word { color: var(--muted); font-size: var(--text-xs); }
+.room-word.failing, .disk-row.failing .name, tr.failing .name { color: var(--red); }
+td.disk-size { white-space: nowrap; min-width: 7.5rem; }
+td.disk-size .room { min-width: 7rem; }
+td.disk-size .meta { display: block; }
 
 /* Refined shell and home surface. Keep the component rules above compatible
    with the older pages; these additions give the family dashboard its quieter,
@@ -1023,6 +1043,8 @@ button:focus-visible, a.button:focus-visible, input:focus-visible, select:focus-
 .disk-row .name { grid-column: 1; grid-row: 1; font-size: 13px; font-weight: 500; }
 .disk-row .size { grid-column: 2; grid-row: 1; color: var(--muted); font-size: 13px; }
 .disk-row .holds { grid-column: 1; grid-row: 2; font-size: 12px; }
+.disk-row .room { grid-column: 1 / -1; grid-row: 3; }
+.disk-row .room-word { grid-column: 1 / -1; grid-row: 4; }
 .glance { margin-top: 4px; text-align: center; }
 .why { border-color: var(--line-strong); }
 

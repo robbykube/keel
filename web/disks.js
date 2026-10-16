@@ -30,10 +30,19 @@
     return free ? free.id : "";
   }
 
+  function room(d) {
+    const total = d.fs_size || d.size || 0;
+    if (d.free == null || !total) return "";
+    const left = Math.max(0, Math.min(100, Math.round((d.free / total) * 100)));
+    const failing = d.health === "failing";
+    const word = failing ? "Failing" : left < 15 ? "Filling up" : `${left}% free`;
+    return `<div class="room${failing ? " failing" : ""}"><span style="width:${left}%"></span></div><span class="meta">${word}</span>`;
+  }
+
   function renderDisks() {
     const rows = view.disks.map((d, i) => {
       const action = d.can_use ? `<button type="button" data-use="${i}">Use…</button>` : "";
-      return `<tr><td>${diskName(d)}</td><td>${size(d.size)}</td><td>${esc(d.holds)}</td><td>${action}</td></tr>`;
+      return `<tr class="${d.health === "failing" ? "failing" : ""}"><td>${diskName(d)}</td><td class="disk-size">${size(d.size)}${room(d)}</td><td>${esc(d.holds)}</td><td>${action}</td></tr>`;
     });
     el("diskrows").innerHTML = rows.join("") || `<tr><td colspan="4">No disks found.</td></tr>`;
   }

@@ -61,6 +61,15 @@ pub struct Disk {
     pub system: bool,
     /// No partitions and no filesystem.
     pub empty: bool,
+    /// Bytes still free on the filesystem this disk opened, when that can be measured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub free: Option<u64>,
+    /// Size of that filesystem. The bar uses this, and `size` stays the whole disk.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fs_size: Option<u64>,
+    /// `ok`, `failing`, or `unknown`. Empty means this copy did not ask the disk.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub health: String,
 }
 
 #[derive(Serialize)]

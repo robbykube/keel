@@ -200,7 +200,8 @@ pub struct StorageView {
     pub can_copy: bool,
 }
 
-pub fn view(disks: Vec<Disk>) -> StorageView {
+pub fn view(mut disks: Vec<Disk>) -> StorageView {
+    crate::diskhealth::annotate(&mut disks);
     let disks: Vec<DiskView> = disks
         .into_iter()
         .filter(|disk| disk.kind == "disk")
@@ -454,6 +455,29 @@ pub fn issues() -> Vec<Issue> {
             title: "A Keel disk is not connected",
             why: "Its folders are hidden until it is back, so nothing is written to the wrong disk. Check the Yottamaster's power and cable. Keel opens the disk again by itself.",
             evidence: missing.join(", "),
+            repair: None,
+        });
+    }
+    let mut checked = crate::inventory::lsblk_disks();
+    crate::diskhealth::annotate(&mut checked);
+    let failing = crate::diskhealth::failing(&checked);
+    if !failing.is_empty() {
+        let names: Vec<String> = failing
+            .iter()
+            .map(|disk| {
+                if disk.model.is_empty() {
+                    disk.name.clone()
+                } else {
+                    format!("{} ({})", disk.model, disk.name)
+                }
+            })
+            .collect();
+        items.push(Issue {
+            id: "disk-failing",
+            severity: "red",
+            title: "A disk is failing",
+            why: "Copy the files off it, then replace that disk. Keel will not erase it from here.",
+            evidence: names.join(", "),
             repair: None,
         });
     }
