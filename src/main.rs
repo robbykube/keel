@@ -5,6 +5,7 @@ mod catalog;
 mod config;
 mod discover;
 mod files;
+mod firewall;
 mod folders;
 mod github_connect;
 mod installer;
@@ -313,6 +314,14 @@ async fn main() {
                 store: Arc::new(Mutex::new(store)),
             };
             tokio::spawn(watch_disks(state.clone()));
+            tokio::spawn(async {
+                let _ = tokio::task::spawn_blocking(|| {
+                    if crate::firewall::wanted() {
+                        let _ = crate::firewall::enable(&local_addresses());
+                    }
+                })
+                .await;
+            });
             state
         })
         .fallback_service(ServeDir::new(web))
@@ -770,6 +779,29 @@ async fn issues_list(State(state): State<AppState>) -> Json<IssuesReport> {
 }
 
 async fn repair_run(Json(req): Json<RepairRequest>) -> Json<RepairResult> {
+    if req.id == "house-only" {
+        let addresses = local_addresses();
+        return Json(
+            tokio::task::spawn_blocking(move || match crate::firewall::enable(&addresses) {
+                Ok(message) => RepairResult {
+                    ok: true,
+                    id: "house-only".into(),
+                    message,
+                },
+                Err(message) => RepairResult {
+                    ok: false,
+                    id: "house-only".into(),
+                    message,
+                },
+            })
+            .await
+            .unwrap_or_else(|_| RepairResult {
+                ok: false,
+                id: "house-only".into(),
+                message: "The firewall did not change. The page stays as it was.".into(),
+            }),
+        );
+    }
     if req.id.starts_with("restart-") {
         return Json(
             tokio::task::spawn_blocking(move || crate::services::restart(&req.id))

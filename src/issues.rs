@@ -73,6 +73,12 @@ pub fn report(
             safe: true,
             available: false,
         },
+        RepairAction {
+            id: "house-only",
+            label: "Only the house and Away",
+            safe: true,
+            available: matches!(inventory, Inventory::Linux),
+        },
     ];
 
     IssuesReport {

@@ -21,6 +21,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Sign in | A name and password for the page. Settings on the Keel screen adds a person. The page records who signed in |
 | Download | Save that file to the phone or computer you are using. A folder is opened, not downloaded |
 | Try it on one disk | Ask one spinning disk in the USB box to sleep. If it is already asleep, Keel leaves the box to do that |
+| Only the house and Away | The page and the folders answer on this network and on Away. The Keel screen still works. Other computers are refused |
 | Use this | Shared folder or files app a person should pick |
 | Leave this | Disks for other programs, installer files, or the computer itself |
 
