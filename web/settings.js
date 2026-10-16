@@ -332,6 +332,69 @@ $("client-id-form").addEventListener("submit", async (event) => {
   }
 });
 
+function when(ms) {
+  if (!ms) return "";
+  return new Date(ms).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
+
+function renderPeople(view) {
+  const people = view.people || [];
+  $("people-list").replaceChildren(...(people.length ? people.map((person) => {
+    const item = document.createElement("li");
+    item.textContent = person.name;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Remove";
+    button.addEventListener("click", async () => {
+      $("people-status").textContent = "Removing…";
+      const { res, message } = await postJson("/api/auth/people/remove", { name: person.name });
+      $("people-status").textContent = message;
+      if (res.ok) await loadPeople();
+    });
+    item.append(" ", button);
+    return item;
+  }) : [Object.assign(document.createElement("li"), { textContent: "No one yet. Add the first person on this screen." })]));
+  const visits = view.visits || [];
+  $("people-visits").replaceChildren(...(visits.length ? visits.map((visit) => {
+    const item = document.createElement("li");
+    item.textContent = `${visit.name} · ${when(visit.at_ms)}`;
+    return item;
+  }) : [Object.assign(document.createElement("li"), { textContent: "No one has signed in yet." })]));
+}
+
+async function loadPeople() {
+  const res = await fetch("/api/auth/people", { credentials: "same-origin" });
+  if (!res.ok) {
+    $("people-status").textContent = "Sign in on this screen, then add a person.";
+    return;
+  }
+  renderPeople(await res.json());
+}
+
+$("people-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const name = $("people-name").value.trim();
+  const password = $("people-pass").value;
+  const again = $("people-pass2").value;
+  if (!name || !password) {
+    $("people-status").textContent = "Type a name and a password.";
+    return;
+  }
+  if (password !== again) {
+    $("people-status").textContent = "Type the same password again.";
+    return;
+  }
+  $("people-status").textContent = "Saving…";
+  const { res, message } = await postJson("/api/auth/people", { name, password });
+  $("people-status").textContent = message;
+  if (!res.ok) return;
+  $("people-name").value = "";
+  $("people-pass").value = "";
+  $("people-pass2").value = "";
+  await loadPeople();
+});
+
+loadPeople();
 loadUpdates();
 loadUpdateProgress();
 refreshConnect();

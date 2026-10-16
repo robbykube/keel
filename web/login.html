@@ -31,14 +31,28 @@
   </aside>
   <main>
     <header><h1>Sign in</h1></header>
-    <p class="lede" id="lede">Ask the Keel computer to allow this browser. Someone at that screen presses Allow.</p>
+    <p class="lede" id="lede">Sign in with your name and password.</p>
+    <form class="form auth-form" id="person-form">
+      <label class="wide">Name
+        <input id="person-name" autocomplete="username" spellcheck="false" />
+      </label>
+      <label class="wide">Password
+        <input id="person-password" type="password" autocomplete="current-password" />
+      </label>
+      <button type="submit">Sign in</button>
+    </form>
     <p class="meta" id="status"></p>
     <div class="actions">
-      <button type="button" id="ask-keel">Ask the Keel computer</button>
       <button type="button" id="local-login" hidden>Continue on this computer</button>
     </div>
     <details class="why">
+      <summary>Ask the Keel computer</summary>
+      <p>Someone at the Keel screen presses Allow. That sign-in is not tied to a name.</p>
+      <button type="button" id="ask-keel">Ask the Keel computer</button>
+    </details>
+    <details class="why">
       <summary>Use the admin token instead</summary>
+      <p>The token does not say who signed in. A name and password does.</p>
       <form class="form auth-form" id="form">
         <label class="wide">Admin token
           <span class="token-row">

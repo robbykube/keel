@@ -12,6 +12,7 @@ mod inventory;
 mod issues;
 mod model;
 mod overlay;
+mod people;
 mod remote;
 mod services;
 mod copies;
@@ -30,6 +31,9 @@ use axum::extract::{Path, Query, State};
 use axum::response::Redirect;
 use axum::handler::Handler;
 use axum::http::{HeaderValue, StatusCode};
+use axum::body::Body;
+use axum::http::header::{CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE};
+use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
@@ -139,6 +143,16 @@ async fn main() {
         .route("/api/auth/session", get(auth::session_state))
         .route("/api/auth/logout", post(auth::sign_out))
         .route(
+            "/api/auth/people",
+            get(auth::people_view)
+                .post(auth::people_add)
+                .layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/auth/people/remove",
+            post(auth::people_remove).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
             "/api/restart",
             post(restart).layer(axum::middleware::from_fn(auth::require_admin)),
         )
@@ -189,6 +203,10 @@ async fn main() {
         .route(
             "/api/folders/list",
             get(folders_list).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/folders/file",
+            get(folders_file).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route(
             "/api/folders/mkdir",
@@ -490,6 +508,28 @@ async fn folders_section(
     );
     let _ = tokio::task::spawn_blocking(move || crate::smb::apply(&shares)).await;
     storage_reply(Ok(message))
+}
+
+async fn folders_file(
+    State(state): State<AppState>,
+    Query(query): Query<crate::folders::ListQuery>,
+) -> Result<Response, (StatusCode, String)> {
+    let shares = state.store.lock().await.shares.clone();
+    let opened = tokio::task::spawn_blocking(move || {
+        crate::folders::open_download(&shares, &query.share, &query.path)
+    })
+    .await
+    .unwrap_or_else(|_| Err("Keel could not download that file. Try again.".into()))
+    .map_err(|message| (StatusCode::BAD_REQUEST, message))?;
+    let header = crate::folders::attachment_header(&opened.name);
+    let file = tokio::fs::File::from_std(opened.file);
+    let body = Body::from_stream(tokio_util::io::ReaderStream::new(file));
+    Response::builder()
+        .header(CONTENT_TYPE, "application/octet-stream")
+        .header(CONTENT_DISPOSITION, header)
+        .header(CONTENT_LENGTH, opened.len.to_string())
+        .body(body)
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Keel could not download that file. Try again.".into()))
 }
 
 async fn folders_mkdir(

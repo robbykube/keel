@@ -33,6 +33,20 @@
     <header><h1>Settings</h1></header>
     <p class="lede">Updates come from your existing GitHub repository, github.com/robbykube/keel. That repository is private, so this computer needs your permission to see it. Connect GitHub on your phone or this PC. You do not need a second repository. The sign-in stays on this computer.</p>
     <div class="scroll">
+      <section id="people">
+        <h2>People</h2>
+        <p>Each person signs in with a name and password. The page then knows who it was. Adding an existing name replaces that password. Opening folders in File Explorer still uses the name on the Files page.</p>
+        <ul id="people-list"></ul>
+        <form class="form" id="people-form">
+          <label>Name <input id="people-name" autocomplete="off" spellcheck="false" /></label>
+          <label>Password <input id="people-pass" type="password" autocomplete="new-password" /></label>
+          <label>Same password again <input id="people-pass2" type="password" autocomplete="new-password" /></label>
+          <button type="submit">Add</button>
+        </form>
+        <p class="meta" id="people-status"></p>
+        <h2>Recent sign-ins</h2>
+        <ul id="people-visits"></ul>
+      </section>
       <section id="appearance">
         <h2>Appearance</h2>
         <p>Light or dark. This screen remembers the choice.</p>
@@ -76,7 +90,7 @@
           <span id="update-progress-bar"></span>
         </div>
       </div>
-      <p><a href="/login.html">Sign in</a> from another computer, or press Allow on this screen.</p>
+      <p>From another computer, <a href="/login.html">sign in</a> with a name and password. Allow on this screen is still there when someone is standing at it.</p>
     </div>
   </main>
   <script src="/approve.js"></script>

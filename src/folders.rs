@@ -123,6 +123,66 @@ pub fn list(shares: &[Share], share: &str, path: &str) -> Result<Listing, String
     list_root(&find_root(shares, share)?, path)
 }
 
+#[derive(Debug)]
+pub struct Download {
+    pub file: fs::File,
+    pub name: String,
+    pub len: u64,
+}
+
+pub fn open_download(shares: &[Share], share: &str, path: &str) -> Result<Download, String> {
+    let root = find_root(shares, share)?;
+    let rel = normalize(path)?;
+    if rel.is_empty() {
+        return Err("Choose a file to download.".into());
+    }
+    let full = resolve_existing(&root.path, &rel)?;
+    let meta = fs::symlink_metadata(&full).map_err(|_| "That file is not there. Reload the page.".to_string())?;
+    if meta.file_type().is_symlink() {
+        return Err("Keel does not open links. Use the real file.".into());
+    }
+    if meta.is_dir() {
+        return Err("Open a folder to see what is in it. Download is for a file.".into());
+    }
+    if !meta.is_file() {
+        return Err("Keel can only download a file.".into());
+    }
+    let name = full
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| safe_part(name))
+        .ok_or_else(|| "That file name cannot be downloaded.".to_string())?
+        .to_string();
+    let file = fs::File::open(&full).map_err(|err| io_sentence(&err, "download that file"))?;
+    Ok(Download {
+        file,
+        name,
+        len: meta.len(),
+    })
+}
+
+pub fn attachment_header(name: &str) -> String {
+    let ascii: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii() && c != '"' && c != '\\' && !c.is_control() {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let mut encoded = String::new();
+    for byte in name.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_') {
+            encoded.push(byte as char);
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    format!("attachment; filename=\"{ascii}\"; filename*=UTF-8''{encoded}")
+}
+
 fn list_root(root: &Root, path: &str) -> Result<Listing, String> {
     let rel = normalize(path)?;
     let dir = resolve_existing(&root.path, &rel)?;
@@ -641,6 +701,35 @@ mod tests {
         assert_eq!(fs::read(copied).unwrap(), b"old");
         assert!(transfer_roots(&docs, "Yesterday.txt", &copies, "", false).is_err());
 
+        let opened = open_download_root(&copies, "Yesterday.txt").unwrap();
+        assert_eq!(opened.name, "Yesterday.txt");
+        assert_eq!(opened.len, 3);
+        assert!(open_download_root(&copies, "").is_err());
+        assert!(open_download_root(&copies, "../secret").is_err());
+        fs::create_dir(copies.path.join("Older")).unwrap();
+        assert!(open_download_root(&copies, "Older").unwrap_err().contains("folder"));
+        assert!(attachment_header("Note.txt").contains("filename=\"Note.txt\""));
+        assert!(!attachment_header("a\"b\r\n").contains('\n'));
+        assert!(!attachment_header("a\"b\r\n").contains('\r'));
+
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    fn open_download_root(root: &Root, path: &str) -> Result<Download, String> {
+        let rel = normalize(path)?;
+        if rel.is_empty() {
+            return Err("Choose a file to download.".into());
+        }
+        let full = resolve_existing(&root.path, &rel)?;
+        let meta = fs::symlink_metadata(&full).map_err(|_| "missing".to_string())?;
+        if meta.file_type().is_symlink() {
+            return Err("Keel does not open links. Use the real file.".into());
+        }
+        if meta.is_dir() {
+            return Err("Open a folder to see what is in it. Download is for a file.".into());
+        }
+        let name = full.file_name().unwrap().to_string_lossy().to_string();
+        let file = fs::File::open(&full).unwrap();
+        Ok(Download { file, name, len: meta.len() })
     }
 }

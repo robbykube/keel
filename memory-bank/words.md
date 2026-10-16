@@ -18,6 +18,8 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Look around | Check one computer you name. Not a search of every machine |
 | Open / closed | Like a computer: the app is on disk; running only when you need it |
 | Away | Same files, not on the house Wi‑Fi. The overlay is how you reach them |
+| Sign in | A name and password for the page. Settings on the Keel screen adds a person. The page records who signed in |
+| Download | Save that file to the phone or computer you are using. A folder is opened, not downloaded |
 | Use this | Shared folder or files app a person should pick |
 | Leave this | Disks for other programs, installer files, or the computer itself |
 

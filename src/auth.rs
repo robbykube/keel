@@ -12,7 +12,19 @@ use std::time::{Duration, Instant};
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
+    #[serde(default)]
     pub token: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub password: String,
+}
+
+#[derive(Deserialize)]
+pub struct PersonBody {
+    pub name: String,
+    #[serde(default)]
+    pub password: String,
 }
 
 #[derive(Deserialize)]
@@ -122,15 +134,20 @@ struct Pending {
     keep_until: Instant,
 }
 
+struct Live {
+    expires: Instant,
+    who: String,
+}
+
 struct Gate {
     requests: Vec<Pending>,
-    sessions: HashMap<String, Instant>,
+    sessions: HashMap<String, Live>,
 }
 
 impl Gate {
     fn purge(&mut self, now: Instant) {
         self.requests.retain(|request| request.keep_until > now);
-        self.sessions.retain(|_, expires| *expires > now);
+        self.sessions.retain(|_, live| live.expires > now);
     }
 }
 
@@ -166,23 +183,33 @@ pub fn session_cookie(session: &str) -> String {
     format!("keel_session={session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400")
 }
 
-pub fn issue_session() -> Result<String, String> {
+pub fn issue_session(who: &str) -> Result<String, String> {
     let id = random_id()?;
     let mut gate = gate();
     let now = Instant::now();
     gate.purge(now);
-    gate.sessions.insert(id.clone(), now + SESSION_TTL);
+    gate.sessions.insert(
+        id.clone(),
+        Live {
+            expires: now + SESSION_TTL,
+            who: who.to_string(),
+        },
+    );
     Ok(id)
+}
+
+fn session_who(presented: &str) -> Option<String> {
+    let mut gate = gate();
+    let now = Instant::now();
+    gate.purge(now);
+    gate.sessions.get(presented).map(|live| live.who.clone())
 }
 
 pub fn credential_ok(presented: &str, admin_token: &str) -> bool {
     if !presented.is_empty() && presented == admin_token {
         return true;
     }
-    let mut gate = gate();
-    let now = Instant::now();
-    gate.purge(now);
-    gate.sessions.get(presented).is_some_and(|expires| *expires > now)
+    session_who(presented).is_some()
 }
 
 /// Ask the Keel computer to allow this browser. The same address keeps one
@@ -261,7 +288,13 @@ pub fn decide(id: &str, allow: bool) -> Result<(), String> {
     }
     if allow {
         let session = random_id()?;
-        gate.sessions.insert(session.clone(), now + SESSION_TTL);
+        gate.sessions.insert(
+            session.clone(),
+            Live {
+                expires: now + SESSION_TTL,
+                who: String::new(),
+            },
+        );
         gate.requests[index].state = RequestState::Allowed(session);
     } else {
         gate.requests[index].state = RequestState::Denied;
@@ -294,34 +327,46 @@ pub fn poll(id: &str) -> RequestView {
     }
 }
 
-pub async fn login(
-    Json(req): Json<LoginRequest>,
-) -> Result<(HeaderMap, Json<serde_json::Value>), (StatusCode, String)> {
-    if !token_configured() {
-        return Err((
-            StatusCode::NOT_IMPLEMENTED,
-            "Admin sign-in is not set up on this computer yet.".into(),
-        ));
-    }
-    let token = req.token.trim();
-    if !verify(token) {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            "That admin token does not match. Ask the Keel computer, or type the token again."
-                .into(),
-        ));
-    }
-    let session = issue_session().map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))?;
+fn start_session(who: &str, visit: &str) -> Result<(HeaderMap, Json<serde_json::Value>), (StatusCode, String)> {
+    let session = issue_session(who).map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))?;
+    crate::people::remember(visit);
     let mut headers = HeaderMap::new();
     headers.insert(
         SET_COOKIE,
         HeaderValue::from_str(&session_cookie(&session))
             .map_err(|_| (StatusCode::BAD_REQUEST, "could not start the sign-in session".into()))?,
     );
-    Ok((
-        headers,
-        Json(serde_json::json!({ "ok": true, "message": "signed in" })),
-    ))
+    let message = if who.is_empty() {
+        "Signed in.".to_string()
+    } else {
+        format!("Signed in as {who}.")
+    };
+    Ok((headers, Json(serde_json::json!({ "ok": true, "message": message, "who": who }))))
+}
+
+pub async fn login(
+    Json(req): Json<LoginRequest>,
+) -> Result<(HeaderMap, Json<serde_json::Value>), (StatusCode, String)> {
+    if !req.name.trim().is_empty() {
+        let who = crate::people::sign_in(&req.name, &req.password)
+            .map_err(|error| (StatusCode::UNAUTHORIZED, error))?;
+        return start_session(&who, &who);
+    }
+    if !token_configured() {
+        return Err((
+            StatusCode::NOT_IMPLEMENTED,
+            "Add a person in Settings on the Keel screen, then sign in with that name and password.".into(),
+        ));
+    }
+    let token = req.token.trim();
+    if !verify(token) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            "That admin token does not match. Sign in with a name and password, or type the token again."
+                .into(),
+        ));
+    }
+    start_session("", "Admin token")
 }
 
 pub async fn create_sign_in(
@@ -385,6 +430,9 @@ pub async fn answer_sign_in(
         ));
     }
     decide(&id, body.allow).map_err(|error| (StatusCode::CONFLICT, error))?;
+    if body.allow {
+        crate::people::remember("Allowed at the screen");
+    }
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -392,8 +440,31 @@ pub async fn answer_sign_in(
 /// browser elsewhere is signed in only while its session cookie is valid.
 pub async fn session_state(request: Request) -> Json<serde_json::Value> {
     let signed_in = is_authorized(&request);
-    let can_sign_out = signed_in && session_from(request.headers()).is_some() && token_configured();
-    Json(serde_json::json!({ "signed_in": signed_in, "can_sign_out": can_sign_out }))
+    let who = session_from(request.headers())
+        .and_then(|session| session_who(&session))
+        .unwrap_or_default();
+    let can_sign_out = session_from(request.headers()).is_some_and(|session| session_who(&session).is_some());
+    Json(serde_json::json!({ "signed_in": signed_in, "can_sign_out": can_sign_out, "who": who }))
+}
+
+pub async fn people_view() -> Json<crate::people::PeopleView> {
+    Json(crate::people::view())
+}
+
+pub async fn people_add(
+    Json(body): Json<PersonBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let message = crate::people::add_person(&body.name, &body.password)
+        .map_err(|error| (StatusCode::BAD_REQUEST, error))?;
+    Ok(Json(serde_json::json!({ "ok": true, "message": message })))
+}
+
+pub async fn people_remove(
+    Json(body): Json<PersonBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let message = crate::people::remove_person(&body.name)
+        .map_err(|error| (StatusCode::BAD_REQUEST, error))?;
+    Ok(Json(serde_json::json!({ "ok": true, "message": message })))
 }
 
 pub async fn sign_out(headers: HeaderMap) -> (HeaderMap, Json<serde_json::Value>) {

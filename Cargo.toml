@@ -1,6 +1,6 @@
 [package]
 name = "keel"
-version = "0.1.19"
+version = "0.1.20"
 edition = "2021"
 description = "Fast, opinionated NAS with a Proxmox-style web GUI"
 
@@ -10,6 +10,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sysinfo = "0.33"
 tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
 tower-http = { version = "0.6", features = ["fs"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls-native-roots"] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std", "fast"] }

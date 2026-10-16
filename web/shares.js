@@ -115,7 +115,11 @@ function renderListing() {
       : escapeHtml(entry.name);
     const canMove = !readOnly && entry.kind !== "link";
     const canCopy = entry.kind !== "link";
+    const download = entry.kind === "file"
+      ? `<a class="button" href="/api/folders/file?${new URLSearchParams({ share, path: joinPath(path, entry.name) })}" download="${escapeHtml(entry.name)}">Download</a>`
+      : "";
     const actions = [
+      download,
       canMove ? `<button type="button" data-op="move" data-name="${escapeHtml(entry.name)}" data-kind="${entry.kind}">Move</button>` : "",
       canCopy ? `<button type="button" data-op="copy" data-name="${escapeHtml(entry.name)}" data-kind="${entry.kind}">Copy</button>` : "",
     ].join("");

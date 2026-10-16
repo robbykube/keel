@@ -110,7 +110,15 @@ const powerAction = async (button, path, ask, busy, fallback) => {
   }
 };
 
-const moreMenu = (groups) => {
+const signedAs = (who) => {
+  if (!who) return null;
+  const line = document.createElement("p");
+  line.className = "signed-as";
+  line.textContent = `Signed in as ${who}`;
+  return line;
+};
+
+const moreMenu = (groups, who) => {
   const wrap = document.createElement("div");
   wrap.className = "more";
   const toggle = document.createElement("button");
@@ -123,6 +131,8 @@ const moreMenu = (groups) => {
   panel.className = "more-panel";
   panel.setAttribute("role", "menu");
   panel.hidden = true;
+  const whoLine = signedAs(who);
+  if (whoLine) panel.appendChild(whoLine);
   let current = false;
   groups.forEach((group) => {
     if (!group.items.length) return;
@@ -266,7 +276,9 @@ const installKeelChrome = (showInstall = false, session = { signed_in: false, ca
   if (showComputer) moreGroups.push({ title: "This computer", items: computer });
   moreGroups.push({ title: "", items: supportItems });
   moreGroups.push({ title: "", items: NOTES });
-  aside.appendChild(moreMenu(moreGroups));
+  aside.appendChild(moreMenu(moreGroups, session.who || ""));
+  const whoLine = signedAs(session.who || "");
+  if (whoLine) aside.appendChild(whoLine);
   aside.appendChild(powerMenu(session));
   const themeSlot = document.getElementById("theme-slot");
   if (themeSlot && !themeSlot.querySelector(".theme-toggle")) themeSlot.appendChild(themeControl());
@@ -281,6 +293,7 @@ const bootChrome = () => {
     installKeelChrome(Boolean(health.can_install), {
       signed_in: Boolean(session.signed_in),
       can_sign_out: Boolean(session.can_sign_out),
+      who: session.who || "",
     }, installed);
   });
 };

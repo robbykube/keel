@@ -1,4 +1,5 @@
 const form = document.getElementById("form");
+const personForm = document.getElementById("person-form");
 const token = document.getElementById("token");
 const status = document.getElementById("status");
 const lede = document.getElementById("lede");
@@ -14,11 +15,35 @@ const afterSignIn = () => {
 let waiting = null;
 
 if (onThisComputer) {
-  askKeel.hidden = true;
+  personForm.hidden = true;
   localLogin.hidden = false;
-  lede.textContent = "This is the Keel computer. When another computer asks to sign in, press Allow on the notice.";
+  lede.textContent = "This is the Keel computer. Add people in Settings. When another computer asks to sign in, press Allow on the notice.";
   localLogin.addEventListener("click", () => { window.location.href = "/"; });
 }
+
+personForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const name = document.getElementById("person-name").value.trim();
+  const password = document.getElementById("person-password").value;
+  if (!name || !password) {
+    status.textContent = "Type the name and password.";
+    return;
+  }
+  status.textContent = "Signing in.";
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ name, password }),
+    });
+    const data = await res.text();
+    if (!res.ok) throw new Error(data || "That name or password is not right.");
+    window.location.href = afterSignIn();
+  } catch (err) {
+    status.textContent = String(err.message || err);
+  }
+});
 
 showToken.addEventListener("click", () => {
   const visible = token.type === "text";
@@ -77,7 +102,7 @@ askKeel.addEventListener("click", async () => {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!token.value.trim()) {
-    status.textContent = "Type the admin token, or ask the Keel computer.";
+    status.textContent = "Type the admin token, or sign in with a name and password.";
     return;
   }
   status.textContent = "Signing in.";
