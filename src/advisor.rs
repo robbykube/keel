@@ -65,8 +65,8 @@ pub fn opportunities(idle: bool, cpu_pct: f32) -> Vec<Opportunity> {
 
     out.push(Opportunity {
         id: "no-host-s3",
-        title: "Never S3 the host to save a few watts",
-        why: "That kills Tailscale, the file path from away, and this advisor. The floor is cheaper than a full wake path.",
+        title: "Never S3 the host alone to save a few watts",
+        why: "That kills Tailscale and the file path from away with no wake path. Rest keeps the floor up. Optional sleep later needs a helper (for example a Pi on Away) to send a wake packet — see wake-and-sleep.md.",
         phase: "always",
         safe_while_working: true,
         auto: true,

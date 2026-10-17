@@ -68,7 +68,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 - After the phone message: one folder login per person for File Explorer. Page sign-in is already a name and password. The firewall does not turn on until Repair’s “Only the house and Away” is pressed. The locked page does not turn on until Away’s “Lock the page” is pressed. The phone does not turn on until Repair’s “Send to the phone” is pressed.
 - Check `/etc/apt/sources.list` on the installed box has `deb.debian.org` lines; if yes, Podman and Tailscale can be installed online from Keel (no USB). Container images always download from the internet.
 - Plug the Yottamaster into the Keel box in JBOD/Normal (not the enclosure’s RAID). NVMe is OS/apps; USB bays are bulk files. Do not put ZFS on the USB bridge.
-- Overlay stays the away door for the same share. Do not expose SMB to the public internet. Sleep stays off the Power menu: suspending the computer drops Away, and a wake packet only works on the house network. Rest still parks apps while the computer stays reachable.
+- Overlay stays the away door for the same share. Do not expose SMB to the public internet. Sleep stays off the Power menu for now: suspending the computer drops Away on that box, and a wake packet only works on the house network unless a helper sends it. Rest still parks apps while the computer stays reachable. Planned later: optional Settings sleep/soft-off on the EliteDesk, Raspberry Pi always on Away to send WoL, BIOS After Power Loss → Power On for outages — see wake-and-sleep.md.
 - Do not wipe rok. OpenCloud on rok can stay until files are copied or mounted as a foreign folder.
 - Copy the install ISO onto Ventoy and reinstall on the Samsung disk only when a full disk install is wanted.
 - Whole-disk A/B updates (RAUC) after the single-disk installer has been proven
@@ -89,7 +89,8 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 - Linux is the real pool/SMB stack; Windows host is a distinct backend
 - `keelctl` on the admin PC pushes the matching binary over SSH/WinRM
 - Explanations live in the GUI (Guide + Why this?), not only in markdown
-- Overlay is how files work away from home. Keel prefers Headscale and supports Tailscale clients. Same share. Never stop it to save watts. Brand can change; the job cannot.
+- Overlay is how files work away from home. Keel prefers Headscale and supports Tailscale clients. Same share. Never stop it to save watts under Rest. Brand can change; the job cannot.
+- **Wake and sleep (2026-10-17):** EliteDesk 800 G2 Mini remains the NAS. A Raspberry Pi stays always on for Away and can WoL the desk. Rest stays default; optional sleep/soft-off is a Settings plan (Away pauses on the NAS until boot). Soft-off still allows WoL if BIOS Wake On LAN is on and S5 Maximum Power Savings is off. Outages: EliteDesk After Power Loss → Power On. Plan in wake-and-sleep.md. Not built.
 - Power advisor: even while Active, score busy vs parked and explain each save
 - Ship the rok LXC set (including currently stopped guests); not a plugin bazaar
 - **Apps (2026-10-14):** use existing apps, not Keel rewrites. Run them as Podman containers, each a systemd unit (Quadlet); no Docker daemon. Download only when chosen (first-start “What will you use Keel for?” ticks, or Apps → Install). Versions are pinned and signed with the Keel release; Keel sets up folder, NVMe database, ports, Away address, first account, and shows a phone QR. Containers see only the folders Keel grants. Remove keeps data. App updates ride Keel releases with rollback.

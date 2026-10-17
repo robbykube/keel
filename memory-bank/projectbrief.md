@@ -29,6 +29,7 @@ Windows is for building the GUI and for `keelctl`, not the NAS OS.
 - lab-rok.md (this homelab’s Proxmox inventory)
 - catalog-rok.md (ship-with apps, including rok’s stopped LXCs)
 - guide-and-power.md (Guide, idle floor, advisor)
+- wake-and-sleep.md (optional EliteDesk sleep + Pi WoL; not built yet)
 - os.md (Debian appliance layers; the live image installs the box)
 - health-and-repair.md (local issues + one-click Fix; AI later)
 - setup-and-report.md (few-question setup)
