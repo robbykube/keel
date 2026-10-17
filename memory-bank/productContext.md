@@ -32,5 +32,5 @@ stays Keel: sea-glass on deep water. Details in [ui.md](ui.md).
 - Information density over marketing cards
 - Same explanation bar as Cerebro / the AI Suite: a always-on **Guide**, **Notes** for ideas, and **Why this?** at consequential actions (what, why, what changes, how to undo)
 - Headings are a proposal in plain words (Use this / Leave this). Machine names stay in Why or the Guide. No clever metaphors.
-- Power: keel works like an OS. Installed ≠ running. Open an app when you need it. Idle = Tailscale floor; Active = start what is asked for; a **power advisor** still closes unused work while you are using the box. Never S3 the host.
-- **Away:** Tailscale (or the same kind of private path if we switch) is how you open files when you are not at home. Same share. The box stays on so that path stays up. Overlay is not an optional extra.
+- Power: keel works like an OS. Installed ≠ running. Open an app when you need it. Idle = Tailscale floor; Active = start what is asked for; a **power advisor** still closes unused work while you are using the box. Never S3 the host alone (no wake path). Optional sleep with a Pi that stays on Away is a later Settings choice — see wake-and-sleep.md.
+- **Away:** Tailscale (or the same kind of private path if we switch) is how you open files when you are not at home. Same share. Under Rest the box stays on so that path stays up. Overlay is not an optional extra.

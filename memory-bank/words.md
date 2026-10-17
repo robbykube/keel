@@ -11,6 +11,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Apps | Programs that are installed. Open one when you need it |
 | Away | The same files, when you are not at home |
 | Rest | The computer stays on and apps stay closed. Away stays connected |
+| Sleep when quiet | (Planned.) The EliteDesk may sleep or shut down to save watts. Away on that box pauses until it boots again. A Raspberry Pi stays on Away and can wake it. See wake-and-sleep.md |
 | On another computer | Files stay on Proxmox or TrueNAS; keel does not wipe them |
 | Disks in this machine | Files would live on drives in the keel box |
 | 1 thing to look at | Home’s notice. Sea-glass. Fix it opens Sign in, then Disks. It does not erase |

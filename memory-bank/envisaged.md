@@ -15,6 +15,7 @@ Stay a curated appliance. Do not become TrueNAS, Unraid CA, or a second Proxmox.
 9. **Presence** — phone on LAN or Tailscale → raise a small Active set; gone → decay back to floor. Not a full home-automation suite.
 10. **Pool placement guard** — refuse NAS data on 81%-full `local`; want passthrough or a dedicated vdev.
 11. **Overlay as the away file path** — tight Tailscale (or successor) relationship: join on first boot, show overlay address next to every share, Samba on that NIC. Swap the brand, keep the job.
+12. **Optional sleep + Pi wake** — Rest stays default. Settings may offer sleep/soft-off on the EliteDesk while a Raspberry Pi keeps Away and sends WoL. Outages: BIOS power-on after AC. Plan: [wake-and-sleep.md](wake-and-sleep.md).
 
 ## AI Suite (later)
 
@@ -27,6 +28,6 @@ Parked product thoughts live in `E:\Personal Projects\ideas` (video brand/SaaS, 
 - Hypervisor UI (rok stays Proxmox)
 - Plugin bazaar
 - Second OpenCloud (SMB is the file path; a web files UI is an idea note, not the catalog)
-- Host S3 as the energy strategy
+- Host S3 **alone** as the energy strategy (no always-on Away helper / wake path). Optional sleep *with* a Pi wake floor is planned — see wake-and-sleep.md.
 - TUI admin
 - Running Chef/Loom on the NAS
