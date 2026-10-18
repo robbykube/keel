@@ -394,6 +394,28 @@ $("people-form").addEventListener("submit", async (event) => {
   await loadPeople();
 });
 
+async function loadWake() {
+  try {
+    const res = await fetch("/api/power/wake", { credentials: "same-origin" });
+    if (!res.ok) return;
+    const data = await res.json();
+    if ($("wake-status") && !$("wake-status").textContent) $("wake-status").textContent = data.message || "";
+  } catch (_) { /* The sentence from the button stays. */ }
+}
+
+$("wake-prepare").addEventListener("click", async () => {
+  $("wake-prepare").disabled = true;
+  $("wake-status").textContent = "Preparing wake. This can take a minute the first time.";
+  try {
+    const { message } = await postJson("/api/power/wake", {});
+    $("wake-status").textContent = message || "Wake stayed as it was.";
+  } catch (err) {
+    $("wake-status").textContent = String(err);
+  }
+  $("wake-prepare").disabled = false;
+});
+
+loadWake();
 loadPeople();
 loadUpdates();
 loadUpdateProgress();

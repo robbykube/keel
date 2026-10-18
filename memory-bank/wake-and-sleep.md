@@ -1,6 +1,7 @@
 # Wake and sleep (planned)
 
-Not built yet. Default power story stays **Rest**: host on, apps parked, Away up.
+Sleep is not built. Default power story stays **Rest**: host on, apps parked, Away up.
+Settings **Prepare wake** arms the built-in wired port (`ethtool wol g`, remembered in `keel-wake.service`) and shows its address. It does not sleep or shut down the computer.
 This page is the optional deeper watt path we agreed (2026-10-17).
 
 ## Hardware split

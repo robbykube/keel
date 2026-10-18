@@ -11,6 +11,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Apps | Programs that are installed. Open one when you need it |
 | Away | The same files, when you are not at home |
 | Rest | The computer stays on and apps stay closed. Away stays connected |
+| Prepare wake | Turn on wake for the built-in network port. The computer stays on. Sleep waits until a Pi on Away can send the wake |
 | Sleep when quiet | (Planned.) The EliteDesk may sleep or shut down to save watts. Away on that box pauses until it boots again. A Raspberry Pi stays on Away and can wake it. See wake-and-sleep.md |
 | On another computer | Files stay on Proxmox or TrueNAS; keel does not wipe them |
 | Disks in this machine | Files would live on drives in the keel box |

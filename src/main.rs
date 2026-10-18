@@ -25,6 +25,7 @@ mod spindown;
 mod storage;
 mod store;
 mod updates;
+mod wake;
 
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -233,6 +234,10 @@ async fn main() {
             post(folders_move).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route("/api/power", get(power))
+        .route(
+            "/api/power/wake",
+            get(wake_view).post(wake_prepare).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route(
             "/api/power/idle",
             post(power_idle).layer(axum::middleware::from_fn(auth::require_admin)),
@@ -631,6 +636,20 @@ fn power_state() -> Power {
         services_stopped: idle,
         overlay_required: true,
         why: "Idle keeps the host on and the selected overlay running so you can open files and the GUI when you are not at home. The rest of the catalog is installed, not running — like an OS with apps closed. keel stays up as the small control plane. Host S3 is off: that would kill the overlay and the file path.",
+    }
+}
+
+async fn wake_view() -> Json<serde_json::Value> {
+    Json(crate::wake::view())
+}
+
+async fn wake_prepare() -> Json<serde_json::Value> {
+    let result = tokio::task::spawn_blocking(crate::wake::prepare)
+        .await
+        .unwrap_or_else(|_| Err("Wake stayed as it was.".into()));
+    match result {
+        Ok(message) => Json(serde_json::json!({ "ok": true, "message": message })),
+        Err(message) => Json(serde_json::json!({ "ok": false, "message": message })),
     }
 }
 

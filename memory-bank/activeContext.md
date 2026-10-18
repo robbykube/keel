@@ -33,6 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
+- **v0.1.25 (2026-10-18):** Settings can prepare wake on the built-in network port and shows the address plus the EliteDesk startup settings. The computer stays on. Sleep waits until a Pi on Away can send the wake.
 - **v0.1.24 (2026-10-16):** Repair can send one phone message when something is red. The app is the free ntfy app, pointed at this computer over Away. A short bar does not send. The words stay on this computer.
 - **v0.1.23 (2026-10-16):** Away can lock the page. The address is the Away name, Keel serves it, and the browser shows a lock. The Keel screen stays on its own page. Turn on HTTPS certificates for the Away network first.
 - **v0.1.22 (2026-10-16):** Repair can limit the page and the folders to the house network and Away. The Keel screen stays open. Tailscale stays reachable if the house rule is wrong. It does not turn on until that button is pressed, then it comes back when Keel starts.
@@ -90,7 +91,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 - `keelctl` on the admin PC pushes the matching binary over SSH/WinRM
 - Explanations live in the GUI (Guide + Why this?), not only in markdown
 - Overlay is how files work away from home. Keel prefers Headscale and supports Tailscale clients. Same share. Never stop it to save watts under Rest. Brand can change; the job cannot.
-- **Wake and sleep (2026-10-17):** EliteDesk 800 G2 Mini remains the NAS. A Raspberry Pi stays always on for Away and can WoL the desk. Rest stays default; optional sleep/soft-off is a Settings plan (Away pauses on the NAS until boot). Soft-off still allows WoL if BIOS Wake On LAN is on and S5 Maximum Power Savings is off. Outages: EliteDesk After Power Loss → Power On. Plan in wake-and-sleep.md. Not built.
+- **Wake and sleep (2026-10-17):** EliteDesk 800 G2 Mini remains the NAS. A Raspberry Pi stays always on for Away and can WoL the desk. Rest stays default. Prepare wake is in Settings and does not sleep the computer. Optional sleep/soft-off still waits until that Pi can send the wake. Soft-off still allows WoL if BIOS Wake On LAN is on and S5 Maximum Power Savings is off. Outages: EliteDesk After Power Loss → Power On. Plan in wake-and-sleep.md.
 - Power advisor: even while Active, score busy vs parked and explain each save
 - Ship the rok LXC set (including currently stopped guests); not a plugin bazaar
 - **Apps (2026-10-14):** use existing apps, not Keel rewrites. Run them as Podman containers, each a systemd unit (Quadlet); no Docker daemon. Download only when chosen (first-start “What will you use Keel for?” ticks, or Apps → Install). Versions are pinned and signed with the Keel release; Keel sets up folder, NVMe database, ports, Away address, first account, and shows a phone QR. Containers see only the folders Keel grants. Remove keeps data. App updates ride Keel releases with rollback.
