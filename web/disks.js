@@ -59,6 +59,21 @@
     el("copystatus").textContent = text;
     el("copynow").hidden = !view.can_copy;
     el("copynow").disabled = view.copy_running;
+    renderComputer();
+  }
+
+  function renderComputer() {
+    const c = view.computer_copy || {};
+    let text;
+    if (!view.can_copy_computer) {
+      text = "Give a disk the Nightly copy job. Keel keeps a copy of itself there, apart from the files.";
+    } else if (c.message) {
+      text = c.message;
+    } else {
+      text = "Keel can keep a copy of this computer on the Nightly copy disk, apart from the files.";
+    }
+    el("computerstatus").textContent = text;
+    el("computersavego").disabled = !view.can_copy_computer;
   }
 
   function showUse(index) {
@@ -154,6 +169,15 @@
     const reply = await post("/api/storage/copy-now");
     el("copystatus").textContent = reply.message;
     setTimeout(() => load().catch(() => {}), 1500);
+  });
+
+  el("computersavego").addEventListener("click", async () => {
+    el("computersavego").disabled = true;
+    el("computerstatus").textContent = "Copying this computer.";
+    const reply = await post("/api/storage/copy-computer");
+    el("computerstatus").textContent = reply.message;
+    el("computersavego").disabled = !view.can_copy_computer;
+    await load().catch(() => {});
   });
 
   load().catch((err) => {

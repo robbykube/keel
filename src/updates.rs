@@ -381,7 +381,9 @@ async fn apply_verified_release_inner() -> Result<String, String> {
         .assets
         .iter()
         .find(|asset| is_package_name(&asset.name))
-        .ok_or_else(|| "The release has no Keel package.".to_string())?;
+        .ok_or_else(|| {
+            "This release has no Keel package for this computer. A Pi needs the arm64 file.".to_string()
+        })?;
     let checksum = release
         .assets
         .iter()
@@ -517,6 +519,12 @@ async fn verify_release_assets(
     signature: Option<&GithubAsset>,
 ) -> SignatureCheck {
     let (Some(package), Some(checksum), Some(signature)) = (package, checksum, signature) else {
+        if package.is_none() && checksum.is_some() && signature.is_some() {
+            return SignatureCheck {
+                state: "no_package",
+                sha256: None,
+            };
+        }
         return SignatureCheck {
             state: "missing",
             sha256: None,
@@ -707,6 +715,9 @@ fn decide(
             "Keel {latest} is available and the signature checks out. This machine does not have the update service yet, so Keel will not install it."
         ),
         "missing" => format!("Keel {latest} is available, but it is not signed. Keel will not install it."),
+        "no_package" => format!(
+            "Keel {latest} is on GitHub, but that release has no file for this kind of computer."
+        ),
         "download_failed" => format!(
             "Keel {latest} is available, but this computer could not download the signed files from GitHub."
         ),
@@ -1015,8 +1026,19 @@ fn checksum_for(sums: &str, name: &str) -> Option<String> {
     None
 }
 
+fn package_prefix() -> &'static str {
+    #[cfg(target_arch = "aarch64")]
+    {
+        "keel-linux-arm64-"
+    }
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        "keel-linux-amd64-"
+    }
+}
+
 fn is_package_name(name: &str) -> bool {
-    name.starts_with("keel-linux-amd64-") && name.ends_with(".tar.gz")
+    name.starts_with(package_prefix()) && name.ends_with(".tar.gz")
 }
 
 fn write_pending() -> Result<(), String> {
@@ -1491,6 +1513,19 @@ mod tests {
         assert!(!super::github_can_connect());
         std::env::remove_var("KEEL_DATA");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn package_name_matches_this_computer() {
+        let ours = format!("{}v0.1.25.tar.gz", package_prefix());
+        assert!(is_package_name(&ours));
+        let other = if package_prefix().contains("arm64") {
+            "keel-linux-amd64-v0.1.25.tar.gz"
+        } else {
+            "keel-linux-arm64-v0.1.25.tar.gz"
+        };
+        assert!(!is_package_name(other));
+        assert!(!is_package_name("notes.txt"));
     }
 
     #[test]

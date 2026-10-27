@@ -90,6 +90,13 @@ jobs:
             exit 1
           fi
           chmod 0755 signer/keel
+          # Keel 0.1.27 on the Pi only looks for the PC file name.
+          # This one release puts the Pi program in that file so Install works.
+          # The real PC program is kept under a name neither computer installs.
+          if [[ "${GITHUB_REF_NAME}" == "v0.1.28" ]]; then
+            mv pkgs/keel-linux-amd64-v0.1.28.tar.gz pkgs/keel-linux-pc-v0.1.28.tar.gz
+            cp pkgs/keel-linux-arm64-v0.1.28.tar.gz pkgs/keel-linux-amd64-v0.1.28.tar.gz
+          fi
           sha256sum pkgs/keel-linux-*.tar.gz > SHA256SUMS
           # The signed names are the file names, not the pkgs/ directory.
           sed -i 's|pkgs/||' SHA256SUMS

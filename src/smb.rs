@@ -157,12 +157,20 @@ fn render_shares_conf(shares: &[Share], root: &Path, owner: Option<&str>) -> Str
             }
         };
         let shown = path.display().to_string().replace('"', "");
+        // The nightly disk is shared so yesterday's files can be opened.
+        // "This computer" on that disk is the program and the sign-in
+        // settings. It stays on the disk and off the shared folder.
+        let veto = if shown == "/srv/keel/copy" {
+            "/lost+found/This computer/"
+        } else {
+            "/lost+found/"
+        };
         out.push_str(&format!(
             "\n[{}]\n\
              \tpath = \"{shown}\"\n\
              \tbrowseable = yes\n\
              \tread only = {read_only}\n\
-             \tveto files = /lost+found/\n\
+             \tveto files = {veto}\n\
              {access}",
             share.name,
         ));
@@ -352,6 +360,7 @@ mod tests {
         assert!(conf.contains("guest ok = no"));
         assert!(conf.contains("valid users = robby"));
         assert!(conf.contains("read only = yes"));
+        assert!(conf.contains("veto files = /lost+found/This computer/"));
         assert!(!conf.contains("guest ok = yes"));
     }
 }

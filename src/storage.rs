@@ -87,6 +87,8 @@ struct State {
     owner: Option<String>,
     roles: BTreeMap<String, RoleRecord>,
     copies: CopyStatus,
+    #[serde(default)]
+    computer_copy: CopyStatus,
 }
 
 fn state() -> std::sync::MutexGuard<'static, State> {
@@ -140,6 +142,16 @@ pub fn copy_status() -> CopyStatus {
 pub fn set_copy_status(status: CopyStatus) {
     let mut state = state();
     state.copies = status;
+    save(&state);
+}
+
+pub fn computer_copy_status() -> CopyStatus {
+    state().computer_copy.clone()
+}
+
+pub fn set_computer_copy_status(status: CopyStatus) {
+    let mut state = state();
+    state.computer_copy = status;
     save(&state);
 }
 
@@ -198,6 +210,8 @@ pub struct StorageView {
     pub copies: CopyStatus,
     pub copy_running: bool,
     pub can_copy: bool,
+    pub computer_copy: CopyStatus,
+    pub can_copy_computer: bool,
 }
 
 pub fn view(mut disks: Vec<Disk>) -> StorageView {
@@ -227,6 +241,8 @@ pub fn view(mut disks: Vec<Disk>) -> StorageView {
         copies: copy_status(),
         copy_running: crate::copies::running(),
         can_copy: crate::copies::can_run(),
+        computer_copy: crate::copies::computer_status(),
+        can_copy_computer: crate::copies::can_copy_computer(),
     }
 }
 
@@ -246,7 +262,7 @@ fn describe(disk: Disk) -> DiskView {
     } else if let Some(id) = role.as_deref() {
         let title = self::role(id).map(|r| r.title).unwrap_or(id);
         if disk.mount.is_empty() {
-            format!("{title} (not open yet)")
+            format!("{title}. The files are already on this disk.")
         } else {
             title.to_string()
         }
@@ -323,6 +339,94 @@ pub fn prepare(request: &PrepareRequest, disks: &[Disk]) -> Result<String, Strin
     }
     Ok(format!("{} is ready for {}.", disk_words(&target.disk), job.title))
 }
+
+/// Open disks that already have a Keel job, without erasing them.
+/// A disk labeled `keel-files` and the other job labels came from the
+/// previous computer. This one only mounts that filesystem.
+pub fn adopt_connected() {
+    if !cfg!(target_os = "linux") {
+        return;
+    }
+    let disks = crate::inventory::lsblk_disks();
+    let mut count: BTreeMap<&str, usize> = BTreeMap::new();
+    for disk in &disks {
+        if let Some(id) = known_role_label(&disk.label) {
+            *count.entry(id).or_insert(0) += 1;
+        }
+    }
+    for disk in &disks {
+        if disk.system || disk.path.is_empty() {
+            continue;
+        }
+        let Some(id) = known_role_label(&disk.label) else {
+            continue;
+        };
+        if count.get(id).copied().unwrap_or(0) != 1 {
+            continue;
+        }
+        if mounted(id) {
+            remember_role(id, disk);
+            continue;
+        }
+        if host(ADOPT_SCRIPT, &[&disk.path, id], None).is_ok() {
+            remember_role(id, disk);
+        }
+    }
+}
+
+fn known_role_label(label: &str) -> Option<&str> {
+    let id = label.strip_prefix("keel-")?;
+    role(id).map(|role| role.id)
+}
+
+fn remember_role(id: &str, disk: &Disk) {
+    let mut state = state();
+    if state.roles.contains_key(id) {
+        return;
+    }
+    state.roles.insert(
+        id.to_string(),
+        RoleRecord {
+            model: disk.model.clone(),
+            size: disk.size,
+            prepared_ms: now_ms(),
+        },
+    );
+    save(&state);
+}
+
+const ADOPT_SCRIPT: &str = r#"set -uo pipefail
+dev="$1"; role="$2"; mp="/srv/keel/$role"
+fail() { echo "$1" >&2; exit 1; }
+case "$role" in
+  files|copy|extra|software) ;;
+  *) fail "That is not a Keel disk job." ;;
+esac
+[ -b "$dev" ] || fail "That disk is no longer connected."
+mountpoint -q "$mp" && exit 0
+part=""
+while read -r name label fstype; do
+  if [ "$label" = "keel-$role" ] && [ "$fstype" = "ext4" ]; then
+    part="$name"
+    break
+  fi
+done < <(lsblk -lnpo NAME,LABEL,FSTYPE "$dev")
+[ -n "$part" ] && [ -b "$part" ] || fail "That disk does not have the old Keel files."
+uuid=$(blkid -s UUID -o value "$part")
+[ -n "$uuid" ] || fail "Keel could not read that disk."
+mkdir -p "$mp"
+if [ -n "$(ls -A "$mp" 2>/dev/null)" ]; then
+  fail "The folder for that disk is not empty. Keel did not open it."
+fi
+tmp=$(mktemp)
+grep -v "[[:space:]]$mp[[:space:]]" /etc/fstab > "$tmp" || true
+printf 'UUID=%s %s ext4 defaults,nofail,x-systemd.device-timeout=10s 0 2\n' "$uuid" "$mp" >> "$tmp"
+cat "$tmp" > /etc/fstab
+rm -f "$tmp"
+systemctl daemon-reload >/dev/null 2>&1 || true
+mount "$mp" >/dev/null 2>&1 || fail "Keel could not open the files already on that disk."
+exit 0
+"#;
 
 /// A section beside Documents, Work, and Media. It lives on the Files disk,
 /// so the nightly copy includes it, and a computer opens it by this name.
@@ -717,5 +821,17 @@ mod tests {
         assert_eq!(empty.holds, "Empty");
         let old = describe(Disk { name: "sdd".into(), path: "/dev/sdd".into(), kind: "disk".into(), fstype: "ntfs".into(), ..Disk::default() });
         assert!(old.can_use);
+        let waiting = describe(Disk { name: "sde".into(), path: "/dev/sde".into(), kind: "disk".into(), label: "keel-files".into(), ..Disk::default() });
+        assert!(!waiting.can_use);
+        assert!(waiting.holds.contains("already on this disk"));
+    }
+
+    #[test]
+    fn opening_an_old_disk_does_not_erase_it() {
+        assert!(ADOPT_SCRIPT.contains("mount \"$mp\""));
+        assert!(ADOPT_SCRIPT.contains("keel-$role"));
+        assert!(!ADOPT_SCRIPT.contains("wipefs"));
+        assert!(!ADOPT_SCRIPT.contains("mkfs"));
+        assert!(!ADOPT_SCRIPT.contains("parted"));
     }
 }

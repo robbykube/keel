@@ -26,6 +26,99 @@ pub fn can_run() -> bool {
     storage::mounted("files") && (storage::mounted("copy") || storage::mounted("extra"))
 }
 
+pub fn can_copy_computer() -> bool {
+    storage::mounted("copy") || storage::mounted("extra")
+}
+
+pub fn computer_status() -> CopyStatus {
+    storage::computer_copy_status()
+}
+
+const COMPUTER_COPY_NEEDS_DISK: &str =
+    "Give a disk the Nightly copy job. Keel keeps a copy of itself there, apart from the files.";
+
+/// Copy the program, the people, and the settings onto the Nightly copy disk,
+/// and onto the Third copy disk when that one is connected. The folder is
+/// "This computer", beside the file mirror, not inside it.
+pub fn copy_computer() -> Result<String, String> {
+    if !can_copy_computer() {
+        return Err(COMPUTER_COPY_NEEDS_DISK.into());
+    }
+    let nightly = storage::mounted("copy");
+    let third = storage::mounted("extra");
+    let done = match (nightly, third) {
+        (true, true) => {
+            "This computer is copied onto the Nightly copy disk and the Third copy disk, apart from the files."
+        }
+        (false, true) => "This computer is copied onto the Third copy disk, apart from the files.",
+        _ => "This computer is copied onto the Nightly copy disk, apart from the files.",
+    };
+    storage::set_computer_copy_status(CopyStatus {
+        last_run_ms: storage::now_ms(),
+        last_ok_ms: storage::computer_copy_status().last_ok_ms,
+        ok: false,
+        message: "Copying this computer.".into(),
+    });
+    match storage::host("exec /bin/bash -s", &[], Some(COMPUTER_COPY_SCRIPT)) {
+        Ok(()) => {
+            storage::set_computer_copy_status(CopyStatus {
+                last_run_ms: storage::now_ms(),
+                last_ok_ms: storage::now_ms(),
+                ok: true,
+                message: done.into(),
+            });
+            Ok(done.into())
+        }
+        Err(error) => {
+            storage::set_computer_copy_status(CopyStatus {
+                last_run_ms: storage::now_ms(),
+                last_ok_ms: storage::computer_copy_status().last_ok_ms,
+                ok: false,
+                message: error.clone(),
+            });
+            Err(error)
+        }
+    }
+}
+
+/// Runs as root, outside Keel's sandbox. Destinations are only the two copy
+/// disks, and only while those disks are actually mounted.
+const COMPUTER_COPY_SCRIPT: &str = r#"set -euo pipefail
+copy=/srv/keel/copy
+extra=/srv/keel/extra
+stage=$(mktemp -d /tmp/keel-computer.XXXXXX)
+trap 'rm -rf "$stage"' EXIT
+mkdir -p "$stage/program" "$stage/people"
+cp -a /usr/bin/keel "$stage/program/keel"
+cp -a /usr/lib/keel/web "$stage/program/web"
+if [ -d /var/lib/keel ]; then
+  tar -C /var/lib/keel --exclude=./files --exclude=./updates/staged --exclude=./updates/previous -cf - . | tar -C "$stage/people" -xf -
+fi
+day=$(date +%F)
+copied=0
+for root in "$copy" "$extra"; do
+  if ! mountpoint -q "$root"; then
+    continue
+  fi
+  dest="$root/This computer"
+  mkdir -p "$dest/Older"
+  rm -rf "$dest/Latest"
+  mkdir -p "$dest/Latest"
+  cp -a "$stage/." "$dest/Latest/"
+  rm -rf "$dest/Older/$day"
+  mkdir -p "$dest/Older/$day"
+  cp -a "$stage/." "$dest/Older/$day/"
+  chmod -R go-rwx "$dest"
+  find "$dest/Older" -mindepth 1 -maxdepth 1 -type d -mtime +30 -exec rm -rf {} +
+  copied=1
+done
+if [ "$copied" -ne 1 ]; then
+  echo "Give a disk the Nightly copy job. Keel keeps a copy of itself there, apart from the files." >&2
+  exit 1
+fi
+sync
+"#;
+
 pub fn due() -> bool {
     can_run() && !running() && storage::now_ms().saturating_sub(storage::copy_status().last_run_ms) >= DAY_MS
 }
@@ -361,5 +454,19 @@ mod tests {
         assert!(!dst.join("Documents/b.txt").exists());
 
         let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn computer_copy_stays_beside_the_file_mirror() {
+        assert!(COMPUTER_COPY_SCRIPT.contains("This computer"));
+        assert!(COMPUTER_COPY_SCRIPT.contains("/srv/keel/copy"));
+        assert!(COMPUTER_COPY_SCRIPT.contains("/srv/keel/extra"));
+        assert!(COMPUTER_COPY_SCRIPT.contains("--exclude=./files"));
+        assert!(!COMPUTER_COPY_SCRIPT.contains("/srv/keel/files"));
+        assert!(!COMPUTER_COPY_SCRIPT.contains("rsync"));
+        if !can_copy_computer() {
+            let err = copy_computer().unwrap_err();
+            assert_eq!(err, COMPUTER_COPY_NEEDS_DISK);
+        }
     }
 }

@@ -74,6 +74,31 @@ struct Root {
     read_only: bool,
 }
 
+const COMPUTER_FOLDER: &str = "This computer";
+
+fn computer_disk(path: &Path) -> bool {
+    let text = path.to_string_lossy();
+    let text = text.trim_end_matches(['/', '\\']);
+    text == "/srv/keel/copy" || text == "/srv/keel/extra"
+}
+
+/// The copy of this computer sits on the copy disks, beside the files.
+/// The Files page does not open it.
+fn hides_computer(root: &Root, rel: &str) -> bool {
+    if !computer_disk(&root.path) {
+        return false;
+    }
+    rel == COMPUTER_FOLDER || rel.starts_with(&format!("{COMPUTER_FOLDER}/"))
+}
+
+fn refuse_computer(root: &Root, rel: &str) -> Result<(), String> {
+    if hides_computer(root, rel) {
+        Err("That folder is the copy of this computer. It stays off the Files page.".into())
+    } else {
+        Ok(())
+    }
+}
+
 const SAMPLE: &[(&str, bool)] = &[
     ("Documents", false),
     ("Work", false),
@@ -120,7 +145,10 @@ pub fn home(shares: &[Share]) -> FolderHome {
 }
 
 pub fn list(shares: &[Share], share: &str, path: &str) -> Result<Listing, String> {
-    list_root(&find_root(shares, share)?, path)
+    let root = find_root(shares, share)?;
+    let rel = normalize(path)?;
+    refuse_computer(&root, &rel)?;
+    list_root(&root, path)
 }
 
 #[derive(Debug)]
@@ -133,6 +161,7 @@ pub struct Download {
 pub fn open_download(shares: &[Share], share: &str, path: &str) -> Result<Download, String> {
     let root = find_root(shares, share)?;
     let rel = normalize(path)?;
+    refuse_computer(&root, &rel)?;
     if rel.is_empty() {
         return Err("Choose a file to download.".into());
     }
@@ -199,6 +228,9 @@ fn list_root(root: &Root, path: &str) -> Result<Listing, String> {
         let item = item.map_err(|err| io_sentence(&err, "open that folder"))?;
         let name = item.file_name().to_string_lossy().to_string();
         if name == "lost+found" || !safe_part(&name) {
+            continue;
+        }
+        if name == COMPUTER_FOLDER && rel.is_empty() && computer_disk(&root.path) {
             continue;
         }
         let meta = match fs::symlink_metadata(item.path()) {
@@ -324,10 +356,12 @@ fn transfer_roots(
         return Err(read_only_sentence());
     }
     let from_rel = normalize(from_path)?;
+    refuse_computer(from_root, &from_rel)?;
     if from_rel.is_empty() {
         return Err("Choose a file or folder inside, not the whole share.".into());
     }
     let to_rel = normalize(to_path)?;
+    refuse_computer(to_root, &to_rel)?;
     if from_root.name == to_root.name && inside(&from_rel, &to_rel) {
         return Err("Open a folder that is not inside this one.".into());
     }
@@ -713,6 +747,26 @@ mod tests {
         assert!(!attachment_header("a\"b\r\n").contains('\r'));
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn files_page_does_not_open_the_computer_copy() {
+        let copy = Root {
+            name: "Copies".into(),
+            path: PathBuf::from("/srv/keel/copy"),
+            read_only: true,
+        };
+        assert!(hides_computer(&copy, "This computer"));
+        assert!(hides_computer(&copy, "This computer/people/admin-token"));
+        assert!(!hides_computer(&copy, "Latest/Documents"));
+        assert!(refuse_computer(&copy, "This computer/Latest").is_err());
+        let docs = Root {
+            name: "Documents".into(),
+            path: PathBuf::from("/srv/keel/files/Documents"),
+            read_only: false,
+        };
+        assert!(!hides_computer(&docs, "This computer"));
+        assert!(refuse_computer(&docs, "This computer").is_ok());
     }
 
     fn open_download_root(root: &Root, path: &str) -> Result<Download, String> {

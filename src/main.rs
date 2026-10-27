@@ -185,6 +185,10 @@ async fn main() {
             post(storage_copy_now).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route(
+            "/api/storage/copy-computer",
+            post(storage_copy_computer).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
             "/api/storage/sleep-try",
             post(storage_sleep_try).layer(axum::middleware::from_fn(auth::require_admin)),
         )
@@ -322,6 +326,7 @@ async fn main() {
         )
         .with_state({
             let mut store = Store::load();
+            crate::storage::adopt_connected();
             crate::storage::ensure_shares(&mut store);
             crate::smb::bootstrap(&mut store);
             let state = AppState {
@@ -693,16 +698,21 @@ async fn restart() -> (StatusCode, Json<serde_json::Value>) {
 async fn watch_disks(state: AppState) {
     let mut seen: Vec<bool> = Vec::new();
     loop {
-        tokio::time::sleep(Duration::from_secs(60)).await;
+        let _ = tokio::task::spawn_blocking(crate::storage::adopt_connected).await;
         let now: Vec<bool> = crate::storage::ROLES
             .iter()
             .map(|role| crate::storage::mounted(role.id))
             .collect();
         if now != seen {
             seen = now;
-            let shares = state.store.lock().await.shares.clone();
+            let shares = {
+                let mut store = state.store.lock().await;
+                crate::storage::ensure_shares(&mut store);
+                store.shares.clone()
+            };
             let _ = tokio::task::spawn_blocking(move || crate::smb::apply(&shares)).await;
         }
+        tokio::time::sleep(Duration::from_secs(60)).await;
         if crate::copies::due() {
             let _ = tokio::task::spawn_blocking(crate::copies::run_now).await;
         }
@@ -790,6 +800,13 @@ async fn storage_sleep_try(State(state): State<AppState>) -> (StatusCode, Json<s
     let result = tokio::task::spawn_blocking(move || crate::spindown::try_once(&disks))
         .await
         .unwrap_or_else(|_| Err("The sleep try stopped. The disks stay spinning.".into()));
+    storage_reply(result)
+}
+
+async fn storage_copy_computer() -> (StatusCode, Json<serde_json::Value>) {
+    let result = tokio::task::spawn_blocking(crate::copies::copy_computer)
+        .await
+        .unwrap_or_else(|_| Err("The copy of this computer stopped.".into()));
     storage_reply(result)
 }
 
