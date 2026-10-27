@@ -16,13 +16,14 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | On another computer | Files stay on Proxmox or TrueNAS; keel does not wipe them |
 | Disks in this machine | Files would live on drives in the keel box |
 | 1 thing to look at | Home’s notice. Sea-glass. Fix it opens Sign in, then Disks. It does not erase |
-| in this computer | How much the disks hold. The bar under a disk is the room left. A short bar is filling up. Red means that disk says it is failing |
+| in this computer | How much the disks hold. The bar under a disk is how much of it is in use. It starts empty and fills. A long bar is filling up. Red means that disk says it is failing |
 | Look around | Check one computer you name. Not a search of every machine |
 | Open / closed | Like a computer: the app is on disk; running only when you need it |
 | Away | Same files, not on the house Wi‑Fi. The overlay is how you reach them |
 | Sign in | A name and password for the page. Settings on the Keel screen adds a person. The page records who signed in |
 | Download | Save that file to the phone or computer you are using. A folder is opened, not downloaded |
 | Try it on one disk | Ask one spinning disk in the USB box to sleep. If it is already asleep, Keel leaves the box to do that |
+| Copy this computer | Save the Keel program, the people, and the settings onto the Nightly copy disk, in a folder of their own, apart from the files. A second copy goes on the Third copy disk when that disk is connected |
 | Only the house and Away | The page and the folders answer on this network and on Away. The Keel screen still works. Other computers are refused |
 | Lock the page | The same page at the Away name, with a lock the browser trusts. The password app asks for that address. The Keel screen stays as it is |
 | Send to the phone | When something is red, one message goes to the free ntfy app. The phone must be on Away |

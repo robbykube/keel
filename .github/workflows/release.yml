@@ -9,13 +9,27 @@ permissions:
   contents: write
 
 jobs:
-  linux-amd64:
+  package:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: amd64
+            target: x86_64-unknown-linux-gnu
+          - name: arm64
+            target: aarch64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Build release binary
-        run: cargo build --release
+        with:
+          targets: ${{ matrix.target }}
+      - name: Install the arm64 linker
+        if: matrix.name == 'arm64'
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+      - name: Point Cargo at the arm64 linker
+        if: matrix.name == 'arm64'
+        run: echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
       - name: Check tag matches Cargo.toml
         shell: bash
         run: |
@@ -26,16 +40,42 @@ jobs:
             echo "Cargo.toml version ${version} does not match tag ${tag}" >&2
             exit 1
           fi
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
       - name: Package appliance payload
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release/keel
-          install -m 0755 target/release/keel release/keel/keel
+          install -m 0755 "target/${{ matrix.target }}/release/keel" release/keel/keel
           install -m 0644 packaging/systemd/keel.service release/keel/keel.service
           cp -a web release/keel/web
-          tar -C release -czf "keel-linux-amd64-${GITHUB_REF_NAME}.tar.gz" keel
-          sha256sum "keel-linux-amd64-${GITHUB_REF_NAME}.tar.gz" > SHA256SUMS
+          tar -C release -czf "keel-linux-${{ matrix.name }}-${GITHUB_REF_NAME}.tar.gz" keel
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: keel-linux-${{ matrix.name }}
+          path: keel-linux-${{ matrix.name }}-${{ github.ref_name }}.tar.gz
+      - name: Upload the signer
+        if: matrix.name == 'amd64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: keel-signer
+          path: target/${{ matrix.target }}/release/keel
+
+  publish:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: keel-linux-*
+          path: pkgs
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: keel-signer
+          path: signer
       - name: Sign checksums
         env:
           KEEL_RELEASE_SIGNING_KEY: ${{ secrets.KEEL_RELEASE_SIGNING_KEY }}
@@ -46,13 +86,19 @@ jobs:
             echo "KEEL_RELEASE_SIGNING_KEY is not configured" >&2
             exit 1
           fi
-          ./target/release/keel sign-file SHA256SUMS
+          chmod 0755 signer/keel
+          sha256sum pkgs/keel-linux-*.tar.gz > SHA256SUMS
+          # The signed names are the file names, not the pkgs/ directory.
+          sed -i 's|pkgs/||' SHA256SUMS
+          ./signer/keel sign-file SHA256SUMS
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
+          set -euo pipefail
           gh release create "$GITHUB_REF_NAME" \
-            "keel-linux-amd64-${GITHUB_REF_NAME}.tar.gz" \
+            pkgs/keel-linux-*.tar.gz \
             SHA256SUMS \
             SHA256SUMS.sig \
             --generate-notes \

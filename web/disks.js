@@ -33,10 +33,10 @@
   function room(d) {
     const total = d.fs_size || d.size || 0;
     if (d.free == null || !total) return "";
-    const left = Math.max(0, Math.min(100, Math.round((d.free / total) * 100)));
+    const used = Math.max(0, Math.min(100, Math.round(((total - d.free) / total) * 100)));
     const failing = d.health === "failing";
-    const word = failing ? "Failing" : left < 15 ? "Filling up" : `${left}% free`;
-    return `<div class="room${failing ? " failing" : ""}"><span style="width:${left}%"></span></div><span class="meta">${word}</span>`;
+    const word = failing ? "Failing" : used >= 85 ? "Filling up" : `${used}% in use`;
+    return `<div class="room${failing ? " failing" : ""}" role="img" aria-label="${used}% in use"><span style="width:${used}%"></span></div><span class="meta">${word}</span>`;
   }
 
   function renderDisks() {

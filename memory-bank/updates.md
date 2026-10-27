@@ -5,9 +5,12 @@ still this design, and they are not built.
 
 What works now:
 
-- GitHub Actions publishes `keel-linux-amd64-vX.Y.Z.tar.gz`, `SHA256SUMS`, and
-  `SHA256SUMS.sig` when a `vX.Y.Z` tag is pushed. The tag must match
-  `Cargo.toml`.
+- GitHub Actions publishes `keel-linux-amd64-vX.Y.Z.tar.gz` and
+  `keel-linux-arm64-vX.Y.Z.tar.gz`, plus one `SHA256SUMS` and
+  `SHA256SUMS.sig`, when a `vX.Y.Z` tag is pushed. The tag must match
+  `Cargo.toml`. The running program installs only the file for its own
+  kind of computer. A Pi does not install the PC file. A release tagged
+  before the arm64 file existed has nothing for the Pi to install.
 - The private signing key lives only in the GitHub Actions secret
   `KEEL_RELEASE_SIGNING_KEY`. The matching public key is
   `packaging/updates/release-public.hex` and is built into the `keel` binary.

@@ -1,4 +1,5 @@
-//! Room left on a disk, and whether the disk says it is failing.
+//! Free space on a disk, and whether the disk says it is failing.
+//! The pages show that as how much of the disk is in use.
 //!
 //! A missing reading stays unknown. A USB bridge that cannot answer is not a
 //! failing disk. SMART is cached so opening Home does not wake a sleeping disk
@@ -64,8 +65,8 @@ pub fn annotate(disks: &mut [Disk]) {
     }
 }
 
-/// A USB box often answers for itself, not for the disk inside it. Room left
-/// still shows. A SMART failure from that box is not called a failing disk.
+/// A USB box often answers for itself, not for the disk inside it. How much
+/// is in use still shows. A SMART failure from that box is not called a failing disk.
 fn health_from(transport: &str, read: impl FnOnce() -> &'static str) -> &'static str {
     if transport == "usb" {
         "unknown"

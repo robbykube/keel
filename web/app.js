@@ -119,11 +119,11 @@ function awayCard(overlay, owner) {
 function roomBar(disk) {
   const total = disk.fs_size || disk.size || 0;
   if (disk.free == null || !total) return "";
-  const left = Math.max(0, Math.min(100, Math.round((disk.free / total) * 100)));
+  const used = Math.max(0, Math.min(100, Math.round(((total - disk.free) / total) * 100)));
   const failing = disk.health === "failing";
-  const filling = left < 15;
+  const filling = used >= 85;
   const word = failing ? "Failing" : filling ? "Filling up" : "";
-  return `<div class="room${failing ? " failing" : ""}" role="img" aria-label="${left}% free"><span style="width:${left}%"></span></div>${word ? `<div class="room-word${failing ? " failing" : ""}">${word}</div>` : ""}`;
+  return `<div class="room${failing ? " failing" : ""}" role="img" aria-label="${used}% in use"><span style="width:${used}%"></span></div>${word ? `<div class="room-word${failing ? " failing" : ""}">${word}</div>` : ""}`;
 }
 
 function disksCard(storage, failing) {
@@ -151,7 +151,7 @@ function disksCard(storage, failing) {
       <span class="pill ${failing ? "bad" : ""}">${failing ? "Needs a look" : (disks.length === 1 ? "1 disk" : `${disks.length} disks`)}</span>
     </div>
     ${headline}
-    ${disks.length ? '<p class="card-note">The number above is how much the disks hold. A short bar is a disk filling up.</p>' : ''}
+    ${disks.length ? '<p class="card-note">The number above is how much the disks hold. The bar fills as a disk is used.</p>' : ''}
     <div class="disk-list">${rows}</div>
   </article>`;
 }
