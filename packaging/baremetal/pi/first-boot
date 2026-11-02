@@ -1,0 +1,30 @@
+#!/bin/bash
+# Runs once, before Keel, on a card that has no sign-in token yet.
+# A later boot leaves an existing token alone.
+set -euo pipefail
+
+install -d -m 0700 /etc/keel /var/lib/keel /var/lib/keel/files
+
+env=/etc/keel/keel.env
+if [[ ! -s "${env}" ]] || ! grep -q '^KEEL_ADMIN_TOKEN=.\+' "${env}"; then
+  token="keel-$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')"
+  printf 'KEEL_ADMIN_TOKEN=%s\n' "${token}" > "${env}"
+  chmod 0600 "${env}"
+  printf '%s\n' "${token}" > /var/lib/keel/admin-token
+  chmod 0600 /var/lib/keel/admin-token
+  if [[ -d /boot/firmware ]]; then
+    printf '%s\n' "${token}" > /boot/firmware/keel-token.txt
+    chmod 0600 /boot/firmware/keel-token.txt || true
+  fi
+fi
+
+if ! id keel >/dev/null 2>&1; then
+  useradd --system --home /var/lib/keel --shell /usr/sbin/nologin --user-group keel
+fi
+chown keel:keel /var/lib/keel/files || true
+if [[ ! -s /var/lib/keel/smb-shares.conf ]]; then
+  printf '%s\n' '# Keel writes the folders here.' > /var/lib/keel/smb-shares.conf
+fi
+if command -v smbpasswd >/dev/null 2>&1 && id keel >/dev/null 2>&1; then
+  printf '%s\n%s\n' keel keel | smbpasswd -a keel -s >/dev/null 2>&1 || true
+fi

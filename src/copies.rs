@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::storage::{self, mount_point, CopyStatus};
+use crate::storage::{self, role_root, CopyStatus};
 
 const KEEP_DAYS: i64 = 30;
 const DAY_MS: u64 = 24 * 60 * 60 * 1000;
@@ -161,18 +161,18 @@ fn run_jobs() -> CopyStatus {
         return previous;
     }
     let today = date(today_days());
-    let files = mount_point("files");
+    let files = role_root("files");
     let mut tally = Tally::default();
     let mut done = Vec::new();
 
     if storage::mounted("copy") {
-        let root = mount_point("copy");
+        let root = role_root("copy");
         mirror(&files, &root.join("Latest"), &root.join("Older").join(&today), &mut tally);
         prune(&root.join("Older"), &mut tally);
         done.push("the nightly copy");
     }
     if storage::mounted("extra") {
-        let root = mount_point("extra");
+        let root = role_root("extra");
         for folder in ["Documents", "Work"] {
             let source = files.join(folder);
             if source.is_dir() {

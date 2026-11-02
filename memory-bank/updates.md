@@ -14,7 +14,9 @@ What works now:
   that file once, and keeps the real PC program as
   `keel-linux-pc-v0.1.28.tar.gz`, which neither computer installs.
   A release tagged before the arm64 file existed has nothing for the
-  Pi to install.
+  Pi to install. v0.1.29 is a normal release: the arm64 file is
+  `keel-linux-arm64-v0.1.29.tar.gz` and the PC file keeps its own name.
+  A Pi already running 0.1.28 installs the arm64 file.
 - The private signing key lives only in the GitHub Actions secret
   `KEEL_RELEASE_SIGNING_KEY`. The matching public key is
   `packaging/updates/release-public.hex` and is built into the `keel` binary.

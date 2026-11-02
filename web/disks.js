@@ -41,8 +41,13 @@
 
   function renderDisks() {
     const rows = view.disks.map((d, i) => {
-      const action = d.can_use ? `<button type="button" data-use="${i}">Use…</button>` : "";
-      return `<tr class="${d.health === "failing" ? "failing" : ""}"><td>${diskName(d)}</td><td class="disk-size">${size(d.size)}${room(d)}</td><td>${esc(d.holds)}</td><td>${action}</td></tr>`;
+      const offers = d.offers || [];
+      const buttons = [];
+      if (offers.includes("files")) buttons.push(`<button type="button" data-keep="files" data-index="${i}">These are the Files</button>`);
+      if (offers.includes("software")) buttons.push(`<button type="button" data-keep="software" data-index="${i}">These are Software and Inbox</button>`);
+      if (offers.includes("everyday")) buttons.push(`<button type="button" data-keep="everyday" data-index="${i}">Use this disk</button>`);
+      if (d.can_use) buttons.push(`<button type="button" data-use="${i}">Erase…</button>`);
+      return `<tr class="${d.health === "failing" ? "failing" : ""}"><td>${diskName(d)}</td><td class="disk-size">${size(d.size)}${room(d)}</td><td>${esc(d.holds)}</td><td>${buttons.join(" ")}</td></tr>`;
     });
     el("diskrows").innerHTML = rows.join("") || `<tr><td colspan="4">No disks found.</td></tr>`;
   }
@@ -52,7 +57,7 @@
     const hasCopyDisk = view.roles.some((r) => (r.id === "copy" || r.id === "extra") && r.disk);
     let text;
     if (view.copy_running) text = "Copying now. This can take hours the first time.";
-    else if (!hasCopyDisk) text = "No copy disk yet. Give a disk the Nightly copy job and Keel copies Files to it once a day.";
+    else if (!hasCopyDisk) text = "A copy needs another disk. One disk can hold the everyday folders, and Keel copies them once a day when a second disk is there.";
     else if (!view.can_copy) text = "Copies wait until the Files disk and a copy disk are both connected.";
     else if (!c.last_run_ms) text = "Keel makes the first copy within a minute or two.";
     else text = `Last copy ${when(c.last_run_ms)}. ${c.message}`;
@@ -124,7 +129,16 @@
     }
   }
 
-  el("diskrows").addEventListener("click", (e) => {
+  el("diskrows").addEventListener("click", async (e) => {
+    const keep = e.target.closest("button[data-keep]");
+    if (keep) {
+      const disk = view.disks[Number(keep.dataset.index)];
+      keep.disabled = true;
+      const reply = await post("/api/storage/keep", { path: disk.path, kind: keep.dataset.keep });
+      el("diskstatus").textContent = reply.message || (reply.ok ? "Done." : "That did not work.");
+      await load().catch(() => {});
+      return;
+    }
     const button = e.target.closest("button[data-use]");
     if (button) showUse(Number(button.dataset.use));
   });

@@ -1,0 +1,13 @@
+[Unit]
+Description=Prepare Keel on this card
+DefaultDependencies=no
+After=local-fs.target
+Before=keel.service smbd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/keel/first-boot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

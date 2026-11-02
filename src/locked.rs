@@ -60,6 +60,18 @@ pub fn lock() -> Result<String, String> {
     ))
 }
 
+/// The locked page answers on the Away address only, so the house address
+/// on port 443 can be the front door.
+pub fn page_bind(ip: &str) -> Result<std::net::SocketAddr, String> {
+    let addr: std::net::Ipv4Addr = ip
+        .parse()
+        .map_err(|_| "Connect Away first. The locked page uses that address.".to_string())?;
+    if addr.is_loopback() || addr.is_unspecified() || addr.is_broadcast() || addr.is_link_local() {
+        return Err("Connect Away first. The locked page uses that address.".into());
+    }
+    Ok(std::net::SocketAddr::from((addr, 443)))
+}
+
 pub fn safe_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 253
@@ -150,9 +162,14 @@ async fn listen(app: axum::Router) -> Result<(), String> {
     let config = axum_server::tls_rustls::RustlsConfig::from_pem_file(&cert, &key)
         .await
         .map_err(|_| "Keel could not read the lock.".to_string())?;
-    let addr: std::net::SocketAddr = "0.0.0.0:443"
-        .parse()
-        .map_err(|_| "The locked page could not start.".to_string())?;
+    let ip = tokio::task::spawn_blocking(|| {
+        crate::overlay::status()
+            .overlay_ip
+            .unwrap_or_default()
+    })
+    .await
+    .unwrap_or_default();
+    let addr = page_bind(&ip)?;
     UP.store(true, Ordering::Relaxed);
     let started = axum_server::bind_rustls(addr, config)
         .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>())
@@ -167,6 +184,13 @@ mod tests {
 
     #[test]
     fn only_an_away_name_can_be_locked() {
+        assert_eq!(
+            page_bind("100.64.0.2").unwrap(),
+            "100.64.0.2:443".parse().unwrap()
+        );
+        assert!(page_bind("127.0.0.1").is_err());
+        assert!(page_bind("0.0.0.0").is_err());
+        assert!(page_bind("keel").is_err());
         assert!(safe_name("keel.tailnet.ts.net"));
         assert!(!safe_name("keel.local"));
         assert!(!safe_name("keel.tailnet.ts.net;rm"));

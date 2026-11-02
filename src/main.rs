@@ -3,6 +3,7 @@ mod apps;
 mod auth;
 mod catalog;
 mod config;
+mod devices;
 mod discover;
 mod files;
 mod firewall;
@@ -11,9 +12,16 @@ mod github_connect;
 mod installer;
 mod inventory;
 mod issues;
+mod jitsi;
 mod locked;
+mod mail;
+mod names;
 mod model;
 mod overlay;
+mod owned;
+mod papers;
+mod passwords;
+mod photos;
 mod phone;
 mod people;
 mod remote;
@@ -181,6 +189,10 @@ async fn main() {
             post(storage_owner).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route(
+            "/api/storage/keep",
+            post(storage_keep).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
             "/api/storage/copy-now",
             post(storage_copy_now).layer(axum::middleware::from_fn(auth::require_admin)),
         )
@@ -280,10 +292,50 @@ async fn main() {
             get(phone_view).post(phone_on).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route("/api/catalog", get(catalog_list))
+        .route("/api/name", get(owned_view).post(owned_save).layer(axum::middleware::from_fn(auth::require_admin)))
         .route("/api/apps", get(apps_list))
         .route(
             "/api/apps/choose",
             post(apps_choose).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route("/api/apps/jitsi", get(jitsi_status))
+        .route(
+            "/api/apps/jitsi/install",
+            post(jitsi_install).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route("/api/apps/technitium", get(names_status))
+        .route(
+            "/api/apps/technitium/install",
+            post(names_install).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route("/api/apps/npm", get(door_status))
+        .route(
+            "/api/apps/npm/install",
+            post(door_install).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route("/api/apps/vaultwarden", get(passwords_status))
+        .route(
+            "/api/apps/vaultwarden/install",
+            post(passwords_install).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/apps/vaultwarden/close",
+            post(passwords_close).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route("/api/apps/immich", get(photos_status))
+        .route(
+            "/api/apps/immich/install",
+            post(photos_install).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route("/api/apps/papra", get(papers_status))
+        .route(
+            "/api/apps/papra/install",
+            post(papers_install).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route("/api/apps/thunderbird", get(mail_status))
+        .route(
+            "/api/apps/thunderbird/install",
+            post(mail_install).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route(
             "/api/apps/{id}/action",
@@ -293,6 +345,11 @@ async fn main() {
         .route(
             "/api/repair",
             post(repair_run).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route("/api/devices", get(devices_view))
+        .route(
+            "/api/devices/look",
+            post(devices_look).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route(
             "/api/notes",
@@ -754,6 +811,23 @@ fn storage_reply(result: Result<String, String>) -> (StatusCode, Json<serde_json
     }
 }
 
+async fn storage_keep(
+    State(state): State<AppState>,
+    Json(req): Json<crate::storage::KeepRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let result = tokio::task::spawn_blocking(move || crate::storage::keep(&req.path, &req.kind))
+        .await
+        .unwrap_or_else(|_| Err("The disk job stopped unexpectedly.".into()));
+    if result.is_ok() {
+        let mut store = state.store.lock().await;
+        crate::storage::ensure_shares(&mut store);
+        let shares = store.shares.clone();
+        drop(store);
+        let _ = tokio::task::spawn_blocking(move || crate::smb::apply(&shares)).await;
+    }
+    storage_reply(result)
+}
+
 async fn storage_prepare(
     State(state): State<AppState>,
     Json(req): Json<crate::storage::PrepareRequest>,
@@ -841,6 +915,31 @@ async fn issues_list(State(state): State<AppState>) -> Json<IssuesReport> {
     report.red |= extra.iter().any(|issue| issue.severity == "red");
     report.items.splice(0..0, extra);
     Json(report)
+}
+
+async fn devices_view() -> Json<crate::devices::Report> {
+    Json(crate::devices::saved())
+}
+
+fn devices_problem(message: String) -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::BAD_REQUEST,
+        Json(serde_json::json!({ "ok": false, "message": message })),
+    )
+}
+
+async fn devices_look() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    let result = tokio::task::spawn_blocking(crate::devices::look).await;
+    match result {
+        Ok(Ok(report)) => {
+            let value = serde_json::to_value(report).unwrap_or_else(|_| {
+                serde_json::json!({ "message": "Keel could not see the house network." })
+            });
+            Ok((StatusCode::OK, Json(value)))
+        }
+        Ok(Err(message)) => Err(devices_problem(message)),
+        Err(_) => Err(devices_problem("Keel could not see the house network.".into())),
+    }
 }
 
 async fn repair_run(Json(req): Json<RepairRequest>) -> Json<RepairResult> {
@@ -997,6 +1096,186 @@ async fn installer_plan(
                 Json(serde_json::json!({ "ok": false, "message": message })),
             )
         })
+}
+
+async fn jitsi_status() -> Json<crate::jitsi::Status> {
+    Json(crate::jitsi::view())
+}
+
+async fn jitsi_install() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match crate::jitsi::start() {
+        Ok(status) => Ok((
+            if status.ready { StatusCode::OK } else { StatusCode::ACCEPTED },
+            Json(serde_json::json!({
+                "ok": true,
+                "ready": status.ready,
+                "address": status.address,
+                "message": status.message,
+            })),
+        )),
+        Err(message) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": message })),
+        )),
+    }
+}
+
+async fn names_status() -> Json<crate::names::Status> {
+    Json(crate::names::names_view())
+}
+
+async fn names_install() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    open_program(crate::names::names_start())
+}
+
+async fn door_status() -> Json<crate::names::Status> {
+    Json(crate::names::door_view())
+}
+
+async fn door_install() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    open_program(crate::names::door_start())
+}
+
+async fn passwords_status() -> Json<crate::passwords::Status> {
+    Json(crate::passwords::view())
+}
+
+async fn passwords_install() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    password_program(crate::passwords::start(false))
+}
+
+async fn passwords_close() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    password_program(crate::passwords::start(true))
+}
+
+async fn owned_view() -> Json<crate::owned::Owned> {
+    Json(crate::owned::view())
+}
+
+async fn owned_save(
+    Json(body): Json<crate::owned::SaveRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match crate::owned::save(&body.name) {
+        Ok(owned) => Ok((
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "ok": true,
+                "name": owned.name,
+                "photos": owned.photos,
+            })),
+        )),
+        Err(message) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": message })),
+        )),
+    }
+}
+
+async fn mail_status() -> Json<crate::mail::Status> {
+    Json(crate::mail::view())
+}
+
+async fn mail_install() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match crate::mail::start() {
+        Ok(status) => Ok((
+            if status.ready { StatusCode::OK } else { StatusCode::ACCEPTED },
+            Json(serde_json::json!({
+                "ok": true,
+                "ready": status.ready,
+                "address": status.address,
+                "message": status.message,
+            })),
+        )),
+        Err(message) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": message })),
+        )),
+    }
+}
+
+async fn papers_status() -> Json<crate::papers::Status> {
+    Json(crate::papers::view())
+}
+
+async fn papers_install() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match crate::papers::start() {
+        Ok(status) => Ok((
+            if status.ready { StatusCode::OK } else { StatusCode::ACCEPTED },
+            Json(serde_json::json!({
+                "ok": true,
+                "ready": status.ready,
+                "address": status.address,
+                "message": status.message,
+            })),
+        )),
+        Err(message) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": message })),
+        )),
+    }
+}
+
+async fn photos_status() -> Json<crate::photos::Status> {
+    Json(crate::photos::view())
+}
+
+async fn photos_install() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match crate::photos::start() {
+        Ok(status) => Ok((
+            if status.ready { StatusCode::OK } else { StatusCode::ACCEPTED },
+            Json(serde_json::json!({
+                "ok": true,
+                "ready": status.ready,
+                "address": status.address,
+                "message": status.message,
+            })),
+        )),
+        Err(message) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": message })),
+        )),
+    }
+}
+
+fn password_program(
+    result: Result<crate::passwords::Status, String>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match result {
+        Ok(status) => Ok((
+            if status.ready { StatusCode::OK } else { StatusCode::ACCEPTED },
+            Json(serde_json::json!({
+                "ok": true,
+                "ready": status.ready,
+                "address": status.address,
+                "message": status.message,
+                "signups_open": status.signups_open,
+            })),
+        )),
+        Err(message) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": message })),
+        )),
+    }
+}
+
+fn open_program(
+    result: Result<crate::names::Status, String>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match result {
+        Ok(status) => Ok((
+            if status.ready { StatusCode::OK } else { StatusCode::ACCEPTED },
+            Json(serde_json::json!({
+                "ok": true,
+                "ready": status.ready,
+                "address": status.address,
+                "message": status.message,
+            })),
+        )),
+        Err(message) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": message })),
+        )),
+    }
 }
 
 async fn apps_list() -> Json<Vec<crate::apps::AppManifest>> {

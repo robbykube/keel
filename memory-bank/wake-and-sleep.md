@@ -11,7 +11,7 @@ This page is the optional deeper watt path we agreed (2026-10-17).
 | **HP EliteDesk 800 G2 Mini** | Real Keel NAS: disks, shares, nightly copy, catalog apps |
 | **Raspberry Pi** | Always-on sidekick: Away (Tailscale) stays up; can wake the EliteDesk |
 
-The Pi is **not** the family NAS. Keel’s ship path is amd64 today; the Pi does not need a full Keel image for wake. Tailscale plus a small wake action is enough. Full Keel on the Pi is optional later if we want the same GUI there.
+The Pi was the sidekick, not the family NAS. On 2026-10-27 the EliteDesk looked dead, so a full Keel card image for a Pi 4 or Pi 5 is the stand-in: `dist/baremetal/release/keel-arm64-pi.img`. If the desk comes back, it remains the better place for disks and for calls with several cameras. The Pi image does not sleep, and it does not wake the desk.
 
 EliteDesk still wins for USB bulk disks (Yottamaster), copies, and apps. The Pi wins on idle watts (~2–5 W) so Away can survive while the desk sleeps or is soft-off.
 

@@ -5,7 +5,7 @@ const PRIMARY = [
   ["/overlay.html", "Away"],
 ];
 const computerNav = (showInstall) => {
-  const items = [["/pools.html", "Disks"]];
+  const items = [["/pools.html", "Disks"], ["/devices.html", "Devices"]];
   if (showInstall) items.push(["/installer.html", "Install"]);
   items.push(["/repair.html", "Repair"]);
   return items;
@@ -24,6 +24,7 @@ const NAV_ICONS = {
   Away: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5a13 13 0 0 1 0 17M12 3.5a13 13 0 0 0 0 17"/></svg>',
   Guide: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5A3.5 3.5 0 0 1 19 8v11.5H8.5A3.5 3.5 0 0 0 5 23z"/><path d="M5 4.5v15A3.5 3.5 0 0 1 8.5 16H19M8 8h7M8 11.5h7"/></svg>',
   Notes: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12a1.5 1.5 0 0 1 1.5 1.5v14a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V5A1.5 1.5 0 0 1 6 3.5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
+  Devices: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="18" cy="17" r="2"/><path d="M8 12h8M16.2 8.2 8 12l8.2 3.8"/></svg>',
 };
 
 const BRAND_ICON = '<svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="13" rx="2.5"/><path d="M7 9.5h10M7 13h5"/></svg>';

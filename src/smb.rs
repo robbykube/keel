@@ -122,10 +122,7 @@ fn share_dir(share: &Share, root: &Path) -> PathBuf {
 /// A share on one of Keel's disks is only offered while that disk is open,
 /// so nothing is written into the empty mount folder on the system disk.
 pub fn available(share: &Share) -> bool {
-    match crate::storage::share_role(&share.path) {
-        Some(role) => crate::storage::mounted(&role),
-        None => true,
-    }
+    crate::storage::path_ready(&share.path)
 }
 
 fn render_shares_conf(shares: &[Share], root: &Path, owner: Option<&str>) -> String {

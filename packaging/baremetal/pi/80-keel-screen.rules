@@ -1,0 +1,1 @@
+ACTION=="change", SUBSYSTEM=="drm", TAG+="systemd", ENV{SYSTEMD_WANTS}="keel-screen-plug.service"

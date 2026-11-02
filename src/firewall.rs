@@ -70,7 +70,7 @@ pub fn ruleset(subnets: &[String]) -> Result<String, String> {
     let mut house = String::new();
     for subnet in subnets {
         house.push_str(&format!(
-            "    ip saddr {subnet} tcp dport {{ 445, 9478 }} accept\n"
+            "    ip saddr {subnet} tcp dport {{ 53, 80, 81, 443, 445, 5380, 9478 }} accept\n    ip saddr {subnet} udp dport {{ 53, 10000 }} accept\n"
         ));
     }
     Ok(format!(
@@ -84,7 +84,8 @@ pub fn ruleset(subnets: &[String]) -> Result<String, String> {
     icmpv6 type {{ echo-request, nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert }} accept
     udp sport 67 udp dport 68 accept
     udp dport 41641 accept
-    iifname "tailscale0" tcp dport {{ 445, 9478, 443, 9479 }} accept
+    iifname "tailscale0" tcp dport {{ 53, 80, 81, 443, 445, 5380, 9478, 9479 }} accept
+    iifname "tailscale0" udp dport {{ 53, 10000 }} accept
 {house}  }}
 }}
 "#
@@ -136,8 +137,13 @@ mod tests {
         assert!(rules.contains("policy drop"));
         assert!(rules.contains("iif \"lo\" accept"));
         assert!(rules.contains("udp dport 41641 accept"));
-        assert!(rules.contains("iifname \"tailscale0\" tcp dport { 445, 9478, 443, 9479 } accept"));
-        assert!(rules.contains("ip saddr 192.168.0.0/24 tcp dport { 445, 9478 } accept"));
+        assert!(rules.contains("iifname \"tailscale0\" tcp dport { 53, 80, 81, 443, 445, 5380, 9478, 9479 } accept"));
+        assert!(!rules.contains("8443"));
+        assert!(!rules.contains("8444"));
+        assert!(!rules.contains("ip saddr 192.168.0.0/24 tcp dport { 53, 80, 81, 443, 445, 5380, 8443, 8444, 9478 }"));
+        assert!(rules.contains("iifname \"tailscale0\" udp dport { 53, 10000 } accept"));
+        assert!(rules.contains("ip saddr 192.168.0.0/24 tcp dport { 53, 80, 81, 443, 445, 5380, 9478 } accept"));
+        assert!(rules.contains("ip saddr 192.168.0.0/24 udp dport { 53, 10000 } accept"));
         assert!(!rules.contains("ip saddr 192.168.0.0/24 tcp dport { 445, 9478, 9479 }"));
         assert!(!rules.contains("dport 22"));
         assert!(ruleset(&[]).is_err());

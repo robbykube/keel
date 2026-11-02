@@ -762,6 +762,8 @@ a.button:hover { background: var(--accent-dim); }
 }
 .app-row h3 { margin: 0; font-size: var(--text-lg); font-weight: 560; }
 .app-row p { margin: var(--space-1) 0 0; color: var(--muted); }
+.app-row .install-message { color: var(--text); font-size: var(--text-md); font-weight: 500; }
+.app-row .install-bar { margin-top: var(--space-3); }
 .home-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

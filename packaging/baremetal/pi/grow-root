@@ -1,0 +1,15 @@
+#!/bin/bash
+# The card is usually larger than the image. Use the free space for Keel.
+set -euo pipefail
+
+source="$(findmnt -no SOURCE /)"
+disk="$(lsblk -no PKNAME "${source}" 2>/dev/null || true)"
+part="$(printf '%s' "${source}" | grep -o '[0-9]*$' || true)"
+if [[ -z "${disk}" || -z "${part}" || ! -b "/dev/${disk}" ]]; then
+  echo "Keel could not see the card, so it was left as written."
+  exit 0
+fi
+if command -v growpart >/dev/null 2>&1; then
+  growpart "/dev/${disk}" "${part}" || true
+fi
+resize2fs "${source}" || true

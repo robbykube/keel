@@ -26,6 +26,14 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Copy this computer | Save the Keel program, the people, and the settings onto the Nightly copy disk, in a folder of their own, apart from the files. A second copy goes on the Third copy disk when that disk is connected |
 | Only the house and Away | The page and the folders answer on this network and on Away. The Keel screen still works. Other computers are refused |
 | Lock the page | The same page at the Away name, with a lock the browser trusts. The password app asks for that address. The Keel screen stays as it is |
+| Video | A call at video and the name you own. Open it on Apps when you want one. It keeps going until people leave |
+| Passwords | The Bitwarden app, at passwords and the name you own. Create the house account, then close new accounts |
+| Papers | Documents filed at papers and the name you own. Papers you add are stored in Documents. Documents stays the files |
+| Mail | A mailbox on this computer. Link Gmail and other accounts. Mail you move here stays here |
+| Devices | Computers that answered on the house network. Look now writes the list. Nothing is blocked |
+| The name you own | The name you bought, such as klaingar.com. Keel makes each app name, such as photos.klaingar.com, and asks for the lock. You do not type addresses |
+| Names | The book of names for this house. Point the router at this computer |
+| Front door | Answers a name you own and sends it to that app. This page stays on its own address |
 | Send to the phone | When something is red, one message goes to the free ntfy app. The phone must be on Away |
 | Use this | Shared folder or files app a person should pick |
 | Leave this | Disks for other programs, installer files, or the computer itself |

@@ -11,9 +11,8 @@ Come with as much of this lab as possible. **Have** ≠ **run**. Stopped-on-rok 
 | Immich | 106 | Stopped until Active |
 | Nginx Proxy Manager | 108 | Stopped until Active |
 | Papra | 109 | Stopped until Active |
-| Proxmox Mail Gateway | 110 | Stopped until Active |
-| Open Archiver | 111 | Stopped until Active |
+| Thunderbird | 110 | Stopped until Active |
 
 On keel they are **packages + systemd**, not LXCs. rok IDs are the lab map only. CPU save = stopped units, not container tax.
 
-OpenCloud (104), Proxmox Backup Server (107), and Scanopy (101) stay facts about rok. They are not Keel apps. Files, Nightly copy, and Third copy cover those jobs. A map, if one is needed, is Keel’s own page.
+OpenCloud (104), Proxmox Backup Server (107), and Scanopy (101) stay facts about rok. They are not Keel apps. Files, Nightly copy, and Third copy cover those jobs. A map, if one is needed, is Keel’s own page. Proxmox Mail Gateway and Open Archiver stay facts about rok too. Mail on Keel is a mailbox on this computer. It links Gmail and other accounts. Mail you move here stays here.

@@ -1,0 +1,13 @@
+[Unit]
+Description=Use the whole card for Keel
+DefaultDependencies=no
+After=local-fs.target
+Before=keel.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/keel/grow-root
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

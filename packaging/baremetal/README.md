@@ -176,6 +176,20 @@ the whole thing still builds from scratch.
 
 Override compression directly with `KEEL_SQUASHFS_COMP=xz|zstd` if needed.
 
+## Raspberry Pi card
+
+A Pi 4 or Pi 5 uses a card image, not the PC installer. Writing the image to the microSD is the install. From the Keel folder:
+
+```powershell
+.\packaging\baremetal\build-pi-image.ps1
+```
+
+The result is `dist/baremetal/release/keel-arm64-pi.img`. Use Raspberry Pi Imager, choose that file, and choose the card. That erases the card. An 8 GB card can hold Keel. A larger card is used in full on the first boot. The family folders stay on the USB disks.
+
+The first boot creates the sign-in token and also writes it to `keel-token.txt` on the small boot area of the card. The Pi's own screen does not need that token. Another computer does, unless someone at the screen chooses Allow.
+
+Settings updates look for `keel-linux-arm64-vX.Y.Z.tar.gz` in the GitHub release. A release that only has the PC file is not installed on the Pi. The next tagged release publishes both.
+
 ## Development SSH
 
 The image has no SSH unless you ask for it, and it never accepts passwords —

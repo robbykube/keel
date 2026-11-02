@@ -1,0 +1,52 @@
+/dts-v1/;
+/plugin/;
+
+/*
+ * Official Raspberry Pi 7-inch panel on the display ribbon, beside HDMI.
+ * Debian's Pi 4 tree already has HDMI. It does not have this panel, and the
+ * usual Raspberry Pi overlay asks for names that tree does not use.
+ * The ribbon's I2C is the second channel of i2c0 (GPIO 44 and 45).
+ */
+/ {
+	compatible = "brcm,bcm2711", "brcm,bcm2835";
+
+	fragment@0 {
+		target = <&dsi1>;
+		__overlay__ {
+			status = "okay";
+
+			port {
+				dsi_out: endpoint {
+					remote-endpoint = <&panel_in>;
+				};
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&i2c0_1>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			panel@45 {
+				compatible = "raspberrypi,7inch-touchscreen-panel";
+				reg = <0x45>;
+
+				port {
+					panel_in: endpoint {
+						remote-endpoint = <&dsi_out>;
+					};
+				};
+			};
+
+			touch@38 {
+				compatible = "edt,edt-ft5406";
+				reg = <0x38>;
+				touchscreen-size-x = <800>;
+				touchscreen-size-y = <480>;
+			};
+		};
+	};
+};

@@ -1,0 +1,6 @@
+[Unit]
+Description=Show Keel on a screen that was just plugged in
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/keel/start-kiosk.sh plug

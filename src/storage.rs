@@ -67,11 +67,30 @@ pub fn mount_point(role: &str) -> PathBuf {
     Path::new(MOUNT_ROOT).join(role)
 }
 
+/// Where this job's folders are. A disk Keel opened by looking at it keeps
+/// its own place; a job that was prepared still uses `/srv/keel/<job>`.
+pub fn role_root(id: &str) -> PathBuf {
+    let custom = state()
+        .roles
+        .get(id)
+        .map(|record| record.root.clone())
+        .unwrap_or_default();
+    if custom.is_empty() {
+        mount_point(id)
+    } else {
+        PathBuf::from(custom)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct RoleRecord {
     pub model: String,
     pub size: u64,
     pub prepared_ms: u64,
+    /// Where the folders are. Empty means `/srv/keel/<job>`.
+    /// Everyday folders may share one disk, so two jobs can use the same root.
+    #[serde(default)]
+    pub root: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -165,7 +184,7 @@ pub fn mounted(role: &str) -> bool {
     if !cfg!(target_os = "linux") {
         return false;
     }
-    let target = mount_point(role);
+    let target = role_root(role);
     let target = target.to_string_lossy();
     std::fs::read_to_string("/proc/self/mounts")
         .map(|mounts| {
@@ -178,9 +197,22 @@ pub fn mounted(role: &str) -> bool {
 
 /// The role a share's folder lives on, if it lives on one of Keel's disks.
 pub fn share_role(path: &str) -> Option<String> {
-    let rest = path.strip_prefix(MOUNT_ROOT)?.strip_prefix('/')?;
-    let role = rest.split('/').next()?;
-    (!role.is_empty()).then(|| role.to_string())
+    let path = Path::new(path);
+    ROLES.iter().find_map(|role| {
+        let root = role_root(role.id);
+        (path == root || path.starts_with(&root)).then(|| role.id.to_string())
+    })
+}
+
+/// A shared folder is shown only while its disk is actually open.
+pub fn path_ready(path: &str) -> bool {
+    if let Some(role) = share_role(path) {
+        return mounted(&role);
+    }
+    if let Some(root) = open_mount_root(path) {
+        return mount_listed(&root);
+    }
+    true
 }
 
 #[derive(Serialize)]
@@ -190,6 +222,10 @@ pub struct DiskView {
     /// What is on this disk, in words.
     pub holds: String,
     pub role: Option<String>,
+    /// Top folders, when the disk is open.
+    pub folders: Vec<String>,
+    /// Jobs this disk can take without erasing it: `files`, `software`, `everyday`.
+    pub offers: Vec<String>,
     pub can_use: bool,
 }
 
@@ -216,11 +252,33 @@ pub struct StorageView {
 
 pub fn view(mut disks: Vec<Disk>) -> StorageView {
     crate::diskhealth::annotate(&mut disks);
-    let disks: Vec<DiskView> = disks
+    let taken: Vec<String> = prepared_roles();
+    let mut disks: Vec<DiskView> = disks
         .into_iter()
         .filter(|disk| disk.kind == "disk")
         .map(describe)
         .collect();
+    for disk in &mut disks {
+        if !disk.disk.mount.is_empty() {
+            disk.folders = folder_names(&disk.disk.mount);
+        }
+        disk.offers = offers_for(&disk.disk, &disk.folders, &taken);
+        let jobs: Vec<&str> = ROLES
+            .iter()
+            .filter(|role| {
+                taken.iter().any(|id| id == role.id)
+                    && !disk.disk.mount.is_empty()
+                    && Path::new(&disk.disk.mount) == role_root(role.id)
+            })
+            .map(|role| role.title)
+            .collect();
+        if !jobs.is_empty() {
+            disk.holds = jobs.join(". ");
+            disk.can_use = false;
+        } else if disk.role.is_none() && !disk.folders.is_empty() {
+            disk.holds = format!("Folders: {}.", disk.folders.join(", "));
+        }
+    }
     let roles = ROLES
         .iter()
         .map(|role| RoleView {
@@ -229,8 +287,13 @@ pub fn view(mut disks: Vec<Disk>) -> StorageView {
             what: role.what,
             disk: disks
                 .iter()
-                .find(|d| d.role.as_deref() == Some(role.id))
-                .map(|d| disk_words(&d.disk)),
+                .find(|disk| {
+                    disk.role.as_deref() == Some(role.id)
+                        || (taken.iter().any(|id| id == role.id)
+                            && !disk.disk.mount.is_empty()
+                            && Path::new(&disk.disk.mount) == role_root(role.id))
+                })
+                .map(|disk| disk_words(&disk.disk)),
             ready: mounted(role.id),
         })
         .collect();
@@ -273,11 +336,13 @@ fn describe(disk: Disk) -> DiskView {
     } else {
         "Old data. Using it erases that.".to_string()
     };
-    let can_use = !disk.system && disk.mount.is_empty() && role.is_none() && !disk.path.is_empty();
+    let can_use = !disk.system && role.is_none() && !disk.path.is_empty();
     DiskView {
         disk,
         holds,
         role,
+        folders: Vec::new(),
+        offers: Vec::new(),
         can_use,
     }
 }
@@ -329,6 +394,7 @@ pub fn prepare(request: &PrepareRequest, disks: &[Disk]) -> Result<String, Strin
                 model: target.disk.model.clone(),
                 size: target.disk.size,
                 prepared_ms: now_ms(),
+                root: String::new(),
             },
         );
         save(&state);
@@ -372,6 +438,8 @@ pub fn adopt_connected() {
             remember_role(id, disk);
         }
     }
+    open_unlabeled(&disks);
+    recognize_unique();
 }
 
 fn known_role_label(label: &str) -> Option<&str> {
@@ -390,6 +458,7 @@ fn remember_role(id: &str, disk: &Disk) {
             model: disk.model.clone(),
             size: disk.size,
             prepared_ms: now_ms(),
+            root: String::new(),
         },
     );
     save(&state);
@@ -427,6 +496,244 @@ systemctl daemon-reload >/dev/null 2>&1 || true
 mount "$mp" >/dev/null 2>&1 || fail "Keel could not open the files already on that disk."
 exit 0
 "#;
+
+/// Open an ext4 disk that has no Keel name yet. The files stay where they are.
+const OPEN_SCRIPT: &str = r#"set -uo pipefail
+dev="$1"
+fail() { echo "$1" >&2; exit 1; }
+[ -b "$dev" ] || fail "That disk is no longer connected."
+part=""
+while read -r name label fstype; do
+  case "$label" in
+    keel-*) continue ;;
+  esac
+  if [ "$fstype" = "ext4" ]; then
+    part="$name"
+    break
+  fi
+done < <(lsblk -lnpo NAME,LABEL,FSTYPE "$dev")
+[ -n "$part" ] && [ -b "$part" ] || exit 0
+uuid=$(blkid -s UUID -o value "$part")
+case "$uuid" in
+  ""|*[!0-9a-fA-F-]*) fail "Keel could not read that disk." ;;
+esac
+mp="/srv/keel/open/$uuid"
+mountpoint -q "$mp" && { printf '%s\n' "$uuid"; exit 0; }
+mkdir -p "$mp"
+if [ -n "$(ls -A "$mp" 2>/dev/null)" ]; then
+  fail "The folder for that disk is not empty. Keel did not open it."
+fi
+tmp=$(mktemp)
+grep -v "[[:space:]]$mp[[:space:]]" /etc/fstab > "$tmp" || true
+printf 'UUID=%s %s ext4 defaults,nofail,x-systemd.device-timeout=10s 0 2\n' "$uuid" "$mp" >> "$tmp"
+cat "$tmp" > /etc/fstab
+rm -f "$tmp"
+systemctl daemon-reload >/dev/null 2>&1 || true
+mount "$mp" >/dev/null 2>&1 || fail "Keel could not open the files on that disk."
+printf '%s\n' "$uuid"
+exit 0
+"#;
+
+fn open_unlabeled(disks: &[Disk]) {
+    for disk in disks {
+        if disk.system || disk.path.is_empty() || !disk.mount.is_empty() || disk.empty {
+            continue;
+        }
+        if known_role_label(&disk.label).is_some() || disk.fstype != "ext4" {
+            continue;
+        }
+        let _ = host_text(OPEN_SCRIPT, &[&disk.path], None);
+    }
+}
+
+fn recognize_unique() {
+    if !cfg!(target_os = "linux") {
+        return;
+    }
+    let disks = crate::inventory::lsblk_disks();
+    for id in ["files", "software"] {
+        if state().roles.contains_key(id) {
+            continue;
+        }
+        let matches: Vec<&Disk> = disks
+            .iter()
+            .filter(|disk| unlabeled_match(disk, id))
+            .collect();
+        if matches.len() == 1 {
+            let _ = claim(matches[0], &[id]);
+        }
+    }
+}
+
+fn unlabeled_match(disk: &Disk, id: &str) -> bool {
+    if disk.system || disk.mount.is_empty() || known_role_label(&disk.label).is_some() {
+        return false;
+    }
+    matching_roles(&folder_names(&disk.mount))
+        .iter()
+        .any(|role| *role == id)
+}
+
+#[derive(Deserialize)]
+pub struct KeepRequest {
+    pub path: String,
+    pub kind: String,
+}
+
+/// Use the folders already on a disk. Nothing is erased.
+/// `kind` is `files`, `software`, or `everyday` (Files and Software together).
+pub fn keep(path: &str, kind: &str) -> Result<String, String> {
+    if !cfg!(target_os = "linux") {
+        return Err("Disks are opened on the Keel computer, not on this Windows copy.".into());
+    }
+    let roles: Vec<&str> = match kind {
+        "files" => vec!["files"],
+        "software" => vec!["software"],
+        "everyday" => vec!["files", "software"],
+        _ => return Err("Choose what to keep on this disk.".into()),
+    };
+    let disks = crate::inventory::lsblk_disks();
+    let disk = disks
+        .iter()
+        .find(|disk| disk.path == path)
+        .ok_or_else(|| "That disk is no longer connected. Reload the page.".to_string())?;
+    if disk.system {
+        return Err("That disk is Keel itself.".into());
+    }
+    if disk.mount.is_empty() || !safe_data_mount(&disk.mount) {
+        return Err("Keel has not opened that disk yet.".into());
+    }
+    claim(disk, &roles)?;
+    let titles: Vec<&str> = roles
+        .iter()
+        .filter_map(|id| role(id).map(|role| role.title))
+        .collect();
+    Ok(format!(
+        "{} now holds {}.",
+        disk_words(disk),
+        titles.join(" and ")
+    ))
+}
+
+fn claim(disk: &Disk, roles: &[&str]) -> Result<(), String> {
+    for id in roles {
+        let job = role(id).ok_or_else(|| "Choose what to keep on this disk.".to_string())?;
+        if let Some(existing) = state().roles.get(*id) {
+            let root = if existing.root.is_empty() {
+                mount_point(id)
+            } else {
+                PathBuf::from(&existing.root)
+            };
+            if root != Path::new(&disk.mount) {
+                return Err(format!("{} is already on another disk.", job.title));
+            }
+        }
+    }
+    for id in roles {
+        let mut stored = state();
+        let record = stored.roles.entry((*id).to_string()).or_insert(RoleRecord {
+            model: disk.model.clone(),
+            size: disk.size,
+            prepared_ms: now_ms(),
+            root: String::new(),
+        });
+        if record.root.is_empty() {
+            record.root = disk.mount.clone();
+        }
+        record.model = disk.model.clone();
+        record.size = disk.size;
+        save(&stored);
+    }
+    for id in roles {
+        let Some(job) = role(id) else { continue };
+        for folder in job.folders {
+            let dir = Path::new(&disk.mount).join(folder);
+            if !dir.exists() {
+                std::fs::create_dir(&dir)
+                    .map_err(|_| "Keel could not make a folder on that disk.".to_string())?;
+            }
+            give_to_owner(&dir);
+        }
+    }
+    Ok(())
+}
+
+fn safe_data_mount(mount: &str) -> bool {
+    let path = Path::new(mount);
+    path.starts_with(MOUNT_ROOT) && path != Path::new(MOUNT_ROOT) && !mount.contains("..")
+}
+
+/// Folder names that say what a disk already is.
+fn matching_roles(folders: &[String]) -> Vec<&'static str> {
+    let has = |name: &str| folders.iter().any(|folder| folder == name);
+    let mut roles = Vec::new();
+    if has("Documents") && has("Work") && has("Media") {
+        roles.push("files");
+    }
+    if has("Software") && has("Inbox") {
+        roles.push("software");
+    }
+    roles
+}
+
+fn offers_for(disk: &Disk, folders: &[String], taken_roles: &[String]) -> Vec<String> {
+    if disk.system || !safe_data_mount(&disk.mount) {
+        return Vec::new();
+    }
+    let taken = |id: &str| taken_roles.iter().any(|role| role == id);
+    let mut offers = Vec::new();
+    for id in matching_roles(folders) {
+        if !taken(id) && known_role_label(&disk.label).is_none() {
+            offers.push((*id).to_string());
+        }
+    }
+    let copy_name = matches!(known_role_label(&disk.label), Some("copy" | "extra"));
+    if !taken("files") && !offers.iter().any(|id| id == "files") && !disk.empty && !copy_name && known_role_label(&disk.label).is_none()
+    {
+        offers.push("everyday".into());
+    }
+    offers
+}
+
+fn folder_names(mount: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let Ok(entries) = std::fs::read_dir(mount) else {
+        return names;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') || name == "lost+found" {
+            continue;
+        }
+        if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
+            names.push(name);
+        }
+    }
+    names.sort();
+    names
+}
+
+fn open_mount_root(path: &str) -> Option<String> {
+    let rest = path.strip_prefix("/srv/keel/open/")?;
+    let id = rest.split('/').next().unwrap_or("");
+    if id.is_empty() {
+        return None;
+    }
+    Some(format!("/srv/keel/open/{id}"))
+}
+
+fn mount_listed(mount: &str) -> bool {
+    if !cfg!(target_os = "linux") {
+        return false;
+    }
+    std::fs::read_to_string("/proc/self/mounts")
+        .map(|mounts| {
+            mounts
+                .lines()
+                .any(|line| line.split_whitespace().nth(1) == Some(mount))
+        })
+        .unwrap_or(false)
+}
 
 /// A section beside Documents, Work, and Media. It lives on the Files disk,
 /// so the nightly copy includes it, and a computer opens it by this name.
@@ -467,7 +774,7 @@ pub fn ensure_shares(store: &mut Store) {
         for folder in job.folders {
             store.ensure_default_share(Share {
                 name: (*folder).to_string(),
-                path: mount_point(job.id).join(folder).to_string_lossy().into(),
+                path: role_root(job.id).join(folder).to_string_lossy().into(),
                 protocol: "smb".into(),
                 pool: job.title.into(),
                 read_only: false,
@@ -476,12 +783,60 @@ pub fn ensure_shares(store: &mut Store) {
         if job.id == "copy" {
             store.ensure_default_share(Share {
                 name: COPIES_SHARE.into(),
-                path: mount_point(job.id).to_string_lossy().into(),
+                path: role_root(job.id).to_string_lossy().into(),
                 protocol: "smb".into(),
                 pool: job.title.into(),
                 read_only: true,
             });
         }
+    }
+    remember_open_disks(store);
+}
+
+fn remember_open_disks(store: &mut Store) {
+    if !cfg!(target_os = "linux") {
+        return;
+    }
+    let roots: Vec<PathBuf> = ROLES.iter().map(|role| role_root(role.id)).collect();
+    for disk in crate::inventory::lsblk_disks() {
+        if disk.system || disk.mount.is_empty() || !disk.mount.starts_with("/srv/keel/open/") {
+            continue;
+        }
+        let mount = Path::new(&disk.mount);
+        if roots.iter().any(|root| root == mount) {
+            continue;
+        }
+        let name = browse_name(&disk.model, &disk.name);
+        if store.shares.iter().any(|share| share.name == name) {
+            continue;
+        }
+        store.ensure_default_share(Share {
+            name,
+            path: disk.mount,
+            protocol: "smb".into(),
+            pool: "On this disk".into(),
+            read_only: false,
+        });
+    }
+}
+
+fn browse_name(model: &str, dev: &str) -> String {
+    let candidate = if model.is_empty() {
+        format!("Disk {dev}")
+    } else {
+        model.trim().to_string()
+    };
+    let plain = candidate.len() <= 80
+        && !candidate.is_empty()
+        && !candidate.ends_with('.')
+        && !candidate.contains("  ")
+        && candidate
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ' ');
+    if plain {
+        candidate
+    } else {
+        format!("Disk {dev}")
     }
 }
 
@@ -693,6 +1048,11 @@ const PREPARE_SCRIPT: &str = r#"set -uo pipefail
 dev="$1"; role="$2"; mp="/srv/keel/$role"
 fail() { echo "$1" >&2; exit 1; }
 [ -b "$dev" ] || fail "That disk is no longer connected."
+while read -r _ mp; do
+  case "$mp" in
+    /srv/keel/open/*) umount "$mp" || fail "Keel could not close that disk before erasing it." ;;
+  esac
+done < <(lsblk -lnpo NAME,MOUNTPOINT "$dev")
 if lsblk -nro MOUNTPOINT "$dev" | grep -q .; then fail "That disk is in use. Keel did not change it."; fi
 for p in $(lsblk -lnpo NAME,TYPE "$dev" | awk '$2=="part"{print $1}'); do wipefs -aq "$p" >/dev/null 2>&1 || true; done
 wipefs -aq "$dev" >/dev/null 2>&1 || fail "Keel could not clear that disk."
@@ -833,5 +1193,34 @@ mod tests {
         assert!(!ADOPT_SCRIPT.contains("wipefs"));
         assert!(!ADOPT_SCRIPT.contains("mkfs"));
         assert!(!ADOPT_SCRIPT.contains("parted"));
+        assert!(OPEN_SCRIPT.contains("mount \"$mp\""));
+        assert!(!OPEN_SCRIPT.contains("wipefs"));
+        assert!(!OPEN_SCRIPT.contains("mkfs"));
+        assert!(!OPEN_SCRIPT.contains("parted"));
+    }
+
+    #[test]
+    fn folders_say_which_jobs_can_share_one_disk() {
+        let names = |list: &[&str]| list.iter().map(|name| (*name).to_string()).collect::<Vec<_>>();
+        assert_eq!(matching_roles(&names(&["Documents", "Work", "Media"])), vec!["files"]);
+        assert_eq!(
+            matching_roles(&names(&["Documents", "Media", "Software", "Inbox", "Work"])),
+            vec!["files", "software"]
+        );
+        assert!(matching_roles(&names(&["Photos"])).is_empty());
+        let disk = Disk {
+            name: "sdd".into(),
+            path: "/dev/sdd".into(),
+            kind: "disk".into(),
+            mount: "/srv/keel/open/abc".into(),
+            fstype: "ext4".into(),
+            ..Disk::default()
+        };
+        let offers = offers_for(&disk, &names(&["Notes"]), &[]);
+        assert_eq!(offers, vec!["everyday".to_string()]);
+        let offers = offers_for(&disk, &names(&["Documents", "Work", "Media"]), &[]);
+        assert_eq!(offers, vec!["files".to_string()]);
+        let offers = offers_for(&disk, &names(&["Documents", "Work", "Media"]), &["files".into()]);
+        assert!(offers.is_empty());
     }
 }

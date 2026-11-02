@@ -9,8 +9,7 @@ pub fn guests(idle: bool) -> Vec<Guest> {
         (106, "immich", "photos", false, true),
         (108, "npm", "proxy", false, false),
         (109, "papra", "documents", false, true),
-        (110, "mail-gateway", "mail", false, true),
-        (111, "open-archiver", "archive", false, true),
+        (110, "thunderbird", "mail", false, true),
     ];
 
     units

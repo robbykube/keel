@@ -69,7 +69,7 @@ pub fn manifests(idle: bool) -> Vec<AppManifest> {
             &["/var/lib/technitium"],
             "http",
             "keep_warm",
-            "Local names should remain available when the box is active.",
+            "Names for this house. Point the router at this computer.",
         ),
         (
             "vaultwarden",
@@ -77,12 +77,12 @@ pub fn manifests(idle: bool) -> Vec<AppManifest> {
             "container",
             false,
             true,
-            &[80, 3012],
+            &[],
             &[],
             &["/var/lib/vaultwarden"],
             "http",
             "keep_warm",
-            "Keep the passwords for this house.",
+            "Passwords for this house, at the name you own.",
         ),
         (
             "jitsi",
@@ -90,12 +90,12 @@ pub fn manifests(idle: bool) -> Vec<AppManifest> {
             "container",
             false,
             true,
-            &[443, 10000],
+            &[10000],
             &[],
             &["/var/lib/jitsi"],
             "http",
             "on_demand",
-            "Start a meeting when you need one.",
+            "A call at video and the name you own. It keeps going until people leave.",
         ),
         (
             "immich",
@@ -108,7 +108,7 @@ pub fn manifests(idle: bool) -> Vec<AppManifest> {
             &["/var/lib/immich"],
             "http",
             "on_demand",
-            "Show the pictures that are already in Media.",
+            "Show the pictures already in Media, at the name you own.",
         ),
         (
             "npm",
@@ -121,7 +121,7 @@ pub fn manifests(idle: bool) -> Vec<AppManifest> {
             &["/var/lib/npm"],
             "http",
             "keep_warm",
-            "The local front door for apps that are meant to be reachable.",
+            "The front door for a name you own. This page stays on its own address.",
         ),
         (
             "papra",
@@ -134,33 +134,20 @@ pub fn manifests(idle: bool) -> Vec<AppManifest> {
             &["/var/lib/papra"],
             "http",
             "on_demand",
-            "File papers here. The Documents folder stays the files themselves.",
+            "File papers in Documents, at the name you own.",
         ),
         (
-            "mail-gateway",
+            "thunderbird",
             "Mail",
             "container",
             false,
             true,
-            &[25, 587],
             &[],
-            &["/var/lib/mail-gateway"],
-            "tcp",
-            "scheduled",
-            "Send and receive mail.",
-        ),
-        (
-            "open-archiver",
-            "Archive",
-            "container",
-            false,
-            true,
-            &[8080],
             &[],
-            &["/var/lib/open-archiver"],
+            &["/var/lib/thunderbird"],
             "http",
             "on_demand",
-            "Keep an old copy of mail and files.",
+            "A mailbox on this computer. Link Gmail and other accounts. Mail you move here stays here.",
         ),
     ];
 
@@ -224,8 +211,7 @@ const CHOOSABLE: &[&str] = &[
     "jitsi",
     "immich",
     "papra",
-    "mail-gateway",
-    "open-archiver",
+    "thunderbird",
 ];
 
 fn lock_choices() -> std::sync::MutexGuard<'static, ()> {
@@ -247,7 +233,12 @@ fn read_chosen() -> BTreeSet<String> {
         return BTreeSet::new();
     };
     serde_json::from_slice::<ChosenFile>(&bytes)
-        .map(|file| file.ids.into_iter().collect())
+        .map(|file| {
+            file.ids
+                .into_iter()
+                .filter(|id| CHOOSABLE.contains(&id.as_str()))
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -341,7 +332,8 @@ mod tests {
     #[test]
     fn every_manifest_has_a_runtime_and_policy() {
         let apps = manifests(true);
-        assert_eq!(apps.len(), 9);
+        assert_eq!(apps.len(), 8);
+        assert!(apps.iter().all(|app| app.id != "open-archiver" && app.id != "mail-gateway"));
         assert!(apps
             .iter()
             .all(|app| app.id != "opencloud" && app.id != "pbs" && app.id != "scanopy"));
