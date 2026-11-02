@@ -68,7 +68,7 @@ pub fn look() -> Result<Report, String> {
 fn capture() -> Result<String, String> {
     #[cfg(not(windows))]
     {
-        crate::storage::host_text("exec /bin/bash -s", LOOK_SH)
+        crate::storage::host_text("exec /bin/bash -s", &[], Some(LOOK_SH))
     }
     #[cfg(windows)]
     {
