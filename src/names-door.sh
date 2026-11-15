@@ -29,7 +29,7 @@ fi
 mark 75 "Starting the front door."
 podman rm -f keel-door >"$log" 2>&1 || true
 if ! podman run -d --name keel-door --hostname keel-door \
-  -p "$house:80:80" -p "$house:443:443" -p "$house:81:81" \
+  -p "$house:80:80" -p "$house:443:443" -p "$house:81:81" -p "127.0.0.1:81:81" \
   -e DISABLE_IPV6=true \
   -e TZ=UTC \
   -v "$cfg/data:/data" \
@@ -44,7 +44,7 @@ mark 90 "Waiting for the front door."
 up=0
 i=0
 while [ "$i" -lt 40 ]; do
-  code=$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://$house:81/" || true)
+  code=$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://127.0.0.1:81/" || true)
   case "$code" in
     2*|3*) up=1; break ;;
   esac

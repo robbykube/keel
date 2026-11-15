@@ -34,10 +34,12 @@ if [ ! -f "$cfg/installed" ]; then
   rm -rf "$cfg/config"
   install -d -m 0755 "$cfg/config"
 fi
-if ! podman run -d --name keel-names --hostname keel-names \
-  -p "$house:53:53/tcp" -p "$house:53:53/udp" -p "$house:5380:5380" \
+# Share this computer's network. A published port never reached the page:
+# Names was listening where that port does not go. The address below is a
+# real address on this computer, which is the only way that setting applies.
+if ! podman run -d --name keel-names --hostname keel-names --network host \
   -e DNS_SERVER_DOMAIN=keel \
-  -e DNS_SERVER_WEB_SERVICE_LOCAL_ADDRESSES=0.0.0.0 \
+  -e DNS_SERVER_WEB_SERVICE_LOCAL_ADDRESSES="$house,127.0.0.1" \
   -e TZ=UTC \
   -v "$cfg/config:/etc/dns" \
   "$image" >"$log" 2>&1; then
@@ -50,7 +52,7 @@ mark 90 "Waiting for the names page."
 up=0
 i=0
 while [ "$i" -lt 40 ]; do
-  code=$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://$house:5380/" || true)
+  code=$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://127.0.0.1:5380/" || true)
   case "$code" in
     2*|3*) up=1; break ;;
   esac
@@ -62,7 +64,8 @@ if [ "$up" != "1" ]; then
     last=$(podman logs --tail 20 keel-names 2>&1 | sed '/^$/d' | tail -n 1 | cut -c 1-160)
     fail "${last:-Names stopped before the page was ready. Try Open again.}"
   fi
-  fail "Names started, but the page did not answer. Try Open again."
+  last=$(podman logs --tail 40 keel-names 2>&1 | sed '/^$/d' | tail -n 1 | cut -c 1-140)
+  fail "Names started, but the page did not answer. ${last:-Try Open again.}"
 fi
 cat > /etc/systemd/system/keel-names.service <<'EOF'
 [Unit]

@@ -299,10 +299,10 @@ mod tests {
     fn names_use_the_pinned_program_on_the_house_address() {
         let script = names_script();
         assert!(script.contains("docker.io/technitium/dns-server:15.6.2"));
-        assert!(script.contains("\"$house:53:53/udp\""));
-        assert!(script.contains("\"$house:5380:5380\""));
-        assert!(script.contains("DNS_SERVER_WEB_SERVICE_LOCAL_ADDRESSES=0.0.0.0"));
-        assert!(!script.contains("-p 0.0.0.0"));
+        assert!(script.contains("--network host"));
+        assert!(script.contains("DNS_SERVER_WEB_SERVICE_LOCAL_ADDRESSES=\"$house,127.0.0.1\""));
+        assert!(script.contains("http://127.0.0.1:5380/"));
+        assert!(!script.contains("-p "));
         assert!(!script.contains("9478"));
     }
 
@@ -313,6 +313,8 @@ mod tests {
         assert!(script.contains("\"$house:80:80\""));
         assert!(script.contains("\"$house:443:443\""));
         assert!(script.contains("\"$house:81:81\""));
+        assert!(script.contains("127.0.0.1:81:81"));
+        assert!(script.contains("http://127.0.0.1:81/"));
         assert!(!script.contains("0.0.0.0"));
         assert!(!script.contains("9478"));
         assert!(!script.contains("proxy_pass"));
@@ -330,7 +332,8 @@ mod tests {
         assert!(script.contains("host='photos.klaingar.com'"));
         assert!(script.contains("forward='keel-photos-server'"));
         assert!(script.contains("port='2283'"));
-        assert!(script.contains("/api/zones/records/add"));
+        assert!(script.contains("http://127.0.0.1:5380/api/zones/records/add"));
+        assert!(script.contains("http://127.0.0.1:81/api/nginx/proxy-hosts"));
         assert!(script.contains("/api/nginx/proxy-hosts"));
         assert!(script.contains("allow_websocket_upgrade"));
         assert!(!script.contains("9478"));
