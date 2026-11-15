@@ -1111,6 +1111,8 @@ async fn jitsi_install() -> Result<(StatusCode, Json<serde_json::Value>), (Statu
                 "ready": status.ready,
                 "address": status.address,
                 "message": status.message,
+                "state": status.state,
+                "percent": status.percent,
             })),
         )),
         Err(message) => Err((
@@ -1184,6 +1186,8 @@ async fn mail_install() -> Result<(StatusCode, Json<serde_json::Value>), (Status
                 "ready": status.ready,
                 "address": status.address,
                 "message": status.message,
+                "state": status.state,
+                "percent": status.percent,
             })),
         )),
         Err(message) => Err((
@@ -1206,6 +1210,8 @@ async fn papers_install() -> Result<(StatusCode, Json<serde_json::Value>), (Stat
                 "ready": status.ready,
                 "address": status.address,
                 "message": status.message,
+                "state": status.state,
+                "percent": status.percent,
             })),
         )),
         Err(message) => Err((
@@ -1228,6 +1234,8 @@ async fn photos_install() -> Result<(StatusCode, Json<serde_json::Value>), (Stat
                 "ready": status.ready,
                 "address": status.address,
                 "message": status.message,
+                "state": status.state,
+                "percent": status.percent,
             })),
         )),
         Err(message) => Err((
@@ -1248,6 +1256,8 @@ fn password_program(
                 "ready": status.ready,
                 "address": status.address,
                 "message": status.message,
+                "state": status.state,
+                "percent": status.percent,
                 "signups_open": status.signups_open,
             })),
         )),
@@ -1269,6 +1279,8 @@ fn open_program(
                 "ready": status.ready,
                 "address": status.address,
                 "message": status.message,
+                "state": status.state,
+                "percent": status.percent,
             })),
         )),
         Err(message) => Err((

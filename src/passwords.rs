@@ -85,7 +85,7 @@ pub fn start(close: bool) -> Result<Status, String> {
     let opening_line = if close {
         "Closing new accounts."
     } else {
-        "Opening Names."
+        "Opening Passwords. This can take a while."
     };
     write_progress("running", 2, opening_line, "", false, false);
     let host = address.trim_start_matches("https://").to_string();

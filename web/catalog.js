@@ -79,12 +79,30 @@ async function programStatus(spec) {
   return res.json();
 }
 
+async function readAnswer(res) {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    const data = JSON.parse(text);
+    return data && typeof data === "object" ? data : { message: text.trim() };
+  } catch {
+    return { message: text.trim() };
+  }
+}
+
 function watchProgram(spec) {
   if (programTimers[spec.id]) window.clearTimeout(programTimers[spec.id]);
+  let quiet = 0;
   const tick = async () => {
     programTimers[spec.id] = 0;
     const status = await programStatus(spec);
-    if (!status) return;
+    if (!status || status.state === "idle") {
+      quiet += 1;
+      if (quiet < 8) programTimers[spec.id] = window.setTimeout(tick, 800);
+      else if (status) paintProgram(spec, status);
+      return;
+    }
+    quiet = 0;
     paintProgram(spec, status);
     if (status.state === "running") programTimers[spec.id] = window.setTimeout(tick, 800);
   };
@@ -93,11 +111,12 @@ function watchProgram(spec) {
 
 async function openProgram(spec) {
   if (programTimers[spec.id]) window.clearTimeout(programTimers[spec.id]);
-  paintProgram(spec, { state: "running", percent: 2, message: `Opening ${spec.title}.`, ready: false, address: "" });
+  const opening = { state: "running", percent: 8, message: `Opening ${spec.title}. This can take a while.`, ready: false, address: "" };
+  paintProgram(spec, opening);
   try {
     const res = await fetch(`${spec.path}/install`, { method: "POST", credentials: "same-origin" });
-    const data = await res.json().catch(() => ({ message: `Keel could not open ${spec.title}.` }));
-    if (!res.ok || !data.ok) {
+    const data = await readAnswer(res);
+    if (!res.ok || data.ok === false) {
       paintProgram(spec, { state: "error", percent: 0, message: data.message || `Keel could not open ${spec.title}.`, ready: false, address: "" });
       return;
     }
@@ -105,6 +124,13 @@ async function openProgram(spec) {
       paintProgram(spec, { state: "done", percent: 100, message: data.message, ready: true, address: data.address, signups_open: data.signups_open });
       return;
     }
+    paintProgram(spec, {
+      state: data.state || "running",
+      percent: Number(data.percent) || opening.percent,
+      message: data.message || opening.message,
+      ready: false,
+      address: data.address || "",
+    });
     watchProgram(spec);
   } catch (err) {
     paintProgram(spec, { state: "error", percent: 0, message: String(err), ready: false, address: "" });
@@ -116,7 +142,7 @@ async function closeProgram(spec) {
   paintProgram(spec, { state: "running", percent: 2, message: "Closing new accounts.", ready: false, address: "" });
   try {
     const res = await fetch(`${spec.path}/close`, { method: "POST", credentials: "same-origin" });
-    const data = await res.json().catch(() => ({ message: "Keel could not close new accounts." }));
+    const data = await readAnswer(res);
     if (!res.ok || !data.ok) {
       paintProgram(spec, { state: "error", percent: 0, message: data.message || "Keel could not close new accounts.", ready: false, address: "" });
       return;

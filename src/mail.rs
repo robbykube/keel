@@ -75,7 +75,7 @@ pub fn start() -> Result<Status, String> {
     {
         return Ok(view());
     }
-    write_progress("running", 2, "Opening Names.", "", false);
+    write_progress("running", 8, "Opening Mail. This can take a while.", "", false);
     let script = setup_script(&address.trim_start_matches("https://"));
     std::thread::spawn(move || {
         if let Err(message) = crate::names::ensure() {

@@ -75,7 +75,7 @@ pub fn start() -> Result<Status, String> {
     {
         return Ok(view());
     }
-    write_progress("running", 2, "Opening Names.", "", false);
+    write_progress("running", 8, "Opening Photos. This can take a while.", "", false);
     let script = setup_script(&owned);
     std::thread::spawn(move || {
         if let Err(message) = crate::names::ensure() {

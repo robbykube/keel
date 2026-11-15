@@ -301,7 +301,8 @@ mod tests {
         assert!(script.contains("docker.io/technitium/dns-server:15.6.2"));
         assert!(script.contains("\"$house:53:53/udp\""));
         assert!(script.contains("\"$house:5380:5380\""));
-        assert!(!script.contains("0.0.0.0"));
+        assert!(script.contains("DNS_SERVER_WEB_SERVICE_LOCAL_ADDRESSES=0.0.0.0"));
+        assert!(!script.contains("-p 0.0.0.0"));
         assert!(!script.contains("9478"));
     }
 

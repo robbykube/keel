@@ -76,7 +76,7 @@ pub fn start() -> Result<Status, String> {
     {
         return Ok(view());
     }
-    write_progress("running", 2, "Opening Names.", "", false);
+    write_progress("running", 8, "Opening Video. This can take a while.", "", false);
     let host = address.trim_start_matches("https://").to_string();
     let script = setup_script(&host);
     std::thread::spawn(move || {

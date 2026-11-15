@@ -28,9 +28,16 @@ else
 fi
 mark 75 "Starting Names."
 podman rm -f keel-names >"$log" 2>&1 || true
+# The saved setup is only kept after the page answers. Until then, start fresh
+# so the listen address below is applied. A kept setup ignores it.
+if [ ! -f "$cfg/installed" ]; then
+  rm -rf "$cfg/config"
+  install -d -m 0755 "$cfg/config"
+fi
 if ! podman run -d --name keel-names --hostname keel-names \
   -p "$house:53:53/tcp" -p "$house:53:53/udp" -p "$house:5380:5380" \
   -e DNS_SERVER_DOMAIN=keel \
+  -e DNS_SERVER_WEB_SERVICE_LOCAL_ADDRESSES=0.0.0.0 \
   -e TZ=UTC \
   -v "$cfg/config:/etc/dns" \
   "$image" >"$log" 2>&1; then
@@ -50,7 +57,13 @@ while [ "$i" -lt 40 ]; do
   i=$((i + 1))
   sleep 2
 done
-[ "$up" = "1" ] || fail "Names started, but the page did not answer. Try Open again."
+if [ "$up" != "1" ]; then
+  if ! podman inspect -f '{{.State.Running}}' keel-names 2>/dev/null | grep -qx true; then
+    last=$(podman logs --tail 20 keel-names 2>&1 | sed '/^$/d' | tail -n 1 | cut -c 1-160)
+    fail "${last:-Names stopped before the page was ready. Try Open again.}"
+  fi
+  fail "Names started, but the page did not answer. Try Open again."
+fi
 cat > /etc/systemd/system/keel-names.service <<'EOF'
 [Unit]
 Description=Keel names
