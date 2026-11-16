@@ -33,6 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
+- **v0.1.36 (2026-11-16):** Signed release. The front door’s own program was up, and the page still did not answer. Opening it now lets this computer pass visitors through to that page. The Pi installs `keel-linux-arm64-v0.1.36.tar.gz`.
 - **v0.1.35 (2026-11-16):** Signed release. Apps stay closed until the name is saved and Names and the front door are open. Opening an app no longer starts those two. The Names sentence no longer says to change the router DNS. The Pi installs `keel-linux-arm64-v0.1.35.tar.gz`.
 - **v0.1.34 (2026-11-16):** Signed release. After the Names page answers on this computer, Keel tells Names the house address and the lookup address, then starts it again. v0.1.33 stopped because the page stayed on this computer and lookups on 192.168.0.127 did not answer. The Pi installs `keel-linux-arm64-v0.1.34.tar.gz`.
 - **v0.1.33 (2026-11-16):** Signed release. Names counts as ready only when the house address answers. On the Pi, the page answered on this computer, then the house address closed and lookups did not answer.

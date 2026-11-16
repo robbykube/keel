@@ -29,6 +29,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+ExecStartPre=-/bin/sh -c 'sysctl -w net.ipv4.ip_forward=1; sysctl -w net.ipv4.conf.all.route_localnet=1; iptables -P FORWARD ACCEPT; iptables -C FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT || iptables -I FORWARD 1 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT; iptables -C FORWARD -p tcp -m multiport --dports 80,81,443 -j ACCEPT || iptables -I FORWARD 1 -p tcp -m multiport --dports 80,81,443 -j ACCEPT'
 ExecStart=/usr/bin/podman start keel-door
 ExecStop=/usr/bin/podman stop -t 10 keel-door
 [Install]
@@ -72,6 +73,14 @@ else
   mark 45 "Opening the front door."
 fi
 mark 75 "Starting the front door."
+# The page is inside the program. These let this computer pass a visitor through to it.
+install -d -m 0755 /etc/sysctl.d
+printf '%s\n' 'net.ipv4.ip_forward=1' 'net.ipv4.conf.all.route_localnet=1' > /etc/sysctl.d/keel-forward.conf
+sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+sysctl -w net.ipv4.conf.all.route_localnet=1 >/dev/null 2>&1 || true
+iptables -P FORWARD ACCEPT >/dev/null 2>&1 || true
+iptables -C FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT >/dev/null 2>&1 || iptables -I FORWARD 1 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT >/dev/null 2>&1 || true
+iptables -C FORWARD -p tcp -m multiport --dports 80,81,443 -j ACCEPT >/dev/null 2>&1 || iptables -I FORWARD 1 -p tcp -m multiport --dports 80,81,443 -j ACCEPT >/dev/null 2>&1 || true
 if podman container exists keel-door >/dev/null 2>&1; then
   podman start keel-door >"$log" 2>&1 || true
   i=0
@@ -114,5 +123,5 @@ if ! podman inspect -f '{{.State.Running}}' keel-door 2>/dev/null | grep -qx tru
   last=$(podman logs --tail 20 keel-door 2>&1 | sed '/^$/d' | tail -n 1 | cut -c 1-160)
   fail "${last:-The front door stopped before the page was ready. Try Open again.}"
 fi
-last=$(podman logs --tail 40 keel-door 2>&1 | sed '/^$/d' | tail -n 1 | cut -c 1-140)
+last=$(podman logs --tail 80 keel-door 2>&1 | sed '/^$/d' | grep -Ei 'emerg|address family|bind\(\)|failed' | tail -n 1 | cut -c 1-140)
 fail "The front door started, but the page did not answer. ${last:-Try Open again.}"

@@ -321,6 +321,10 @@ mod tests {
         assert!(script.contains("http://127.0.0.1:81/"));
         assert!(script.contains("http://$house:81/"));
         assert!(script.contains("--ipv6=false"));
+        assert!(script.contains("net.ipv4.ip_forward=1"));
+        assert!(script.contains("net.ipv4.conf.all.route_localnet=1"));
+        assert!(script.contains("iptables -P FORWARD ACCEPT"));
+        assert!(script.contains("--dports 80,81,443"));
         assert!(script.contains("rm -rf \"$cfg/data\""));
         assert!(script.contains("podman logs"));
         assert!(!script.contains("0.0.0.0"));
