@@ -33,6 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
+- **v0.1.39 (2026-11-16):** Signed release. Logs ends with the path to the front door page, what is listening, and the firewall rules. The kept front door note checks the house address as a page. The Pi installs `keel-linux-arm64-v0.1.39.tar.gz`.
 - **v0.1.38 (2026-11-16):** Signed release. Sign in, then open Logs, from another computer, to read what Names and the front door wrote. The front door page is published on this computer, not only on the house address. The Pi installs `keel-linux-arm64-v0.1.38.tar.gz`.
 - **v0.1.37 (2026-11-16):** Signed release. Names and the front door open on their own when Keel starts. The name you own can be saved or changed at any time. An app stays closed until those two are ready and a name is saved. The Pi installs `keel-linux-arm64-v0.1.37.tar.gz`.
 - **v0.1.36 (2026-11-16):** Signed release. The front door’s own program was up, and the page still did not answer. Opening it now lets this computer pass visitors through to that page. The Pi installs `keel-linux-arm64-v0.1.36.tar.gz`.

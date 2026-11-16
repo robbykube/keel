@@ -8,7 +8,7 @@ keep_log() {
     printf '%s\n' "---- $(date -Is) ----"
     printf 'localhost %s house %s\n' \
       "$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://127.0.0.1:81/" || true)" \
-      "$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://${house:-}/81/" || true)"
+      "$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://${house:-}:81/" || true)"
     podman logs --tail 120 keel-door 2>&1 || true
   } >> /var/lib/keel/door.log 2>/dev/null || true
 }
