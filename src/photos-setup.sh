@@ -4,6 +4,34 @@ cfg=/var/lib/immich
 photos=/srv/keel/files/Media/Photos
 log="$cfg/setup.log"
 fail() { echo "$1" >&2; exit 1; }
+# Temporary space filled up, and a new program could not start.
+make_room() {
+  avail=$(df -Pk /run 2>/dev/null | awk 'NR==2 { print $4 }')
+  case "$avail" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+  if [ "$avail" -ge 32768 ]; then
+    return 0
+  fi
+  journalctl --vacuum-size=8M >/dev/null 2>&1 || true
+  rm -rf /run/log/journal /run/log/journal.* >/dev/null 2>&1 || true
+  avail=$(df -Pk /run 2>/dev/null | awk 'NR==2 { print $4 }')
+  case "$avail" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+  if [ "$avail" -lt 16384 ]; then
+    fail "The Keel computer ran out of room to start Photos. Restart it, then press Open again."
+  fi
+}
+start_fail() {
+  last=$(sed '/^$/d' "$log" 2>/dev/null | tail -n 1 | cut -c 1-140)
+  case "$last" in
+    *[Nn]o\ space*|*[Nn]ot\ enough\ space*)
+      fail "The Keel computer ran out of room to start Photos. Restart it, then press Open again."
+      ;;
+  esac
+  fail "${last:-Keel could not start Photos. Try Open again.}"
+}
 mark() {
   install -d -m 0755 /run/keel
   printf '{"state":"running","percent":%s,"message":"%s","address":"","ready":false}\n' "$1" "$2" > /run/keel/photos.json.tmp
@@ -127,11 +155,12 @@ if [ "$missing" = 1 ]; then
 else
   mark 40 "Opening Photos."
 fi
+make_room
 mark 70 "Starting Photos."
-podman network exists keel-photos >/dev/null 2>&1 || podman network create keel-photos >"$log" 2>&1 || fail "Keel could not start Photos. Try Open again."
+podman network exists keel-photos >/dev/null 2>&1 || podman network create keel-photos >"$log" 2>&1 || start_fail
 podman rm -f keel-photos-server keel-photos-ml keel-photos-db keel-photos-redis >"$log" 2>&1 || true
 podman run -d --name keel-photos-redis --network keel-photos --network-alias redis \
-  "$cache" >"$log" 2>&1 || fail "Keel could not start Photos. Try Open again."
+  "$cache" >"$log" 2>&1 || start_fail
 podman run -d --name keel-photos-db --network keel-photos --network-alias database \
   --shm-size=128m \
   -e POSTGRES_PASSWORD="$dbpass" \
@@ -139,11 +168,11 @@ podman run -d --name keel-photos-db --network keel-photos --network-alias databa
   -e POSTGRES_DB=immich \
   -e POSTGRES_INITDB_ARGS='--data-checksums' \
   -v "$cfg/postgres:/var/lib/postgresql/data" \
-  "$db" >"$log" 2>&1 || fail "Keel could not start Photos. Try Open again."
+  "$db" >"$log" 2>&1 || start_fail
 podman run -d --name keel-photos-ml --network keel-photos --network-alias immich-machine-learning \
   -e TZ=UTC \
   -v "$cfg/cache:/cache" \
-  "$learn" >"$log" 2>&1 || fail "Keel could not start Photos. Try Open again."
+  "$learn" >"$log" 2>&1 || start_fail
 podman run -d --name keel-photos-server --network keel-photos --network-alias immich-server \
   -p 127.0.0.1:2283:2283 \
   -e DB_PASSWORD="$dbpass" \
@@ -155,7 +184,7 @@ podman run -d --name keel-photos-server --network keel-photos --network-alias im
   -e TZ=UTC \
   -v "$cfg/library:/data" \
   -v "$photos:/photos:ro" \
-  "$server" >"$log" 2>&1 || fail "Keel could not start Photos. Try Open again."
+  "$server" >"$log" 2>&1 || start_fail
 mark 82 "Waiting for the pictures page."
 up=0
 i=0

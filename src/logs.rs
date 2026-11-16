@@ -23,6 +23,7 @@ mod tests {
         assert!(script.contains("/var/lib/keel/door.log"));
         assert!(script.contains("podman logs --tail 80 keel-names"));
         assert!(script.contains("Front door, path"));
+        assert!(script.contains("/var/lib/immich/setup.log"));
         assert!(script.contains("Listening"));
         assert!(script.contains("Rules"));
         assert!(!script.contains("9478"));

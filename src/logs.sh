@@ -15,6 +15,11 @@ if [ -f /var/lib/npm/setup.log ]; then
 fi
 show "Names"
 podman logs --tail 80 keel-names 2>&1 | tail -n 80 || true
+show "Photos"
+if [ -f /var/lib/immich/setup.log ]; then
+  tail -n 20 /var/lib/immich/setup.log || true
+fi
+df -Pk /run / 2>/dev/null | awk 'NR==1 || $6=="/run" || $6=="/" { print }'
 # Where a visitor stops on the way to the front door page. This goes last,
 # because the page keeps the end of what is written here.
 show "Front door, path"
