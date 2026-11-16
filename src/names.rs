@@ -337,7 +337,8 @@ mod tests {
         assert!(script.contains("DNS_SERVER_WEB_SERVICE_LOCAL_ADDRESSES=0.0.0.0"));
         assert!(script.contains("webServiceLocalAddresses"));
         assert!(script.contains("dnsServerLocalEndPoints"));
-        assert!(script.contains("podman restart keel-names"));
+        assert!(script.contains("systemctl restart keel-names"));
+        assert!(script.contains("systemctl start keel-names"));
         assert!(script.contains("http://127.0.0.1:5380/"));
         assert!(script.contains("http://$house:5380/"));
         assert!(script.contains("port_ok \"$house\" 53"));
@@ -352,6 +353,9 @@ mod tests {
         assert!(script.contains("docker.io/jc21/nginx-proxy-manager:2.16.0"));
         assert!(script.contains("/var/lib/keel/door-forward.py"));
         assert!(script.contains("keel-door-page"));
+        assert!(script.contains("setns"));
+        assert!(script.contains("nsenter"));
+        assert!(script.contains("systemctl start keel-door"));
         assert!(script.contains("MASQUERADE"));
         assert!(script.contains("/var/lib/keel/door-publish.sh"));
         assert!(script.contains("--dns 1.1.1.1"));

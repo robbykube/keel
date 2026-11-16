@@ -35,7 +35,7 @@ open_house() {
     --data-urlencode "webServiceLocalAddresses=${house},127.0.0.1" \
     --data-urlencode "dnsServerLocalEndPoints=${house}:53,127.0.0.1:53" || true)
   printf '%s' "$setreply" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' || return 1
-  podman restart keel-names >"$log" 2>&1 || return 1
+  systemctl restart keel-names >"$log" 2>&1 || return 1
   return 0
 }
 wait_ready() {
@@ -48,7 +48,7 @@ wait_ready() {
   done
   return 1
 }
-finish() {
+install_unit() {
   cat > /etc/systemd/system/keel-names.service <<'EOF'
 [Unit]
 Description=Keel names
@@ -64,6 +64,9 @@ WantedBy=multi-user.target
 EOF
   systemctl daemon-reload >"$log" 2>&1 || true
   systemctl enable keel-names.service >"$log" 2>&1 || true
+}
+finish() {
+  install_unit
   touch "$cfg/installed"
   printf '%s\n' "$house"
   exit 0
@@ -86,7 +89,9 @@ else
 fi
 mark 75 "Starting Names."
 if podman container exists keel-names >/dev/null 2>&1; then
-  podman start keel-names >"$log" 2>&1 || true
+  install_unit
+  systemctl reset-failed keel-names.service >/dev/null 2>&1 || true
+  systemctl start keel-names.service >"$log" 2>&1 || true
   wait_ready 15 || true
   if page_ok "http://127.0.0.1:5380/"; then
     open_house && wait_ready 40 || true
@@ -95,16 +100,26 @@ fi
 # The last setup answered on this computer and not on the house address.
 # Open kept it, so the next start does too. Begin again when the house
 # address is still closed.
+# Start it from its own service. When setup ends, that must not stop the program.
+systemctl stop keel-names.service >/dev/null 2>&1 || true
 rm -f "$cfg/installed"
 podman rm -f keel-names >"$log" 2>&1 || true
 rm -rf "$cfg/config"
 install -d -m 0755 "$cfg/config"
-if ! podman run -d --name keel-names --hostname keel-names --network host \
+install_unit
+if ! podman create --name keel-names --hostname keel-names --network host \
   -e DNS_SERVER_DOMAIN=keel \
   -e DNS_SERVER_WEB_SERVICE_LOCAL_ADDRESSES=0.0.0.0 \
   -e TZ=UTC \
   -v "$cfg/config:/etc/dns" \
   "$image" >"$log" 2>&1; then
+  if grep -qi "address already in use" "$log"; then
+    fail "This computer is already answering names. Keel left that in place."
+  fi
+  fail "Keel could not start Names. Try Open again."
+fi
+systemctl reset-failed keel-names.service >/dev/null 2>&1 || true
+if ! systemctl start keel-names.service >"$log" 2>&1; then
   if grep -qi "address already in use" "$log"; then
     fail "This computer is already answering names. Keel left that in place."
   fi

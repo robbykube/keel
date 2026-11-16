@@ -5,17 +5,23 @@ fail() { echo "$1" >&2; exit 1; }
 keep_log() {
   install -d -m 0755 /var/lib/keel
   program=$(podman inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' keel-door 2>/dev/null | awk '{print $1}')
+  pid=$(podman inspect -f '{{.State.Pid}}' keel-door 2>/dev/null || true)
   direct=none
   if printf '%s\n' "$program" | awk -F. 'NF==4 { ok=1 } END { exit ok?0:1 }'; then
-    direct=$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://$program:81/" || true)
+    direct=$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://$program:81/" 2>&1 | tr '\n' ' ' | cut -c 1-100 || true)
+  fi
+  inside=none
+  if [ -n "${pid:-}" ] && [ "$pid" != "0" ] && command -v nsenter >/dev/null 2>&1; then
+    inside=$(nsenter -t "$pid" -n curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://127.0.0.1:81/" 2>&1 | tr '\n' ' ' | cut -c 1-100 || true)
   fi
   {
     printf '%s\n' "---- $(date -Is) ----"
-    printf 'program %s direct %s localhost %s house %s\n' \
-      "${program:-none}" "$direct" \
+    printf 'program %s direct %s inside %s localhost %s house %s\n' \
+      "${program:-none}" "$direct" "$inside" \
       "$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://127.0.0.1:81/" || true)" \
       "$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://${house:-}:81/" || true)"
     systemctl is-active keel-door-page 2>/dev/null || true
+    tail -n 20 /var/lib/keel/door-forward.log 2>/dev/null || true
     podman logs --tail 80 keel-door 2>&1 || true
   } >> /var/lib/keel/door.log 2>/dev/null || true
 }
@@ -37,7 +43,7 @@ page_ok() {
 ready() {
   page_ok "http://127.0.0.1:81/" && page_ok "http://$house:81/"
 }
-finish() {
+install_unit() {
   cat > /etc/systemd/system/keel-door.service <<'EOF'
 [Unit]
 Description=Keel front door
@@ -55,6 +61,9 @@ WantedBy=multi-user.target
 EOF
   systemctl daemon-reload >"$log" 2>&1 || true
   systemctl enable keel-door.service >"$log" 2>&1 || true
+}
+finish() {
+  install_unit
   if podman container exists keel-photos-server >/dev/null 2>&1; then
     podman network connect keel-photos keel-door >"$log" 2>&1 || true
   fi
@@ -103,9 +112,19 @@ iptables -C FORWARD -p tcp -m multiport --dports 80,81,443 -j ACCEPT >/dev/null 
 install -d -m 0755 /var/lib/keel
 cat > /var/lib/keel/door-forward.py <<'PY'
 #!/usr/bin/env python3
-import socket, threading, sys
-dest = sys.argv[1]
+import ctypes, os, select, signal, socket, sys, threading
+CLONE_NEWNET = 0x40000000
+libc = ctypes.CDLL("libc.so.6", use_errno=True)
+libc.setns.argtypes = [ctypes.c_int, ctypes.c_int]
+libc.setns.restype = ctypes.c_int
+pid = sys.argv[1]
 pairs = sys.argv[2:]
+try:
+    nsfd = os.open("/proc/%s/ns/net" % pid, os.O_RDONLY)
+except Exception as exc:
+    print("could not enter the program: %s" % exc, flush=True)
+    raise SystemExit(1)
+signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 def pipe(left, right):
     try:
         while True:
@@ -120,39 +139,63 @@ def pipe(left, right):
             item.shutdown(socket.SHUT_RDWR)
         except Exception:
             pass
-def handle(client, dport):
+def child(client, dport):
     try:
-        remote = socket.create_connection((dest, int(dport)), 5)
-    except Exception:
+        if libc.setns(nsfd, CLONE_NEWNET) != 0:
+            raise OSError(ctypes.get_errno(), "setns")
+        remote = socket.create_connection(("127.0.0.1", int(dport)), 5)
+        threading.Thread(target=pipe, args=(client, remote), daemon=True).start()
+        pipe(remote, client)
         client.close()
-        return
-    threading.Thread(target=pipe, args=(client, remote), daemon=True).start()
-    pipe(remote, client)
-    client.close()
-    remote.close()
-def serve(bind, port, dport):
+        remote.close()
+    except Exception as exc:
+        print("could not reach the page: %s" % exc, flush=True)
+        try:
+            client.close()
+        except Exception:
+            pass
+    os._exit(0)
+def serve(bind, port):
     srv = socket.socket()
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         srv.bind((bind, int(port)))
     except Exception as exc:
         print("could not open %s:%s: %s" % (bind, port, exc), flush=True)
-        return
+        return None
     srv.listen(40)
-    while True:
-        client, _ = srv.accept()
-        threading.Thread(target=handle, args=(client, dport), daemon=True).start()
+    return srv
+listeners = []
 index = 0
-threads = []
 while index + 2 < len(pairs):
-    thread = threading.Thread(target=serve, args=(pairs[index], pairs[index + 1], pairs[index + 2]), daemon=True)
-    thread.start()
-    threads.append(thread)
+    srv = serve(pairs[index], pairs[index + 1])
+    if srv is not None:
+        listeners.append((srv, pairs[index + 2]))
     index += 3
-if not threads:
+if not listeners:
     raise SystemExit(1)
-for thread in threads:
-    thread.join()
+while True:
+    ready_socks, _, _ = select.select([item[0] for item in listeners], [], [])
+    for srv, dport in listeners:
+        if srv not in ready_socks:
+            continue
+        try:
+            client, _ = srv.accept()
+        except Exception:
+            continue
+        try:
+            born = os.fork()
+        except OSError:
+            client.close()
+            continue
+        if born == 0:
+            for other, _ in listeners:
+                try:
+                    other.close()
+                except Exception:
+                    pass
+            child(client, dport)
+        client.close()
 PY
 cat > /var/lib/keel/door-publish.sh <<'EOF'
 #!/bin/sh
@@ -171,15 +214,19 @@ drop_old() {
 drop_old PREROUTING
 drop_old OUTPUT
 drop_old POSTROUTING
-ip=
+pid=
 i=0
 while [ "$i" -lt 20 ]; do
-  ip=$(podman inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' keel-door 2>/dev/null | awk '{print $1}')
-  printf '%s\n' "$ip" | awk -F. 'NF==4 { ok=1 } END { exit ok?0:1 }' && break
+  pid=$(podman inspect -f '{{.State.Pid}}' keel-door 2>/dev/null || true)
+  if [ -n "$pid" ] && [ "$pid" != "0" ]; then
+    break
+  fi
   i=$((i + 1))
   sleep 1
 done
-printf '%s\n' "$ip" | awk -F. 'NF==4 { ok=1 } END { exit ok?0:1 }' || exit 0
+if [ -z "$pid" ] || [ "$pid" = "0" ]; then
+  exit 0
+fi
 house=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -n 1)
 printf '%s\n' "$house" | awk -F. 'NF==4 { ok=1 } END { exit ok?0:1 }' || exit 0
 sub=$(podman network inspect keel-front --format '{{range .Subnets}}{{.Subnet}} {{end}}' 2>/dev/null | awk '{for (n=1;n<=NF;n++) if ($n ~ /^[0-9.]+\/[0-9]+$/) { print $n; exit }}')
@@ -190,13 +237,16 @@ systemctl stop keel-door-page >/dev/null 2>&1 || true
 systemctl reset-failed keel-door-page >/dev/null 2>&1 || true
 py=$(command -v python3)
 [ -n "$py" ] || exit 0
-systemd-run --unit=keel-door-page --collect "$py" /var/lib/keel/door-forward.py "$ip" \
+systemd-run --unit=keel-door-page --collect \
+  --property=StandardOutput=file:/var/lib/keel/door-forward.log \
+  --property=StandardError=inherit \
+  "$py" /var/lib/keel/door-forward.py "$pid" \
   127.0.0.1 80 80 \
   127.0.0.1 81 81 \
   "$house" 80 80 \
   "$house" 81 81 \
   "$house" 443 443 \
-  >/var/lib/keel/door-forward.log 2>&1 || true
+  >/dev/null 2>&1 || true
 exit 0
 EOF
 chmod 755 /var/lib/keel/door-publish.sh /var/lib/keel/door-forward.py
@@ -205,6 +255,9 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 # A start that never answered still left its files. The next Open would
 # keep them, and the page would fail the same way.
+# Start it from its own service. When setup ends, that must not stop the program.
+systemctl stop keel-door.service >/dev/null 2>&1 || true
+systemctl stop keel-door-page >/dev/null 2>&1 || true
 rm -f "$cfg/installed"
 if podman container exists keel-door >/dev/null 2>&1; then
   keep_log
@@ -217,14 +270,23 @@ podman network create keel-front >"$log" 2>&1 || fail "Keel could not start the 
 gw=$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')
 dns="--dns 1.1.1.1"
 printf '%s\n' "$gw" | awk -F. 'NF==4 && $1!~/^(0|127)$/ { ok=1 } END { exit ok?0:1 }' && dns="$dns --dns $gw"
+install_unit
 # shellcheck disable=SC2086
-if ! podman run -d --name keel-door --hostname keel-door --network keel-front \
+if ! podman create --name keel-door --hostname keel-door --network keel-front \
   $dns \
   -e DISABLE_IPV6=true \
   -e TZ=UTC \
   -v "$cfg/data:/data" \
   -v "$cfg/letsencrypt:/etc/letsencrypt" \
   "$image" >"$log" 2>&1; then
+  if grep -qi "address already in use" "$log"; then
+    fail "This computer is already answering on port 80 or 443. The front door did not start."
+  fi
+  last=$(sed '/^$/d' "$log" | tail -n 1 | cut -c 1-140)
+  fail "${last:-Keel could not start the front door. Try Open again.}"
+fi
+systemctl reset-failed keel-door.service >/dev/null 2>&1 || true
+if ! systemctl start keel-door.service >"$log" 2>&1; then
   if grep -qi "address already in use" "$log"; then
     fail "This computer is already answering on port 80 or 443. The front door did not start."
   fi

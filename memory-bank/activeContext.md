@@ -33,6 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
+- **v0.1.42 (2026-11-16):** Signed release. The page on this computer was open, and the check to the program's own address failed. Keel now reaches that page from inside the program. Names and the front door stay running after setup ends. The Pi installs `keel-linux-arm64-v0.1.42.tar.gz`.
 - **v0.1.41 (2026-11-16):** Signed release. The page checks were sent to an old copy of the front door, so the live one never saw them. Keel now drops those rules and opens the page on this computer. Names starts again when its program has stopped. The Pi installs `keel-linux-arm64-v0.1.41.tar.gz`.
 - **v0.1.40 (2026-11-16):** Signed release. The front door program was healthy, and Podman listed its ports without opening them. Keel now opens those ports itself and gives the program the router’s name lookup. The house-and-Away firewall was off. The Pi installs `keel-linux-arm64-v0.1.40.tar.gz`.
 - **v0.1.39 (2026-11-16):** Signed release. Logs ends with the path to the front door page, what is listening, and the firewall rules. The kept front door note checks the house address as a page. The Pi installs `keel-linux-arm64-v0.1.39.tar.gz`.
