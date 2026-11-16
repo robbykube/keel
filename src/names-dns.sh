@@ -10,6 +10,39 @@ mark() {
 house_of() {
   ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -n 1
 }
+page_ok() {
+  code=$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "$1" || true)
+  case "$code" in
+    2*|3*) return 0 ;;
+  esac
+  return 1
+}
+port_ok() {
+  timeout 2 bash -c "echo >/dev/tcp/$1/$2" >/dev/null 2>&1
+}
+ready() {
+  page_ok "http://127.0.0.1:5380/" && page_ok "http://$house:5380/" && port_ok "$house" 53
+}
+finish() {
+  cat > /etc/systemd/system/keel-names.service <<'EOF'
+[Unit]
+Description=Keel names
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/podman start keel-names
+ExecStop=/usr/bin/podman stop -t 10 keel-names
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload >"$log" 2>&1 || true
+  systemctl enable keel-names.service >"$log" 2>&1 || true
+  touch "$cfg/installed"
+  printf '%s\n' "$house"
+  exit 0
+}
 mark 8 "Opening Names."
 install -d -m 0755 "$cfg/config" /run/keel
 if ! command -v podman >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
@@ -27,19 +60,25 @@ else
   mark 45 "Opening Names."
 fi
 mark 75 "Starting Names."
-podman rm -f keel-names >"$log" 2>&1 || true
-# The saved setup is only kept after the page answers. Until then, start fresh
-# so the listen address below is applied. A kept setup ignores it.
-if [ ! -f "$cfg/installed" ]; then
-  rm -rf "$cfg/config"
-  install -d -m 0755 "$cfg/config"
+if podman container exists keel-names >/dev/null 2>&1; then
+  podman start keel-names >"$log" 2>&1 || true
+  i=0
+  while [ "$i" -lt 15 ]; do
+    ready && finish
+    i=$((i + 1))
+    sleep 2
+  done
 fi
-# Share this computer's network. A published port never reached the page:
-# Names was listening where that port does not go. The address below is a
-# real address on this computer, which is the only way that setting applies.
+# The last setup answered on this computer and not on the house address.
+# Open kept it, so the next start does too. Begin again when the house
+# address is still closed.
+rm -f "$cfg/installed"
+podman rm -f keel-names >"$log" 2>&1 || true
+rm -rf "$cfg/config"
+install -d -m 0755 "$cfg/config"
 if ! podman run -d --name keel-names --hostname keel-names --network host \
   -e DNS_SERVER_DOMAIN=keel \
-  -e DNS_SERVER_WEB_SERVICE_LOCAL_ADDRESSES="$house,127.0.0.1" \
+  -e DNS_SERVER_WEB_SERVICE_LOCAL_ADDRESSES=0.0.0.0 \
   -e TZ=UTC \
   -v "$cfg/config:/etc/dns" \
   "$image" >"$log" 2>&1; then
@@ -49,39 +88,18 @@ if ! podman run -d --name keel-names --hostname keel-names --network host \
   fail "Keel could not start Names. Try Open again."
 fi
 mark 90 "Waiting for the names page."
-up=0
 i=0
 while [ "$i" -lt 40 ]; do
-  code=$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://127.0.0.1:5380/" || true)
-  case "$code" in
-    2*|3*) up=1; break ;;
-  esac
+  ready && finish
   i=$((i + 1))
   sleep 2
 done
-if [ "$up" != "1" ]; then
-  if ! podman inspect -f '{{.State.Running}}' keel-names 2>/dev/null | grep -qx true; then
-    last=$(podman logs --tail 20 keel-names 2>&1 | sed '/^$/d' | tail -n 1 | cut -c 1-160)
-    fail "${last:-Names stopped before the page was ready. Try Open again.}"
-  fi
-  last=$(podman logs --tail 40 keel-names 2>&1 | sed '/^$/d' | tail -n 1 | cut -c 1-140)
-  fail "Names started, but the page did not answer. ${last:-Try Open again.}"
+if ! podman inspect -f '{{.State.Running}}' keel-names 2>/dev/null | grep -qx true; then
+  last=$(podman logs --tail 20 keel-names 2>&1 | sed '/^$/d' | tail -n 1 | cut -c 1-160)
+  fail "${last:-Names stopped before the page was ready. Try Open again.}"
 fi
-cat > /etc/systemd/system/keel-names.service <<'EOF'
-[Unit]
-Description=Keel names
-After=network-online.target
-Wants=network-online.target
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/bin/podman start keel-names
-ExecStop=/usr/bin/podman stop -t 10 keel-names
-[Install]
-WantedBy=multi-user.target
-EOF
-systemctl daemon-reload >"$log" 2>&1 || true
-systemctl enable keel-names.service >"$log" 2>&1 || true
-touch "$cfg/installed"
-printf '%s\n' "$house"
-exit 0
+if page_ok "http://127.0.0.1:5380/"; then
+  fail "Names is open on this computer, but the house address did not answer. Try Open again."
+fi
+last=$(podman logs --tail 40 keel-names 2>&1 | sed '/^$/d' | tail -n 1 | cut -c 1-140)
+fail "Names started, but the page did not answer. ${last:-Try Open again.}"

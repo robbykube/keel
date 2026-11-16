@@ -8,6 +8,7 @@ use std::fs;
 use std::net::Ipv4Addr;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, SystemTime};
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -111,15 +112,92 @@ pub(crate) fn door_script() -> String {
 }
 
 pub fn ensure() -> Result<(), String> {
-    let ip = crate::storage::host_text("exec /bin/bash -s", &[], Some(&names_script()))?;
+    let stop = std::sync::Arc::new(AtomicBool::new(false));
+    let flag = stop.clone();
+    let watcher = std::thread::spawn(move || {
+        while !flag.load(Ordering::SeqCst) {
+            mirror_opening();
+            std::thread::sleep(Duration::from_millis(700));
+        }
+    });
+    let result = run_names_then_door();
+    stop.store(true, Ordering::SeqCst);
+    let _ = watcher.join();
+    result
+}
+
+fn run_names_then_door() -> Result<(), String> {
+    NAMES_OPENING.store(true, Ordering::SeqCst);
+    let names = crate::storage::host_text("exec /bin/bash -s", &[], Some(&names_script()));
+    NAMES_OPENING.store(false, Ordering::SeqCst);
+    let ip = names?;
     if !house_address(ip.trim()) {
         return Err("Keel could not see the house network, so this did not start.".into());
     }
-    let ip = crate::storage::host_text("exec /bin/bash -s", &[], Some(&door_script()))?;
+    DOOR_OPENING.store(true, Ordering::SeqCst);
+    let door = crate::storage::host_text("exec /bin/bash -s", &[], Some(&door_script()));
+    DOOR_OPENING.store(false, Ordering::SeqCst);
+    let ip = door?;
     if !house_address(ip.trim()) {
         return Err("Keel could not see the house network, so this did not start.".into());
     }
     Ok(())
+}
+
+fn opening_percent(source: u8) -> u8 {
+    8u8.saturating_add(source / 4).min(34)
+}
+
+fn mirror_opening() {
+    let Some((percent, message)) = newest_running(&["/run/keel/door.json", "/run/keel/names.json"]) else {
+        return;
+    };
+    let shown = opening_percent(percent);
+    let Ok(dir) = fs::read_dir("/run/keel") else {
+        return;
+    };
+    for entry in dir.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|item| item.to_str()) else {
+            continue;
+        };
+        if !name.ends_with(".json") || name == "names.json" || name == "door.json" {
+            continue;
+        }
+        let Some(path) = path.to_str() else {
+            continue;
+        };
+        let Some(current) = read_progress(path) else {
+            continue;
+        };
+        if current.state != "running" || (current.message == message && current.percent == shown) {
+            continue;
+        }
+        write_progress(path, "running", shown, &message, "", false);
+    }
+}
+
+fn newest_running(paths: &[&str]) -> Option<(u8, String)> {
+    let mut best: Option<(SystemTime, u8, String)> = None;
+    for path in paths {
+        let Some(saved) = read_progress(path) else {
+            continue;
+        };
+        if saved.state != "running" || saved.message.is_empty() {
+            continue;
+        }
+        let modified = fs::metadata(path)
+            .and_then(|meta| meta.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+        let replace = match &best {
+            Some((when, _, _)) => modified >= *when,
+            None => true,
+        };
+        if replace {
+            best = Some((modified, saved.percent, saved.message));
+        }
+    }
+    best.map(|(_, percent, message)| (percent, message))
 }
 
 pub fn publish(leaf: &str, forward: &str, port: u16) -> Result<bool, String> {
@@ -283,7 +361,7 @@ fn write_progress(path: &str, state: &str, percent: u8, message: &str, address: 
 
 #[cfg(test)]
 mod tests {
-    use super::{door_script, house_address, link_script, names_script};
+    use super::{door_script, house_address, link_script, names_script, opening_percent};
 
     #[test]
     fn the_house_address_is_not_away_or_this_screen() {
@@ -296,12 +374,22 @@ mod tests {
     }
 
     #[test]
+    fn the_early_bar_stays_before_the_app_itself() {
+        assert_eq!(opening_percent(0), 8);
+        assert_eq!(opening_percent(90), 30);
+        assert!(opening_percent(255) <= 34);
+    }
+
+    #[test]
     fn names_use_the_pinned_program_on_the_house_address() {
         let script = names_script();
         assert!(script.contains("docker.io/technitium/dns-server:15.6.2"));
         assert!(script.contains("--network host"));
-        assert!(script.contains("DNS_SERVER_WEB_SERVICE_LOCAL_ADDRESSES=\"$house,127.0.0.1\""));
+        assert!(script.contains("DNS_SERVER_WEB_SERVICE_LOCAL_ADDRESSES=0.0.0.0"));
         assert!(script.contains("http://127.0.0.1:5380/"));
+        assert!(script.contains("http://$house:5380/"));
+        assert!(script.contains("port_ok \"$house\" 53"));
+        assert!(script.contains("rm -f \"$cfg/installed\""));
         assert!(!script.contains("-p "));
         assert!(!script.contains("9478"));
     }
@@ -315,6 +403,10 @@ mod tests {
         assert!(script.contains("\"$house:81:81\""));
         assert!(script.contains("127.0.0.1:81:81"));
         assert!(script.contains("http://127.0.0.1:81/"));
+        assert!(script.contains("http://$house:81/"));
+        assert!(script.contains("--ipv6=false"));
+        assert!(script.contains("rm -rf \"$cfg/data\""));
+        assert!(script.contains("podman logs"));
         assert!(!script.contains("0.0.0.0"));
         assert!(!script.contains("9478"));
         assert!(!script.contains("proxy_pass"));
