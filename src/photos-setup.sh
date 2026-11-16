@@ -38,11 +38,92 @@ missing=0
 for image in "$server" "$learn" "$cache" "$db"; do
   podman image exists "$image" >/dev/null 2>&1 || missing=1
 done
-if [ "$missing" = 1 ]; then
-  mark 40 "Downloading Photos. This can take a while."
+# The pictures are already in Media. This download is the program that shows them.
+pull_note() {
+  mark "$1" "Downloading the Photos program, part $2 of 4. Your pictures stay in Media."
+}
+pull_program() {
+  n=0
   for image in "$server" "$learn" "$cache" "$db"; do
-    podman pull "$image" >"$log" 2>&1 || fail "Keel could not download Photos. Check the network and try again."
+    n=$((n + 1))
+    case "$n" in
+      1) base=40; span=10 ;;
+      2) base=50; span=14 ;;
+      3) base=64; span=2 ;;
+      *) base=66; span=2 ;;
+    esac
+    if podman image exists "$image" >/dev/null 2>&1; then
+      pull_note $((base + span)) "$n"
+      continue
+    fi
+    pull_note "$base" "$n"
+    layers=0
+    seen=$base
+    last=0
+    if ! script -q -e -c "podman pull $(printf '%q' "$image")" "$cfg/pull.log" 2>&1 | tr '\r' '\n' | while IFS= read -r line; do
+      printf '%s\n' "$line" >>"$log"
+      parsed=$(printf '%s\n' "$line" | awk -v layers="$layers" -v span="$span" '
+        function bytes(n, u) {
+          if (u ~ /^Gi/) return n * 1073741824
+          if (u ~ /^Mi/) return n * 1048576
+          if (u ~ /^Ki/) return n * 1024
+          if (u ~ /^G/) return n * 1000000000
+          if (u ~ /^M/) return n * 1000000
+          if (u ~ /^K/) return n * 1000
+          return n + 0
+        }
+        BEGIN { frac = 0; done = 0 }
+        {
+          if ($0 ~ /done[[:space:]]*$/) done = 1
+          if (match($0, /[0-9.]+[[:space:]]*[KMGT]i?B[[:space:]]*\/[[:space:]]*[0-9.]+[[:space:]]*[KMGT]i?B/)) {
+            s = substr($0, RSTART, RLENGTH)
+            split(s, p, /[[:space:]]*\/[[:space:]]*/)
+            split(p[1], g, /[[:space:]]+/)
+            split(p[2], t, /[[:space:]]+/)
+            tb = bytes(t[1], t[2])
+            if (tb > 0) frac = bytes(g[1], g[2]) / tb
+            if (frac > 1) frac = 1
+          }
+        }
+        END {
+          fake = layers + frac
+          if (done) fake = layers + 1
+          pct = int(span * fake / (fake + 6))
+          if (pct >= span) pct = span - 1
+          if (pct < 0) pct = 0
+          printf "%d %d\n", pct, done
+        }
+      ')
+      pct=${parsed%% *}
+      done=${parsed##* }
+      case "$pct" in
+        ''|*[!0-9]*) pct=0 ;;
+      esac
+      if [ "$done" = 1 ]; then
+        layers=$((layers + 1))
+      fi
+      step=$((base + pct))
+      now=$(date +%s)
+      if [ "$step" -gt "$seen" ] && [ "$now" != "$last" ]; then
+        seen=$step
+        last=$now
+        pull_note "$seen" "$n"
+      fi
+    done; then
+      fail "Keel could not download the Photos program. Check the network and try again."
+    fi
+    pull_note $((base + span)) "$n"
   done
+}
+if [ "$missing" = 1 ]; then
+  if ! command -v script >/dev/null 2>&1; then
+    mark 40 "Downloading the Photos program. Your pictures stay in Media."
+    for image in "$server" "$learn" "$cache" "$db"; do
+      podman pull "$image" >"$log" 2>&1 || fail "Keel could not download the Photos program. Check the network and try again."
+    done
+  else
+    pull_program
+  fi
 else
   mark 40 "Opening Photos."
 fi

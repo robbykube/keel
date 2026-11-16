@@ -202,6 +202,9 @@ mod tests {
         assert!(script.contains("ghcr.io/immich-app/immich-server:v3.2.2"));
         assert!(script.contains("ghcr.io/immich-app/immich-machine-learning:v3.2.2"));
         assert!(script.contains("docker.io/valkey/valkey:9@sha256:70739f85ad2ee01a726a965584a0f94895f01b0c60b3cc8b0aeef11eaa6888cf"));
+        assert!(script.contains("Downloading the Photos program, part "));
+        assert!(script.contains("Your pictures stay in Media."));
+        assert!(!script.contains("Downloading Photos."));
         assert!(script.contains("photos=/srv/keel/files/Media/Photos"));
         assert!(script.contains("\"$photos:/photos:ro\""));
         assert!(script.contains("-p 127.0.0.1:2283:2283"));

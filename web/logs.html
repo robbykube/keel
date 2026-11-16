@@ -37,20 +37,6 @@
       try {
         const data = JSON.parse(text);
         logs.textContent = (data.text || "").trim() || "Nothing has been written yet.";
-        // #region agent log
-        (function () {
-          const body = String(data.text || "");
-          const keep = (body.match(/program \S+ direct \S+(?: inside \S+)? localhost \S+ house \S+/) || [""])[0];
-          const parts = {};
-          keep.split(/\s+/).forEach(function (word, i, all) {
-            if (i % 2 === 1 && all[i - 1]) parts[all[i - 1]] = word;
-          });
-          const forward = (body.match(/could not (?:reach the page|enter the program|open)[^\n]*/g) || []).slice(0, 6);
-          const listening = (body.match(/tcp [^\n]*:(?:80|81|443|3000|5380)\b[^\n]*/g) || []).slice(0, 12);
-          const payload = {sessionId:"3d0276",runId:"pre-fix",hypothesisId:"A",location:"web/logs.html:logs",message:"front door log snapshot",data:{keep:keep,parts:parts,forward:forward,listening:listening,names:(body.match(/keel-names: [^\n]*/) || [""])[0],door:(body.match(/keel-door: [^\n]*/) || [""])[0],pageActive:/\nactive\n/.test(body),hasInside:keep.indexOf(" inside ") !== -1,sigterm:(body.match(/SIGTERM/) || []).length},timestamp:Date.now()};
-          fetch("http://127.0.0.1:7681/ingest/d477056d-9f9e-4c55-94e6-d58557ec5337",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"3d0276"},body:JSON.stringify(payload)}).catch(function () {});
-        })();
-        // #endregion
       } catch {
         logs.textContent = text.trim() || "Keel could not read the logs.";
       }
