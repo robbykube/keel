@@ -69,7 +69,7 @@ pub fn manifests(idle: bool) -> Vec<AppManifest> {
             &["/var/lib/technitium"],
             "http",
             "keep_warm",
-            "Names for this house. Point the router at this computer.",
+            "Names for this house. Open this before an app.",
         ),
         (
             "vaultwarden",

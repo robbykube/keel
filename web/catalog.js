@@ -35,6 +35,9 @@ const programs = {
 };
 const chosenProgram = { jitsi: "video", vaultwarden: "passwords", immich: "photos", papra: "papers", thunderbird: "mail" };
 const programTimers = {};
+const latest = {};
+let ownedName = "";
+let sharedReady = false;
 
 function programRow(spec, status) {
   const failed = status.state === "error";
@@ -46,7 +49,11 @@ function programRow(spec, status) {
   const bar = opening
     ? `<div class="install-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>`
     : "";
-  const open = status.state === "unavailable" || status.ready
+  const waiting = spec.host === "added" && !sharedReady && !status.ready;
+  const message = waiting && status.state !== "error" && status.state !== "running"
+    ? "Closed until the steps above are done."
+    : (status.message || "");
+  const open = status.state === "unavailable" || status.ready || waiting
     ? ""
     : `<button type="button" data-program="${escapeHtml(spec.id)}"${opening ? " disabled" : ""}>Open</button>`;
   const close = status.ready && status.signups_open
@@ -55,7 +62,7 @@ function programRow(spec, status) {
   return `<article class="app-row" id="${escapeHtml(spec.id)}-row">
     <div>
       <h3>${escapeHtml(spec.title)}</h3>
-      <p class="install-message${failed ? " install-error" : ""}">${escapeHtml(status.message || "")}</p>
+      <p class="install-message${failed ? " install-error" : ""}">${escapeHtml(message)}</p>
       ${address}
       ${bar}
     </div>
@@ -64,6 +71,7 @@ function programRow(spec, status) {
 }
 
 function paintProgram(spec, status) {
+  latest[spec.id] = status;
   const host = $(spec.host);
   if (!host) return;
   const existing = $(`${spec.id}-row`);
@@ -71,6 +79,25 @@ function paintProgram(spec, status) {
   if (existing) existing.outerHTML = html;
   else if (spec.host === "added") host.insertAdjacentHTML("afterbegin", html);
   else host.insertAdjacentHTML("beforeend", html);
+  if (spec.id === "names" || spec.id === "door") updateGate();
+}
+
+function updateGate() {
+  const was = sharedReady;
+  const names = latest.names;
+  const door = latest.door;
+  sharedReady = !!ownedName && !!(names && names.ready) && !!(door && door.ready);
+  const note = $("apps-wait");
+  if (note) {
+    if (!ownedName) note.textContent = "Save the name you own. Then open Names and the front door. Apps stay closed until then.";
+    else if (!names || !names.ready) note.textContent = "Open Names, then the front door. Apps stay closed until then.";
+    else if (!door || !door.ready) note.textContent = "Open the front door. Apps stay closed until then.";
+    else note.textContent = "";
+  }
+  if (was === sharedReady) return;
+  for (const spec of Object.values(programs)) {
+    if (spec.host === "added" && latest[spec.id]) paintProgram(spec, latest[spec.id]);
+  }
 }
 
 async function programStatus(spec) {
@@ -216,8 +243,12 @@ async function loadOwned() {
   const data = await res.json();
   if (data.name) {
     input.value = data.name;
-    status.textContent = `Keel uses that name for each app, such as ${data.photos}. At the place you bought the name, send it to this computer once.`;
+    ownedName = data.name;
+    status.textContent = `Keel uses that name for each app, such as ${data.photos}. At the place you bought the name, send it to this computer once if people outside the house should open it.`;
+  } else {
+    ownedName = "";
   }
+  updateGate();
 }
 
 $("owned-form").addEventListener("submit", async (event) => {
@@ -236,7 +267,9 @@ $("owned-form").addEventListener("submit", async (event) => {
       status.textContent = data.message || "Keel could not store the name.";
       return;
     }
-    status.textContent = `Keel uses that name for each app, such as ${data.photos}. At the place you bought the name, send it to this computer once.`;
+    ownedName = data.name || $("owned-input").value.trim();
+    status.textContent = `Keel uses that name for each app, such as ${data.photos}. At the place you bought the name, send it to this computer once if people outside the house should open it.`;
+    updateGate();
   } catch (err) {
     status.textContent = String(err);
   }

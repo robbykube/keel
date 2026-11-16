@@ -67,6 +67,7 @@ pub fn start() -> Result<Status, String> {
     if !cfg!(target_os = "linux") {
         return Err("Photos install on the Keel computer.".into());
     }
+    crate::names::prepared()?;
     let owned = crate::owned::load().ok_or("Type the name you own, then press Open.")?;
     let address = crate::owned::photos_address(&owned)?;
     if OPENING
@@ -78,11 +79,6 @@ pub fn start() -> Result<Status, String> {
     write_progress("running", 8, "Opening Photos. This can take a while.", "", false);
     let script = setup_script(&owned);
     std::thread::spawn(move || {
-        if let Err(message) = crate::names::ensure() {
-            write_progress("error", 0, &message, "", false);
-            OPENING.store(false, Ordering::SeqCst);
-            return;
-        }
         write_progress("running", 36, "Opening Photos.", "", false);
         let result = crate::storage::host_text("exec /bin/bash -s", &[], Some(&script));
         match result {

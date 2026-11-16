@@ -8,7 +8,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | --- | --- |
 | Files | The name a PC uses to open those files. Same name at home and away |
 | Disks | Where the files are stored |
-| Apps | Programs that are installed. Open one when you need it |
+| Apps | Programs on this computer. Save the name, open Names, then the front door, then open an app |
 | Away | The same files, when you are not at home |
 | Rest | The computer stays on and apps stay closed. Away stays connected |
 | Prepare wake | Turn on wake for the built-in network port. The computer stays on. Sleep waits until a Pi on Away can send the wake |
@@ -32,7 +32,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Mail | A mailbox on this computer. Link Gmail and other accounts. Mail you move here stays here |
 | Devices | Computers that answered on the house network. Look now writes the list. Nothing is blocked |
 | The name you own | The name you bought, such as klaingar.com. Keel makes each app name, such as photos.klaingar.com, and asks for the lock. You do not type addresses |
-| Names | The book of names for this house. Point the router at this computer |
+| Names | The book of names for this house. Open it on Apps before an app. Leave the router DNS as it is |
 | Front door | Answers a name you own and sends it to that app. This page stays on its own address |
 | Send to the phone | When something is red, one message goes to the free ntfy app. The phone must be on Away |
 | Use this | Shared folder or files app a person should pick |

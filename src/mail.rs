@@ -67,6 +67,7 @@ pub fn start() -> Result<Status, String> {
     if !cfg!(target_os = "linux") {
         return Err("Mail installs on the Keel computer.".into());
     }
+    crate::names::prepared()?;
     let owned = crate::owned::load().ok_or("Type the name you own, then press Open.")?;
     let address = crate::owned::app_address(&owned, "mail")?;
     if OPENING
@@ -78,11 +79,6 @@ pub fn start() -> Result<Status, String> {
     write_progress("running", 8, "Opening Mail. This can take a while.", "", false);
     let script = setup_script(&address.trim_start_matches("https://"));
     std::thread::spawn(move || {
-        if let Err(message) = crate::names::ensure() {
-            write_progress("error", 0, &message, "", false);
-            OPENING.store(false, Ordering::SeqCst);
-            return;
-        }
         write_progress("running", 36, "Opening Mail.", "", false);
         let result = crate::storage::host_text("exec /bin/bash -s", &[], Some(&script));
         match result {

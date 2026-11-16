@@ -74,6 +74,9 @@ pub fn start(close: bool) -> Result<Status, String> {
     if close && !Path::new(INSTALLED).is_file() {
         return Err("Open Passwords first.".into());
     }
+    if !close {
+        crate::names::prepared()?;
+    }
     let owned = crate::owned::load().ok_or("Type the name you own, then press Open.")?;
     let address = password_address(&owned)?;
     if OPENING
@@ -91,11 +94,6 @@ pub fn start(close: bool) -> Result<Status, String> {
     let host = address.trim_start_matches("https://").to_string();
     let script = setup_script(&host, close);
     std::thread::spawn(move || {
-        if let Err(message) = crate::names::ensure() {
-            write_progress("error", 0, &message, "", false, false);
-            OPENING.store(false, Ordering::SeqCst);
-            return;
-        }
         write_progress("running", 36, "Opening Passwords.", "", false, false);
         let result = crate::storage::host_text("exec /bin/bash -s", &[], Some(&script));
         match result {
