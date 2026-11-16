@@ -133,7 +133,13 @@ pub fn open_shared() {
 }
 
 fn bring_up(job: &Job) {
-    if view(job).ready {
+    let name = if job.progress.ends_with("names.json") {
+        "keel-names"
+    } else {
+        "keel-door"
+    };
+    // A saved "ready" note can outlive the program. Start it again when it has stopped.
+    if view(job).ready && running(name) {
         return;
     }
     let _ = start(job);
@@ -267,6 +273,14 @@ fn start(job: &Job) -> Result<Status, String> {
     Ok(view(job))
 }
 
+fn running(name: &str) -> bool {
+    let script = format!("podman inspect -f '{{{{.State.Running}}}}' {name} 2>/dev/null");
+    crate::storage::host_text("exec /bin/bash -s", &[], Some(&script))
+        .ok()
+        .as_deref()
+        == Some("true")
+}
+
 fn idle(job: &Job) -> Status {
     let installed = Path::new(job.installed).is_file();
     Status {
@@ -336,11 +350,13 @@ mod tests {
     fn the_front_door_does_not_sit_in_front_of_this_page() {
         let script = door_script();
         assert!(script.contains("docker.io/jc21/nginx-proxy-manager:2.16.0"));
-        assert!(script.contains("DNAT --to-destination"));
+        assert!(script.contains("/var/lib/keel/door-forward.py"));
+        assert!(script.contains("keel-door-page"));
         assert!(script.contains("MASQUERADE"));
         assert!(script.contains("/var/lib/keel/door-publish.sh"));
-        assert!(script.contains("--dns"));
+        assert!(script.contains("--dns 1.1.1.1"));
         assert!(script.contains("/var/lib/keel/door.log"));
+        assert!(!script.contains("DNAT"));
         assert!(!script.contains("-p 80:80"));
         assert!(!script.contains("\"$house:443:443\""));
         assert!(script.contains("http://127.0.0.1:81/"));
