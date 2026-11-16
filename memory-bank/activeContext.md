@@ -33,7 +33,8 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
-- **v0.1.33 (2026-11-16):** Signed release. Names counts as ready only when the house address answers, and a saved setup that does not is started clean. The front door does the same, on a network without IPv6, and a failed start says the program’s last line. While that work runs, the app row shows Names or the front door instead of staying on the first sentence. The Pi installs `keel-linux-arm64-v0.1.33.tar.gz`.
+- **v0.1.34 (2026-11-16):** Signed release. After the Names page answers on this computer, Keel tells Names the house address and the lookup address, then starts it again. v0.1.33 stopped because the page stayed on this computer and lookups on 192.168.0.127 did not answer. The Pi installs `keel-linux-arm64-v0.1.34.tar.gz`.
+- **v0.1.33 (2026-11-16):** Signed release. Names counts as ready only when the house address answers. On the Pi, the page answered on this computer, then the house address closed and lookups did not answer.
 - **Open Photos, live on 0.1.32 (2026-11-16):** Open got through Names and stopped on the front door. Names had been marked ready from this computer alone. Ports 53, 5380, 80, 81, and 443 on 192.168.0.127 were closed after the attempt.
 - **v0.1.31 (2026-11-15):** Signed release. Open keeps a progress bar while an app is starting. Names still stopped with “the page did not answer.”
 - **v0.1.30 (2026-11-02):** Signed release for Settings. Devices lists who answered on this computer’s own house network. Apps can open Video, Passwords, Photos, Papers, and Mail at the name you own. The Pi on 0.1.28 installs the arm64 file. v0.1.29 was tagged and did not publish a package.

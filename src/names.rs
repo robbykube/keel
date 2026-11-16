@@ -386,6 +386,9 @@ mod tests {
         assert!(script.contains("docker.io/technitium/dns-server:15.6.2"));
         assert!(script.contains("--network host"));
         assert!(script.contains("DNS_SERVER_WEB_SERVICE_LOCAL_ADDRESSES=0.0.0.0"));
+        assert!(script.contains("webServiceLocalAddresses"));
+        assert!(script.contains("dnsServerLocalEndPoints"));
+        assert!(script.contains("podman restart keel-names"));
         assert!(script.contains("http://127.0.0.1:5380/"));
         assert!(script.contains("http://$house:5380/"));
         assert!(script.contains("port_ok \"$house\" 53"));

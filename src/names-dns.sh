@@ -23,6 +23,31 @@ port_ok() {
 ready() {
   page_ok "http://127.0.0.1:5380/" && page_ok "http://$house:5380/" && port_ok "$house" 53
 }
+# The saved setup listens on this computer. Tell it the house address too,
+# then start it again so that address is the one that answers.
+open_house() {
+  mark 92 "Telling Names the house address."
+  login=$(curl -sS -X POST "http://127.0.0.1:5380/api/user/login" --data "user=admin&pass=admin" || true)
+  token=$(printf '%s' "$login" | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+  [ -n "$token" ] || return 1
+  setreply=$(curl -sS -X POST "http://127.0.0.1:5380/api/settings/set" \
+    --data-urlencode "token=$token" \
+    --data-urlencode "webServiceLocalAddresses=${house},127.0.0.1" \
+    --data-urlencode "dnsServerLocalEndPoints=${house}:53,127.0.0.1:53" || true)
+  printf '%s' "$setreply" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' || return 1
+  podman restart keel-names >"$log" 2>&1 || return 1
+  return 0
+}
+wait_ready() {
+  tries=$1
+  i=0
+  while [ "$i" -lt "$tries" ]; do
+    ready && finish
+    i=$((i + 1))
+    sleep 2
+  done
+  return 1
+}
 finish() {
   cat > /etc/systemd/system/keel-names.service <<'EOF'
 [Unit]
@@ -62,12 +87,10 @@ fi
 mark 75 "Starting Names."
 if podman container exists keel-names >/dev/null 2>&1; then
   podman start keel-names >"$log" 2>&1 || true
-  i=0
-  while [ "$i" -lt 15 ]; do
-    ready && finish
-    i=$((i + 1))
-    sleep 2
-  done
+  wait_ready 15 || true
+  if page_ok "http://127.0.0.1:5380/"; then
+    open_house && wait_ready 40 || true
+  fi
 fi
 # The last setup answered on this computer and not on the house address.
 # Open kept it, so the next start does too. Begin again when the house
@@ -90,13 +113,19 @@ fi
 mark 90 "Waiting for the names page."
 i=0
 while [ "$i" -lt 40 ]; do
-  ready && finish
+  page_ok "http://127.0.0.1:5380/" && break
   i=$((i + 1))
   sleep 2
 done
 if ! podman inspect -f '{{.State.Running}}' keel-names 2>/dev/null | grep -qx true; then
   last=$(podman logs --tail 20 keel-names 2>&1 | sed '/^$/d' | tail -n 1 | cut -c 1-160)
   fail "${last:-Names stopped before the page was ready. Try Open again.}"
+fi
+page_ok "http://127.0.0.1:5380/" || fail "Names started, but the page did not answer. Try Open again."
+open_house || fail "Keel could not tell Names the house address. Try Open again."
+wait_ready 40 || true
+if page_ok "http://$house:5380/" && ! port_ok "$house" 53; then
+  fail "The names page is open, but this computer is not answering lookups yet. Try Open again."
 fi
 if page_ok "http://127.0.0.1:5380/"; then
   fail "Names is open on this computer, but the house address did not answer. Try Open again."
