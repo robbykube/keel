@@ -1,4 +1,4 @@
-//! Names is Technitium. The front door is Nginx Proxy Manager.
+//! Names is Technitium. The front door is Caddy on this computer.
 //!
 //! Both listen on the house address. The locked page keeps port 443 on the
 //! Away address, so a proxy never sits in front of Keel. No proxy host is
@@ -91,7 +91,7 @@ fn names_job() -> Job {
 fn door_job() -> Job {
     Job {
         progress: "/run/keel/door.json",
-        installed: "/var/lib/npm/installed",
+        installed: "/var/lib/keel/caddy/installed",
         opening: &DOOR_OPENING,
         windows: "The front door installs on the Keel computer.",
         idle_new: "Keel is opening the front door. The first time downloads the program.",
@@ -274,11 +274,21 @@ fn start(job: &Job) -> Result<Status, String> {
 }
 
 fn running(name: &str) -> bool {
-    let script = format!("podman inspect -f '{{{{.State.Running}}}}' {name} 2>/dev/null");
+    let (script, want) = if name == "keel-door" {
+        (
+            "systemctl is-active --quiet keel-door && systemctl show -p ExecStart keel-door | grep -q /usr/local/bin/caddy && echo yes".to_string(),
+            "yes",
+        )
+    } else {
+        (
+            format!("podman inspect -f '{{{{.State.Running}}}}' {name} 2>/dev/null"),
+            "true",
+        )
+    };
     crate::storage::host_text("exec /bin/bash -s", &[], Some(&script))
         .ok()
         .as_deref()
-        == Some("true")
+        == Some(want)
 }
 
 fn idle(job: &Job) -> Status {
@@ -350,36 +360,27 @@ mod tests {
     #[test]
     fn the_front_door_does_not_sit_in_front_of_this_page() {
         let script = door_script();
-        assert!(script.contains("docker.io/jc21/nginx-proxy-manager:2.16.0"));
-        assert!(script.contains("/var/lib/keel/door-forward.py"));
-        assert!(script.contains("keel-door-page"));
-        assert!(script.contains("setns"));
-        assert!(script.contains("nsenter"));
-        assert!(script.contains("systemctl start keel-door"));
-        assert!(script.contains("MASQUERADE"));
-        assert!(script.contains("/var/lib/keel/door-publish.sh"));
-        assert!(script.contains("--dns 1.1.1.1"));
-        assert!(script.contains("/var/lib/keel/door.log"));
+        assert!(script.contains("ver=2.11.9"));
+        assert!(script.contains("caddy_${ver}_linux_arm64.tar.gz"));
+        assert!(script.contains("caddy_${ver}_linux_amd64.tar.gz"));
+        assert!(script.contains("sha512sum -c"));
+        assert!(script.contains("/usr/local/bin/caddy"));
+        assert!(script.contains("systemctl restart keel-door"));
+        assert!(script.contains("http://127.0.0.1/"));
+        assert!(script.contains("http://$house/"));
+        assert!(script.contains("bind 127.0.0.1"));
+        assert!(script.contains("admin 127.0.0.1:2019"));
+        assert!(script.contains("podman rm -f keel-door"));
+        assert!(script.contains("caddy-reload.sh"));
+        assert!(script.contains("reverse_proxy"));
+        assert!(!script.contains('\r'));
         assert!(!script.contains("DNAT"));
         assert!(!script.contains("-p 80:80"));
-        assert!(!script.contains("\"$house:443:443\""));
-        assert!(script.contains("http://127.0.0.1:81/"));
-        assert!(script.contains("http://$house:81/"));
-        assert!(!script.contains("--ipv6=false"));
-        assert!(script.contains("net.ipv4.ip_forward=1"));
-        assert!(script.contains("net.ipv4.conf.all.route_localnet=1"));
-        assert!(script.contains("iptables -P FORWARD ACCEPT"));
-        assert!(script.contains("--dports 80,81,443"));
-        assert!(script.contains("rm -rf \"$cfg/data\""));
-        assert!(script.contains("podman logs"));
+        assert!(!script.contains("--network host"));
         assert!(!script.contains("0.0.0.0"));
         assert!(!script.contains("9478"));
         assert!(!script.contains("proxy_pass"));
-        assert!(script.contains("keel-photos-server"));
-        assert!(script.contains("keel-jitsi-web"));
-        assert!(script.contains("keel-passwords"));
-        assert!(script.contains("keel-papers"));
-        assert!(script.contains("keel-mail"));
+        assert!(!script.contains(":81"));
     }
 
     #[test]
@@ -390,10 +391,14 @@ mod tests {
         assert!(script.contains("forward='keel-photos-server'"));
         assert!(script.contains("port='2283'"));
         assert!(script.contains("http://127.0.0.1:5380/api/zones/records/add"));
-        assert!(script.contains("http://127.0.0.1:81/api/nginx/proxy-hosts"));
-        assert!(script.contains("/api/nginx/proxy-hosts"));
-        assert!(script.contains("allow_websocket_upgrade"));
+        assert!(script.contains("caddy-reload.sh"));
+        assert!(script.contains("keel-jitsi-web) upstream=127.0.0.1:8080"));
+        assert!(script.contains("keel-passwords) upstream=127.0.0.1:8081"));
+        assert!(script.contains("127.0.0.1:$port"));
+        assert!(!script.contains("/api/nginx/proxy-hosts"));
+        assert!(!script.contains('\r'));
         assert!(!script.contains("9478"));
+        assert!(!script.contains("0.0.0.0"));
         assert!(!script.contains("__KEEL_"));
     }
 }

@@ -19,7 +19,7 @@ mod tests {
     #[test]
     fn the_log_script_reads_the_front_door_and_names() {
         let script = include_str!("logs.sh");
-        assert!(script.contains("podman logs --tail 100 keel-door"));
+        assert!(script.contains("journalctl -u keel-door"));
         assert!(script.contains("/var/lib/keel/door.log"));
         assert!(script.contains("podman logs --tail 80 keel-names"));
         assert!(script.contains("Front door, path"));

@@ -33,6 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
+- **v0.1.47 (2026-11-17):** The front door is a small program on this computer, bound to the house address. The large panel and the copy in front of it are gone. The Pi installs `keel-linux-arm64-v0.1.47.tar.gz`.
 - **v0.1.46 (2026-11-16):** Photos Open shows the pictures already in Media. Jellyfin is the full program, refused when the computer has under 6 GB of memory. The Pi installs `keel-linux-arm64-v0.1.46.tar.gz`.
 - **v0.1.45 (2026-11-16):** Photos stopped because temporary space on the Keel computer was full (32K left). The front door page was already answering. This release frees that space before Photos starts, and says so when it cannot. The Pi installs `keel-linux-arm64-v0.1.45.tar.gz`.
 - **v0.1.42 (2026-11-16):** Signed release. The page on this computer was open, and the check to the program's own address failed. Keel now reaches that page from inside the program. Names and the front door stay running after setup ends. The Pi installs `keel-linux-arm64-v0.1.42.tar.gz`.

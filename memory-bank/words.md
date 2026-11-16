@@ -34,7 +34,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | The name you own | The name you bought, such as klaingar.com. Keel makes each app name, such as photos.klaingar.com, and asks for the lock. You do not type addresses |
 | Names | The book of names for this house. Keel opens it on its own. Leave the router DNS as it is |
 | Logs | Notes from Names and the front door. Sign in, then open Logs. That works from another computer |
-| Front door | Answers a name you own and sends it to that app. This page stays on its own address |
+| Front door | A small program on this computer. It answers a name you own and sends it to that app. This page stays on its own address |
 | Photos | Pictures already in Media. Open shows them here. They stay on the disk. Jellyfin is the full program. A small computer is refused it |
 | Send to the phone | When something is red, one message goes to the free ntfy app. The phone must be on Away |
 | Use this | Shared folder or files app a person should pick |

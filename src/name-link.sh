@@ -13,7 +13,7 @@ urlenc() {
 json_token() {
   printf '%s' "$1" | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
 }
-install -d -m 0755 /run/keel
+install -d -m 0755 /run/keel /var/lib/keel/caddy/sites
 house=$(house_of)
 printf '%s\n' "$house" | awk -F. 'NF==4 && $1!~/^(0|127)$/ && !($1==169 && $2==254) && !($1==100 && $2>=64 && $2<=127) { ok=1 } END { exit ok?0:1 }' || fail "Keel could not see the house network, so the name was not written."
 login=$(curl -sS -X POST "http://127.0.0.1:5380/api/user/login" --data "user=admin&pass=admin" || true)
@@ -23,27 +23,20 @@ etoken=$(urlenc "$token")
 curl -sS "http://127.0.0.1:5380/api/zones/create?token=$etoken&zone=$owned&type=Primary" >/dev/null 2>&1 || true
 record=$(curl -sS "http://127.0.0.1:5380/api/zones/records/add?token=$etoken&domain=$host&zone=$owned&type=A&ipAddress=$house&ttl=60&overwrite=true" || true)
 printf '%s' "$record" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' || fail "Keel could not write $host."
-door=$(curl -sS -X POST "http://127.0.0.1:81/api/tokens" -H 'Content-Type: application/json' -d '{"identity":"admin@example.com","secret":"changeme"}' || true)
-dtoken=$(json_token "$door")
-[ -n "$dtoken" ] || fail "Keel could not sign in to the front door, so the name was not sent."
-proxy='{"domain_names":["'"$host"'"],"forward_scheme":"http","forward_host":"'"$forward"'","forward_port":'"$port"',"access_list_id":0,"certificate_id":"new","ssl_forced":true,"meta":{"letsencrypt_email":"admin@'"$owned"'","letsencrypt_agree":true,"dns_challenge":false},"advanced_config":"","locations":[],"block_exploits":false,"caching_enabled":false,"allow_websocket_upgrade":true,"http2_support":true,"hsts_enabled":false,"hsts_subdomains":false}'
-plain='{"domain_names":["'"$host"'"],"forward_scheme":"http","forward_host":"'"$forward"'","forward_port":'"$port"',"access_list_id":0,"certificate_id":0,"ssl_forced":false,"meta":{"letsencrypt_agree":false,"dns_challenge":false},"advanced_config":"","locations":[],"block_exploits":false,"caching_enabled":false,"allow_websocket_upgrade":true,"http2_support":true,"hsts_enabled":false,"hsts_subdomains":false}'
-code=$(curl -sS -o /run/keel/door-reply -w '%{http_code}' -X POST "http://127.0.0.1:81/api/nginx/proxy-hosts" -H "Authorization: Bearer $dtoken" -H 'Content-Type: application/json' -d "$proxy" || true)
-lock=waiting
-case "$code" in
-  2*) lock=locked ;;
-  *)
-    code=$(curl -sS -o /run/keel/door-reply -w '%{http_code}' -X POST "http://127.0.0.1:81/api/nginx/proxy-hosts" -H "Authorization: Bearer $dtoken" -H 'Content-Type: application/json' -d "$plain" || true)
-    case "$code" in
-      2*) lock=waiting ;;
-      *)
-        list=$(curl -sS "http://127.0.0.1:81/api/nginx/proxy-hosts" -H "Authorization: Bearer $dtoken" || true)
-        printf '%s' "$list" | grep -Fq "$host" || fail "Keel could not send $host to the app."
-        lock=locked
-        ;;
-    esac
-    ;;
+printf '%s\n' "$host" | grep -Eq '^[a-z0-9.-]+$' || fail "Keel could not send $host to the app."
+case "$forward" in
+  keel-jitsi-web) upstream=127.0.0.1:8080 ;;
+  keel-passwords) upstream=127.0.0.1:8081 ;;
+  *) upstream="127.0.0.1:$port" ;;
 esac
-rm -f /run/keel/door-reply
+printf '%s\n' "$upstream" | grep -Eq '^127\.0\.0\.1:[0-9]+$' || fail "Keel could not send $host to the app."
+printf '%s %s\n' "$upstream" "admin@$owned" > "/var/lib/keel/caddy/sites/$host"
+[ -x /var/lib/keel/caddy-reload.sh ] || fail "The front door is not ready, so the name was not sent."
+/var/lib/keel/caddy-reload.sh || fail "Keel could not send $host to the app."
+lock=waiting
+code=$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' --resolve "$host:443:$house" "https://$host/" || true)
+case "$code" in
+  2*|3*) lock=locked ;;
+esac
 printf '%s\n' "$lock"
 exit 0
