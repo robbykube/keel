@@ -94,7 +94,7 @@ function updateGate() {
     const failed = (names && names.state === "error") || (door && door.state === "error");
     if (!names || !names.ready || !door || !door.ready) {
       note.textContent = failed
-        ? "Names or the front door stopped. Apps stay closed until both are ready."
+        ? "Names or the front door stopped. Sign in, then open Logs. Apps stay closed until both are ready."
         : "Names and the front door open on their own. Apps stay closed until they are ready.";
     } else if (!ownedName) note.textContent = "Save the name you own. You can change it later. Apps stay closed until it is saved.";
     else note.textContent = "";

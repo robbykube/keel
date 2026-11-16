@@ -530,6 +530,19 @@ a.button:hover { border-color: var(--accent); color: var(--accent); }
 .pending-bar[hidden] { display: none; }
 .pending-bar span { color: var(--muted); }
 #access { white-space: pre-line; }
+.log-sheet {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  font: 0.85rem/1.45 ui-monospace, monospace;
+  max-height: 70vh;
+  overflow: auto;
+}
 .editor {
   display: flex;
   flex-direction: column;

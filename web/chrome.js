@@ -12,6 +12,7 @@ const computerNav = (showInstall) => {
 };
 const SUPPORT = [
   ["/guide.html", "Guide"],
+  ["/logs.html", "Logs"],
   ["/settings.html", "Settings"],
   ["/login.html", "Sign in"],
 ];
@@ -261,7 +262,7 @@ const installKeelChrome = (showInstall = false, session = { signed_in: false, ca
   aside.querySelectorAll(".sidebar-support, .sidebar-utility, .power, .theme-toggle, .more").forEach((node) => node.remove());
   const supportItems = SUPPORT.filter(([href]) => {
     if (href === "/login.html") return !session.signed_in || isActive(href);
-    if (href === "/settings.html") return session.signed_in || isActive(href);
+    if (href === "/settings.html" || href === "/logs.html") return session.signed_in || isActive(href);
     return true;
   });
   const support = sectionLinks("sidebar-support", "Guide and settings", supportItems);

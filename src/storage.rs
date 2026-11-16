@@ -1034,6 +1034,51 @@ pub(crate) fn host_text(script: &str, args: &[&str], input: Option<&str>) -> Res
     Err(last_stderr(&output.stderr))
 }
 
+/// Like `host_text`, but the whole stdout is the result, newest text kept
+/// when it is long. Use this for logs. A script with `$` goes on stdin.
+pub(crate) fn host_all(script: &str, args: &[&str], input: Option<&str>) -> Result<String, String> {
+    let mut command = if Path::new("/usr/bin/systemd-run").exists() || Path::new("/bin/systemd-run").exists() {
+        let mut c = Command::new("systemd-run");
+        c.args(["--quiet", "--wait", "--pipe", "--collect", "--", "/bin/bash", "-c", script, "keel-host"]);
+        c
+    } else {
+        let mut c = Command::new("/bin/bash");
+        c.args(["-c", script, "keel-host"]);
+        c
+    };
+    command
+        .args(args)
+        .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("Keel could not start the disk helper: {error}"))?;
+    if let (Some(text), Some(mut stdin)) = (input, child.stdin.take()) {
+        let _ = stdin.write_all(text.as_bytes());
+    }
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("The disk helper stopped: {error}"))?;
+    if output.status.success() {
+        return Ok(tail_text(&output.stdout, 24_000));
+    }
+    Err(last_stderr(&output.stderr))
+}
+
+fn tail_text(bytes: &[u8], max: usize) -> String {
+    let text = String::from_utf8_lossy(bytes);
+    let text = text.trim();
+    if text.len() <= max {
+        return text.to_string();
+    }
+    let mut start = text.len() - max;
+    while start < text.len() && !text.is_char_boundary(start) {
+        start += 1;
+    }
+    text[start..].to_string()
+}
+
 fn last_stderr(stderr: &[u8]) -> String {
     String::from_utf8_lossy(stderr)
         .lines()

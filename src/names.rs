@@ -336,10 +336,12 @@ mod tests {
     fn the_front_door_does_not_sit_in_front_of_this_page() {
         let script = door_script();
         assert!(script.contains("docker.io/jc21/nginx-proxy-manager:2.16.0"));
-        assert!(script.contains("\"$house:80:80\""));
+        assert!(script.contains("-p 80:80"));
+        assert!(script.contains("-p 81:81"));
         assert!(script.contains("\"$house:443:443\""));
-        assert!(script.contains("\"$house:81:81\""));
-        assert!(script.contains("127.0.0.1:81:81"));
+        assert!(script.contains("/var/lib/keel/door.log"));
+        assert!(!script.contains("\"$house:80:80\""));
+        assert!(!script.contains("\"$house:81:81\""));
         assert!(script.contains("http://127.0.0.1:81/"));
         assert!(script.contains("http://$house:81/"));
         assert!(script.contains("--ipv6=false"));

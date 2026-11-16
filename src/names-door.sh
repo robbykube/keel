@@ -2,6 +2,16 @@ set -uo pipefail
 cfg=/var/lib/npm
 log="$cfg/setup.log"
 fail() { echo "$1" >&2; exit 1; }
+keep_log() {
+  install -d -m 0755 /var/lib/keel
+  {
+    printf '%s\n' "---- $(date -Is) ----"
+    printf 'localhost %s house %s\n' \
+      "$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://127.0.0.1:81/" || true)" \
+      "$(curl -sS -o /dev/null --max-time 3 -w '%{http_code}' "http://${house:-}/81/" || true)"
+    podman logs --tail 120 keel-door 2>&1 || true
+  } >> /var/lib/keel/door.log 2>/dev/null || true
+}
 mark() {
   install -d -m 0755 /run/keel
   printf '{"state":"running","percent":%s,"message":"%s","address":"","ready":false}\n' "$1" "$2" > /run/keel/door.json.tmp
@@ -93,6 +103,7 @@ fi
 # A start that never answered still left its files. The next Open would
 # keep them, and the page would fail the same way.
 rm -f "$cfg/installed"
+keep_log
 podman rm -f keel-door >"$log" 2>&1 || true
 rm -rf "$cfg/data" "$cfg/letsencrypt"
 install -d -m 0755 "$cfg/data" "$cfg/letsencrypt"
@@ -100,7 +111,7 @@ if ! podman network exists keel-front >/dev/null 2>&1; then
   podman network create --ipv6=false keel-front >"$log" 2>&1 || podman network create keel-front >"$log" 2>&1 || fail "Keel could not start the front door. Try Open again."
 fi
 if ! podman run -d --name keel-door --hostname keel-door --network keel-front \
-  -p "$house:80:80" -p "$house:443:443" -p "$house:81:81" -p "127.0.0.1:81:81" \
+  -p 80:80 -p 81:81 -p "$house:443:443" \
   -e DISABLE_IPV6=true \
   -e TZ=UTC \
   -v "$cfg/data:/data" \
@@ -123,5 +134,6 @@ if ! podman inspect -f '{{.State.Running}}' keel-door 2>/dev/null | grep -qx tru
   last=$(podman logs --tail 20 keel-door 2>&1 | sed '/^$/d' | tail -n 1 | cut -c 1-160)
   fail "${last:-The front door stopped before the page was ready. Try Open again.}"
 fi
+keep_log
 last=$(podman logs --tail 80 keel-door 2>&1 | sed '/^$/d' | grep -Ei 'emerg|address family|bind\(\)|failed' | tail -n 1 | cut -c 1-140)
 fail "The front door started, but the page did not answer. ${last:-Try Open again.}"

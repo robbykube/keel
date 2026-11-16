@@ -14,6 +14,7 @@ mod inventory;
 mod issues;
 mod jitsi;
 mod locked;
+mod logs;
 mod mail;
 mod names;
 mod model;
@@ -123,6 +124,10 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/health", get(health))
+        .route(
+            "/api/logs",
+            get(logs_view).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/updates", get(updates_status))
         .route("/api/updates/progress", get(updates_progress))
         .route(
@@ -1121,6 +1126,13 @@ async fn jitsi_install() -> Result<(StatusCode, Json<serde_json::Value>), (Statu
             Json(serde_json::json!({ "ok": false, "message": message })),
         )),
     }
+}
+
+async fn logs_view() -> Json<serde_json::Value> {
+    let text = tokio::task::spawn_blocking(crate::logs::recent)
+        .await
+        .unwrap_or_else(|_| "Keel could not read the logs.".into());
+    Json(serde_json::json!({ "text": text }))
 }
 
 async fn names_status() -> Json<crate::names::Status> {
