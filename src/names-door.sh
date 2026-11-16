@@ -41,6 +41,7 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=-/bin/sh -c 'sysctl -w net.ipv4.ip_forward=1; sysctl -w net.ipv4.conf.all.route_localnet=1; iptables -P FORWARD ACCEPT; iptables -C FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT || iptables -I FORWARD 1 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT; iptables -C FORWARD -p tcp -m multiport --dports 80,81,443 -j ACCEPT || iptables -I FORWARD 1 -p tcp -m multiport --dports 80,81,443 -j ACCEPT'
 ExecStart=/usr/bin/podman start keel-door
+ExecStartPost=-/var/lib/keel/door-publish.sh
 ExecStop=/usr/bin/podman stop -t 10 keel-door
 [Install]
 WantedBy=multi-user.target
@@ -91,8 +92,30 @@ sysctl -w net.ipv4.conf.all.route_localnet=1 >/dev/null 2>&1 || true
 iptables -P FORWARD ACCEPT >/dev/null 2>&1 || true
 iptables -C FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT >/dev/null 2>&1 || iptables -I FORWARD 1 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT >/dev/null 2>&1 || true
 iptables -C FORWARD -p tcp -m multiport --dports 80,81,443 -j ACCEPT >/dev/null 2>&1 || iptables -I FORWARD 1 -p tcp -m multiport --dports 80,81,443 -j ACCEPT >/dev/null 2>&1 || true
+# Podman 5 lists these ports and does not open them. This opens them.
+install -d -m 0755 /var/lib/keel
+cat > /var/lib/keel/door-publish.sh <<'EOF'
+#!/bin/sh
+ip=$(podman inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' keel-door 2>/dev/null | awk '{print $1}')
+house=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -n 1)
+printf '%s\n' "$ip" | awk -F. 'NF==4 { ok=1 } END { exit ok?0:1 }' || exit 0
+printf '%s\n' "$house" | awk -F. 'NF==4 { ok=1 } END { exit ok?0:1 }' || exit 0
+add() { iptables -t nat -C "$@" >/dev/null 2>&1 || iptables -t nat -A "$@" >/dev/null 2>&1 || true; }
+for port in 80 81; do
+  add PREROUTING -p tcp -d "$house" --dport "$port" -j DNAT --to-destination "$ip:$port"
+  add OUTPUT -p tcp -d "$house" --dport "$port" -j DNAT --to-destination "$ip:$port"
+  add OUTPUT -p tcp -d 127.0.0.1 --dport "$port" -j DNAT --to-destination "$ip:$port"
+  add POSTROUTING -p tcp -d "$ip" --dport "$port" -j MASQUERADE
+done
+add PREROUTING -p tcp -d "$house" --dport 443 -j DNAT --to-destination "$ip:443"
+add OUTPUT -p tcp -d "$house" --dport 443 -j DNAT --to-destination "$ip:443"
+add POSTROUTING -p tcp -d "$ip" --dport 443 -j MASQUERADE
+exit 0
+EOF
+chmod 755 /var/lib/keel/door-publish.sh
 if podman container exists keel-door >/dev/null 2>&1; then
   podman start keel-door >"$log" 2>&1 || true
+  /var/lib/keel/door-publish.sh >"$log" 2>&1 || true
   i=0
   while [ "$i" -lt 15 ]; do
     ready && finish
@@ -107,11 +130,14 @@ keep_log
 podman rm -f keel-door >"$log" 2>&1 || true
 rm -rf "$cfg/data" "$cfg/letsencrypt"
 install -d -m 0755 "$cfg/data" "$cfg/letsencrypt"
-if ! podman network exists keel-front >/dev/null 2>&1; then
-  podman network create --ipv6=false keel-front >"$log" 2>&1 || podman network create keel-front >"$log" 2>&1 || fail "Keel could not start the front door. Try Open again."
-fi
+podman network rm -f keel-front >"$log" 2>&1 || true
+podman network create keel-front >"$log" 2>&1 || fail "Keel could not start the front door. Try Open again."
+gw=$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')
+dns=
+printf '%s\n' "$gw" | awk -F. 'NF==4 && $1!~/^(0|127)$/ { ok=1 } END { exit ok?0:1 }' && dns="--dns $gw"
+# shellcheck disable=SC2086
 if ! podman run -d --name keel-door --hostname keel-door --network keel-front \
-  -p 80:80 -p 81:81 -p "$house:443:443" \
+  $dns \
   -e DISABLE_IPV6=true \
   -e TZ=UTC \
   -v "$cfg/data:/data" \
@@ -123,6 +149,7 @@ if ! podman run -d --name keel-door --hostname keel-door --network keel-front \
   last=$(sed '/^$/d' "$log" | tail -n 1 | cut -c 1-140)
   fail "${last:-Keel could not start the front door. Try Open again.}"
 fi
+/var/lib/keel/door-publish.sh >"$log" 2>&1 || true
 mark 90 "Waiting for the front door."
 i=0
 while [ "$i" -lt 60 ]; do
