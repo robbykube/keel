@@ -399,6 +399,7 @@ async fn main() {
                 })
                 .await;
             });
+            crate::names::open_shared();
             state
         })
         .fallback_service(ServeDir::new(web))

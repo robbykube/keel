@@ -50,10 +50,12 @@ function programRow(spec, status) {
     ? `<div class="install-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>`
     : "";
   const waiting = spec.host === "added" && !sharedReady && !status.ready;
+  const sharedDown = !latest.names || !latest.names.ready || !latest.door || !latest.door.ready;
   const message = waiting && status.state !== "error" && status.state !== "running"
-    ? "Closed until the steps above are done."
+    ? (sharedDown ? "Closed until Names and the front door are ready." : "Closed until the name is saved.")
     : (status.message || "");
-  const open = status.state === "unavailable" || status.ready || waiting
+  const shared = spec.host === "names" && status.state !== "error";
+  const open = status.state === "unavailable" || status.ready || waiting || shared
     ? ""
     : `<button type="button" data-program="${escapeHtml(spec.id)}"${opening ? " disabled" : ""}>Open</button>`;
   const close = status.ready && status.signups_open
@@ -89,9 +91,12 @@ function updateGate() {
   sharedReady = !!ownedName && !!(names && names.ready) && !!(door && door.ready);
   const note = $("apps-wait");
   if (note) {
-    if (!ownedName) note.textContent = "Save the name you own. Then open Names and the front door. Apps stay closed until then.";
-    else if (!names || !names.ready) note.textContent = "Open Names, then the front door. Apps stay closed until then.";
-    else if (!door || !door.ready) note.textContent = "Open the front door. Apps stay closed until then.";
+    const failed = (names && names.state === "error") || (door && door.state === "error");
+    if (!names || !names.ready || !door || !door.ready) {
+      note.textContent = failed
+        ? "Names or the front door stopped. Apps stay closed until both are ready."
+        : "Names and the front door open on their own. Apps stay closed until they are ready.";
+    } else if (!ownedName) note.textContent = "Save the name you own. You can change it later. Apps stay closed until it is saved.";
     else note.textContent = "";
   }
   if (was === sharedReady) return;
@@ -124,6 +129,11 @@ function watchProgram(spec) {
     programTimers[spec.id] = 0;
     const status = await programStatus(spec);
     if (!status || status.state === "idle") {
+      if (spec.host === "names") {
+        if (status) paintProgram(spec, status);
+        programTimers[spec.id] = window.setTimeout(tick, 1500);
+        return;
+      }
       quiet += 1;
       if (quiet < 8) programTimers[spec.id] = window.setTimeout(tick, 800);
       else if (status) paintProgram(spec, status);
@@ -205,7 +215,7 @@ async function loadAlways() {
     const status = await programStatus(spec);
     if (!status) continue;
     paintProgram(spec, status);
-    if (status.state === "running") watchProgram(spec);
+    if (!status.ready && status.state !== "unavailable") watchProgram(spec);
   }
 }
 
@@ -244,7 +254,7 @@ async function loadOwned() {
   if (data.name) {
     input.value = data.name;
     ownedName = data.name;
-    status.textContent = `Keel uses that name for each app, such as ${data.photos}. At the place you bought the name, send it to this computer once if people outside the house should open it.`;
+    status.textContent = `Keel uses that name for each app, such as ${data.photos}. You can change it later.`;
   } else {
     ownedName = "";
   }
@@ -268,7 +278,7 @@ $("owned-form").addEventListener("submit", async (event) => {
       return;
     }
     ownedName = data.name || $("owned-input").value.trim();
-    status.textContent = `Keel uses that name for each app, such as ${data.photos}. At the place you bought the name, send it to this computer once if people outside the house should open it.`;
+    status.textContent = `Keel uses that name for each app, such as ${data.photos}. You can change it later.`;
     updateGate();
   } catch (err) {
     status.textContent = String(err);

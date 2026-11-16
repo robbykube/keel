@@ -80,8 +80,8 @@ fn names_job() -> Job {
         installed: "/var/lib/technitium/installed",
         opening: &NAMES_OPENING,
         windows: "Names install on the Keel computer.",
-        idle_new: "Press Open to put names on this computer. The first time downloads the program.",
-        idle_have: "Names are on this computer. Press Open to start them.",
+        idle_new: "Keel is opening Names. The first time downloads the program.",
+        idle_have: "Names are on this computer. Keel is starting them.",
         opening_line: "Opening Names.",
         script: names_script,
         ready: names_ready,
@@ -94,8 +94,8 @@ fn door_job() -> Job {
         installed: "/var/lib/npm/installed",
         opening: &DOOR_OPENING,
         windows: "The front door installs on the Keel computer.",
-        idle_new: "Press Open to put the front door on this computer. The first time downloads the program.",
-        idle_have: "The front door is on this computer. Press Open to start it.",
+        idle_new: "Keel is opening the front door. The first time downloads the program.",
+        idle_have: "The front door is on this computer. Keel is starting it.",
         opening_line: "Opening the front door.",
         script: door_script,
         ready: door_ready,
@@ -112,12 +112,34 @@ pub(crate) fn door_script() -> String {
 
 pub fn prepared() -> Result<(), String> {
     if !names_view().ready {
-        return Err("Open Names first. Apps stay closed until Names and the front door are open.".into());
+        return Err("Names are still opening. Apps stay closed until Names and the front door are ready.".into());
     }
     if !door_view().ready {
-        return Err("Open the front door first. Apps stay closed until it is open.".into());
+        return Err("The front door is still opening. Apps stay closed until it is ready.".into());
     }
     Ok(())
+}
+
+/// Names and the front door do not need the name you own. Keel starts them
+/// on its own. The name can be saved or changed at any time.
+pub fn open_shared() {
+    if !cfg!(target_os = "linux") {
+        return;
+    }
+    std::thread::spawn(|| {
+        bring_up(&names_job());
+        bring_up(&door_job());
+    });
+}
+
+fn bring_up(job: &Job) {
+    if view(job).ready {
+        return;
+    }
+    let _ = start(job);
+    while view(job).state == "running" {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
 }
 
 pub fn publish(leaf: &str, forward: &str, port: u16) -> Result<bool, String> {
