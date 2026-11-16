@@ -8,11 +8,13 @@ mod discover;
 mod files;
 mod firewall;
 mod folders;
+mod gallery;
 mod github_connect;
 mod installer;
 mod inventory;
 mod issues;
 mod jitsi;
+mod jellyfin;
 mod locked;
 mod logs;
 mod mail;
@@ -331,6 +333,19 @@ async fn main() {
         .route(
             "/api/apps/immich/install",
             post(photos_install).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/photos/pictures",
+            get(picture_album).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/photos/picture",
+            get(picture_file).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route("/api/apps/jellyfin", get(jellyfin_status))
+        .route(
+            "/api/apps/jellyfin/install",
+            post(jellyfin_install).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route("/api/apps/papra", get(papers_status))
         .route(
@@ -1236,6 +1251,66 @@ async fn papers_install() -> Result<(StatusCode, Json<serde_json::Value>), (Stat
 
 async fn photos_status() -> Json<crate::photos::Status> {
     Json(crate::photos::view())
+}
+
+async fn picture_album() -> Json<crate::gallery::Album> {
+    Json(tokio::task::spawn_blocking(crate::gallery::album)
+        .await
+        .unwrap_or_else(|_| crate::gallery::Album {
+            pictures: Vec::new(),
+            message: "Keel could not open the pictures.".into(),
+        }))
+}
+
+#[derive(Deserialize)]
+struct PictureQuery {
+    path: String,
+}
+
+async fn picture_file(
+    Query(query): Query<PictureQuery>,
+) -> Result<Response, (StatusCode, String)> {
+    let opened = tokio::task::spawn_blocking(move || crate::gallery::open_picture(&query.path))
+        .await
+        .unwrap_or_else(|_| Err("Keel could not open that picture.".into()))
+        .map_err(|message| (StatusCode::BAD_REQUEST, message))?;
+    let file = tokio::fs::File::from_std(opened.file);
+    let body = Body::from_stream(tokio_util::io::ReaderStream::new(file));
+    Response::builder()
+        .header(CONTENT_TYPE, opened.kind)
+        .header(CONTENT_LENGTH, opened.len.to_string())
+        .body(body)
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Keel could not open that picture.".into(),
+            )
+        })
+}
+
+async fn jellyfin_status() -> Json<crate::jellyfin::Status> {
+    Json(crate::jellyfin::view())
+}
+
+async fn jellyfin_install() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match crate::jellyfin::start() {
+        Ok(status) => Ok((
+            if status.ready { StatusCode::OK } else { StatusCode::ACCEPTED },
+            Json(serde_json::json!({
+                "ok": true,
+                "ready": status.ready,
+                "address": status.address,
+                "message": status.message,
+                "state": status.state,
+                "percent": status.percent,
+                "allowed": status.allowed,
+            })),
+        )),
+        Err(message) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": message })),
+        )),
+    }
 }
 
 async fn photos_install() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {

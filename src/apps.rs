@@ -108,7 +108,7 @@ pub fn manifests(idle: bool) -> Vec<AppManifest> {
             &["/var/lib/immich"],
             "http",
             "on_demand",
-            "Show the pictures already in Media, at the name you own.",
+            "Pictures already in Media. Open shows them here. Jellyfin is the full program, and a small computer cannot use it.",
         ),
         (
             "npm",

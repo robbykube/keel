@@ -35,7 +35,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Names | The book of names for this house. Keel opens it on its own. Leave the router DNS as it is |
 | Logs | Notes from Names and the front door. Sign in, then open Logs. That works from another computer |
 | Front door | Answers a name you own and sends it to that app. This page stays on its own address |
-| Photos | Pictures already in Media. The first Open downloads the program that shows them. The pictures stay on the disk |
+| Photos | Pictures already in Media. Open shows them here. They stay on the disk. Jellyfin is the full program. A small computer is refused it |
 | Send to the phone | When something is red, one message goes to the free ntfy app. The phone must be on Away |
 | Use this | Shared folder or files app a person should pick |
 | Leave this | Disks for other programs, installer files, or the computer itself |

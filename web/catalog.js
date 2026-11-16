@@ -29,7 +29,6 @@ const programs = {
   door: { id: "door", title: "Front door", path: "/api/apps/npm", host: "names" },
   video: { id: "video", title: "Video", path: "/api/apps/jitsi", host: "added" },
   passwords: { id: "passwords", title: "Passwords", path: "/api/apps/vaultwarden", host: "added" },
-  photos: { id: "photos", title: "Photos", path: "/api/apps/immich", host: "added" },
   papers: { id: "papers", title: "Papers", path: "/api/apps/papra", host: "added" },
   mail: { id: "mail", title: "Mail", path: "/api/apps/thunderbird", host: "added" },
 };
@@ -103,6 +102,7 @@ function updateGate() {
   for (const spec of Object.values(programs)) {
     if (spec.host === "added" && latest[spec.id]) paintProgram(spec, latest[spec.id]);
   }
+  if ($("photos-row")) paintPhotos();
 }
 
 async function programStatus(spec) {
@@ -194,6 +194,101 @@ async function closeProgram(spec) {
   }
 }
 
+function photosCard(status) {
+  const allowed = !!(status && status.allowed);
+  const opening = allowed && status.state === "running";
+  const failed = allowed && status.state === "error";
+  const ready = allowed && status.ready;
+  const address = ready && status.address
+    ? `<p><a href="${escapeHtml(status.address)}">${escapeHtml(status.address)}</a></p>`
+    : "";
+  const percent = Math.max(0, Math.min(100, Number(status && status.percent) || 0));
+  const bar = opening
+    ? `<div class="install-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>`
+    : "";
+  let full = `<p class="app-warn">Jellyfin needs a larger computer.</p>`;
+  let jelly = "";
+  if (allowed && status.state === "unavailable") {
+    full = `<p class="install-message">${escapeHtml(status.message || "Jellyfin installs on the Keel computer.")}</p>`;
+  } else if (allowed && !sharedReady && !opening && !failed && !ready) {
+    full = `<p class="install-message">Jellyfin stays closed until Names and the front door are ready.</p>`;
+  } else if (allowed) {
+    full = `<p class="install-message${failed ? " install-error" : ""}">${escapeHtml(status.message || "")}</p>${address}${bar}`;
+    jelly = ready
+      ? ""
+      : `<button type="button" data-program="jellyfin"${opening ? " disabled" : ""}>Jellyfin</button>`;
+  }
+  return `<article class="app-row" id="photos-row">
+    <div>
+      <h3>Photos</h3>
+      <p class="install-message">Pictures already in Media. Open shows them here.</p>
+      ${full}
+    </div>
+    <a class="button" href="/photos.html">Open</a>
+    ${jelly}
+  </article>`;
+}
+
+async function paintPhotos() {
+  let status = { allowed: false, state: "refused", message: "Jellyfin needs a larger computer." };
+  try {
+    const res = await fetch("/api/apps/jellyfin", { credentials: "same-origin" });
+    if (res.ok) status = await res.json();
+  } catch {
+    /* The sentence stays the refusal. */
+  }
+  const host = $("added");
+  if (!host) return;
+  const html = photosCard(status);
+  const existing = $("photos-row");
+  if (existing) existing.outerHTML = html;
+  else host.insertAdjacentHTML("afterbegin", html);
+  if (status.state === "running") {
+    window.setTimeout(paintPhotos, 800);
+  }
+}
+
+async function openJellyfin() {
+  const host = $("added");
+  if (!host || !$("photos-row")) return;
+  $("photos-row").outerHTML = photosCard({
+    allowed: true,
+    state: "running",
+    percent: 8,
+    message: "Opening Jellyfin. This can take a while.",
+    ready: false,
+    address: "",
+  });
+  try {
+    const res = await fetch("/api/apps/jellyfin/install", { method: "POST", credentials: "same-origin" });
+    const data = await readAnswer(res);
+    if (!res.ok || data.ok === false) {
+      $("photos-row").outerHTML = photosCard({
+        allowed: true,
+        state: "error",
+        percent: 0,
+        message: data.message || "Keel could not open Jellyfin.",
+        ready: false,
+        address: "",
+      });
+      return;
+    }
+    $("photos-row").outerHTML = photosCard(data);
+    if (!data.ready) window.setTimeout(paintPhotos, 800);
+  } catch (err) {
+    if ($("photos-row")) {
+      $("photos-row").outerHTML = photosCard({
+        allowed: true,
+        state: "error",
+        percent: 0,
+        message: String(err),
+        ready: false,
+        address: "",
+      });
+    }
+  }
+}
+
 function onProgramClick(event) {
   const close = event.target.closest("button[data-close]");
   if (close) {
@@ -203,6 +298,10 @@ function onProgramClick(event) {
   }
   const open = event.target.closest("button[data-program]");
   if (!open) return;
+  if (open.dataset.program === "jellyfin") {
+    openJellyfin();
+    return;
+  }
   const spec = programs[open.dataset.program];
   if (spec) openProgram(spec);
 }
@@ -232,7 +331,8 @@ async function load() {
   $("more").innerHTML = more.length
     ? more.map((app) => row(app, false)).join("")
     : `<p class="meta">Every app on the list is already added.</p>`;
-  for (const appId of ["thunderbird", "papra", "immich", "vaultwarden", "jitsi"]) {
+  if (opened.some((app) => app.id === "immich")) paintPhotos();
+  for (const appId of ["thunderbird", "papra", "vaultwarden", "jitsi"]) {
     if (!opened.some((app) => app.id === appId)) continue;
     const spec = programs[chosenProgram[appId]];
     const status = await programStatus(spec);

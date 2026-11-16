@@ -776,10 +776,23 @@ a.button:hover { background: var(--accent-dim); }
 .app-row > div { flex: 1; min-width: 0; }
 .app-row h3 { margin: 0; font-size: var(--text-lg); font-weight: 560; }
 .app-row p { margin: var(--space-1) 0 0; color: var(--muted); }
+.app-row .app-warn { color: var(--warn); }
 .app-row .install-message { color: var(--text); font-size: var(--text-md); font-weight: 500; }
 .app-row .install-message.install-error { color: var(--red); }
 .app-row .install-bar { width: 100%; margin-top: var(--space-3); }
-.app-row > button { margin-top: var(--space-1); }
+.app-row > button, .app-row > a.button { margin-top: var(--space-1); }
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-3);
+}
+.photo-grid a { display: block; }
+.photo-grid img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  background: var(--panel-2);
+}
 .home-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
