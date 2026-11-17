@@ -54,7 +54,7 @@ install -d -m 0755 "$cfg/sites" "$cfg/data"
     printf '%s\n' "$host {" "	bind $house" "	reverse_proxy $upstream" '	tls {' '		issuer acme {' "			email $email" '		}' '	}' '}'
   done
 } > "$cfg/Caddyfile"
-if systemctl is-active --quiet keel-door; then
+if systemctl is-active --quiet keel-door && systemctl show -p ExecStart keel-door | grep -q /usr/local/bin/caddy; then
   /usr/local/bin/caddy reload --config "$cfg/Caddyfile" >/var/lib/keel/door.log 2>&1 || exit 1
 fi
 exit 0
@@ -110,15 +110,17 @@ fi
 mark 70 "Starting the front door."
 make_room
 write_helper
-/var/lib/keel/caddy-reload.sh >"$log" 2>&1 || fail "Keel could not write the front door. Try Open again."
-install_unit
 systemctl disable --now caddy.service >/dev/null 2>&1 || true
 systemctl stop keel-door-page >/dev/null 2>&1 || true
 systemctl reset-failed keel-door-page >/dev/null 2>&1 || true
+systemctl stop keel-door.service >/dev/null 2>&1 || true
+systemctl reset-failed keel-door.service >/dev/null 2>&1 || true
 if command -v podman >/dev/null 2>&1; then
   podman rm -f keel-door >"$log" 2>&1 || true
 fi
 rm -f /var/lib/keel/door-forward.py /var/lib/keel/door-publish.sh
+/var/lib/keel/caddy-reload.sh >"$log" 2>&1 || fail "Keel could not write the front door. Try Open again."
+install_unit
 systemctl reset-failed keel-door.service >/dev/null 2>&1 || true
 if ! systemctl restart keel-door.service >"$log" 2>&1; then
   last=$(sed '/^$/d' "$log" 2>/dev/null | tail -n 1 | cut -c 1-140)

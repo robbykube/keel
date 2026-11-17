@@ -373,6 +373,10 @@ mod tests {
         assert!(script.contains("podman rm -f keel-door"));
         assert!(script.contains("caddy-reload.sh"));
         assert!(script.contains("reverse_proxy"));
+        let stop = script.find("systemctl stop keel-door.service").expect("stop the old door");
+        let write = script.find("/var/lib/keel/caddy-reload.sh >").expect("write the door");
+        assert!(stop < write);
+        assert!(script.contains("systemctl show -p ExecStart keel-door | grep -q /usr/local/bin/caddy"));
         assert!(!script.contains('\r'));
         assert!(!script.contains("DNAT"));
         assert!(!script.contains("-p 80:80"));
