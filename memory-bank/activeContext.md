@@ -33,7 +33,8 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
-- **v0.1.49 (2026-11-17):** The front door start showed systemd’s hint because the old program could still be the one started. Keel now loads the small program first, and says when the computer is out of room. The Pi installs `keel-linux-arm64-v0.1.49.tar.gz`.
+- **v0.1.50 (2026-11-17):** Photos was looking in the empty Photos folder. The pictures are in the Pictures folder beside it. Open shows that folder too. The Pi installs `keel-linux-arm64-v0.1.50.tar.gz`.
+- **v0.1.49 (2026-11-17):** The front door start showed systemd’s hint because the old program could still be the one started. Keel loads the small program first, and says when the computer is out of room. The Pi is on this version.
 - **v0.1.48 (2026-11-17):** The front door write stopped because the old door was still the running program. Keel stops that old door first, and reloads only when the small program is the one running. The Pi installed it and showed systemd’s hint instead of starting the new program.
 - **v0.1.47 (2026-11-17):** The front door is a small program on this computer, bound to the house address. The large panel and the copy in front of it are gone. The Pi installs `keel-linux-arm64-v0.1.47.tar.gz`. The Pi installed it and reported “Keel could not write the front door.”
 - **v0.1.46 (2026-11-16):** Photos Open shows the pictures already in Media. Jellyfin is the full program, refused when the computer has under 6 GB of memory. The Pi installs `keel-linux-arm64-v0.1.46.tar.gz`.

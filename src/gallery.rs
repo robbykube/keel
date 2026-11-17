@@ -1,5 +1,6 @@
 //! The light Photos page. It shows picture files already in Media.
-//! Nothing is downloaded, and the pictures stay on the disk.
+//! The library may be named Photos or Pictures. Nothing is downloaded,
+//! and the pictures stay on the disk.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,6 +9,7 @@ use serde::Serialize;
 
 const PICTURE_LIMIT: usize = 400;
 const WALK_DEPTH: u32 = 6;
+const LIBRARY: &[&str] = &["Photos", "Pictures"];
 
 #[derive(Serialize)]
 pub struct Picture {
@@ -28,8 +30,7 @@ pub struct Opened {
 }
 
 pub fn album() -> Album {
-    let root = photos_dir();
-    let pictures = list_in(&root);
+    let pictures = library(&media_dir());
     let message = if pictures.is_empty() {
         "Pictures live in Media. None are there yet.".into()
     } else {
@@ -39,7 +40,10 @@ pub fn album() -> Album {
 }
 
 pub fn open_picture(rel: &str) -> Result<Opened, String> {
-    let full = file_in(&photos_dir(), rel)?;
+    if !in_library(rel) {
+        return Err("That picture is not in Media.".into());
+    }
+    let full = file_in(&media_dir(), rel)?;
     let kind = content_type(&full).ok_or_else(|| "That file is not a picture.".to_string())?;
     let meta = fs::metadata(&full).map_err(|_| "That picture is not in Media.".to_string())?;
     if !meta.is_file() {
@@ -51,6 +55,35 @@ pub fn open_picture(rel: &str) -> Result<Opened, String> {
         len: meta.len(),
         kind,
     })
+}
+
+pub fn library(media: &Path) -> Vec<Picture> {
+    let mut pictures = Vec::new();
+    for folder in LIBRARY {
+        if pictures.len() >= PICTURE_LIMIT {
+            break;
+        }
+        for picture in list_in(&media.join(folder)) {
+            if pictures.len() >= PICTURE_LIMIT {
+                break;
+            }
+            pictures.push(Picture {
+                name: picture.name,
+                path: format!("{folder}/{}", picture.path),
+            });
+        }
+    }
+    pictures.sort_by(|a, b| a.path.to_ascii_lowercase().cmp(&b.path.to_ascii_lowercase()));
+    pictures
+}
+
+fn in_library(rel: &str) -> bool {
+    let rel = rel.trim().trim_matches(['/', '\\']);
+    let mut parts = rel.split(['/', '\\']).filter(|part| !part.is_empty());
+    let Some(folder) = parts.next() else {
+        return false;
+    };
+    LIBRARY.contains(&folder) && parts.next().is_some()
 }
 
 pub fn list_in(root: &Path) -> Vec<Picture> {
@@ -82,12 +115,12 @@ pub fn file_in(root: &Path, rel: &str) -> Result<PathBuf, String> {
     Ok(full_real)
 }
 
-fn photos_dir() -> PathBuf {
+fn media_dir() -> PathBuf {
     if cfg!(target_os = "linux") {
-        PathBuf::from("/srv/keel/files/Media/Photos")
+        PathBuf::from("/srv/keel/files/Media")
     } else {
         let dir = std::env::var("KEEL_DATA").unwrap_or_else(|_| "data".into());
-        PathBuf::from(dir).join("mock-files").join("Media").join("Photos")
+        PathBuf::from(dir).join("mock-files").join("Media")
     }
 }
 
@@ -149,7 +182,7 @@ fn content_type(path: &Path) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{file_in, list_in};
+    use super::{file_in, in_library, library, list_in};
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -171,5 +204,23 @@ mod tests {
         assert!(file_in(&root, "../secret.jpg").is_err());
         assert!(file_in(&root, "note.txt").unwrap().ends_with("note.txt"));
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_page_shows_the_pictures_folder_beside_photos() {
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let media = std::env::temp_dir().join(format!("keel-media-{stamp}"));
+        fs::create_dir_all(media.join("Photos")).unwrap();
+        fs::create_dir_all(media.join("Pictures").join("Holiday")).unwrap();
+        fs::create_dir_all(media.join("Audiobooks")).unwrap();
+        fs::write(media.join("Pictures").join("Holiday").join("a.jpg"), b"jpeg").unwrap();
+        fs::write(media.join("Audiobooks").join("cover.jpg"), b"jpeg").unwrap();
+        let listed = library(&media);
+        let paths: Vec<&str> = listed.iter().map(|picture| picture.path.as_str()).collect();
+        assert_eq!(paths, vec!["Pictures/Holiday/a.jpg"]);
+        assert!(in_library("Pictures/Holiday/a.jpg"));
+        assert!(!in_library("Audiobooks/cover.jpg"));
+        assert!(!in_library("../secret.jpg"));
+        let _ = fs::remove_dir_all(&media);
     }
 }
