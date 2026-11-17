@@ -23,11 +23,21 @@ async function load() {
       note.textContent = data.message || "Pictures live in Media. None are there yet.";
       return;
     }
-    note.textContent = data.message || "Pictures already in Media. They stay on the disk.";
-    grid.innerHTML = pictures.map((picture) => {
-      const src = `/api/photos/picture?path=${encodeURIComponent(picture.path)}`;
-      return `<a href="${src}"><img alt="${escapeHtml(picture.name)}" src="${src}"></a>`;
-    }).join("");
+    note.textContent = data.message || "Pictures already in Media. They stay on the disk. Small copies stay on the disk with them.";
+    const more = $("more");
+    let shown = 0;
+    const paint = () => {
+      const next = pictures.slice(shown, shown + 12);
+      shown += next.length;
+      grid.insertAdjacentHTML("beforeend", next.map((picture) => {
+        const path = encodeURIComponent(picture.path);
+        const full = `/api/photos/picture?path=${path}`;
+        return `<a href="${full}"><img alt="${escapeHtml(picture.name)}" src="${full}&amp;small=1" loading="lazy"></a>`;
+      }).join(""));
+      more.hidden = shown >= pictures.length;
+    };
+    more.onclick = paint;
+    paint();
   } catch (err) {
     note.textContent = String(err);
   }

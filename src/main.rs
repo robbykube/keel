@@ -1265,12 +1265,20 @@ async fn picture_album() -> Json<crate::gallery::Album> {
 #[derive(Deserialize)]
 struct PictureQuery {
     path: String,
+    #[serde(default)]
+    small: String,
 }
 
 async fn picture_file(
     Query(query): Query<PictureQuery>,
 ) -> Result<Response, (StatusCode, String)> {
-    let opened = tokio::task::spawn_blocking(move || crate::gallery::open_picture(&query.path))
+    let opened = tokio::task::spawn_blocking(move || {
+        if query.small == "1" {
+            crate::gallery::open_small(&query.path)
+        } else {
+            crate::gallery::open_picture(&query.path)
+        }
+    })
         .await
         .unwrap_or_else(|_| Err("Keel could not open that picture.".into()))
         .map_err(|message| (StatusCode::BAD_REQUEST, message))?;

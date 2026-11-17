@@ -33,6 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Recent
 
+- **v0.1.51 (2026-11-17):** Photos was sending every full-size picture at once, so the Pi stuck after the first ones appeared. It now shows a few at a time and keeps small copies on the files disk. The Pi installs `keel-linux-arm64-v0.1.51.tar.gz`.
 - **v0.1.50 (2026-11-17):** Photos was looking in the empty Photos folder. The pictures are in the Pictures folder beside it. Open shows that folder too. The Pi installs `keel-linux-arm64-v0.1.50.tar.gz`.
 - **v0.1.49 (2026-11-17):** The front door start showed systemd’s hint because the old program could still be the one started. Keel loads the small program first, and says when the computer is out of room. The Pi is on this version.
 - **v0.1.48 (2026-11-17):** The front door write stopped because the old door was still the running program. Keel stops that old door first, and reloads only when the small program is the one running. The Pi installed it and showed systemd’s hint instead of starting the new program.
