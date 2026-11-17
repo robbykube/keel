@@ -31,6 +31,13 @@ make_room() {
   fi
   journalctl --vacuum-size=8M >/dev/null 2>&1 || true
   rm -rf /run/log/journal /run/log/journal.* >/dev/null 2>&1 || true
+  avail=$(df -Pk /run 2>/dev/null | awk 'NR==2 { print $4 }')
+  case "$avail" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+  if [ "$avail" -lt 16384 ]; then
+    return 1
+  fi
 }
 write_helper() {
   cat > /var/lib/keel/caddy-reload.sh <<'EOF'
@@ -76,8 +83,13 @@ RestartSec=1
 [Install]
 WantedBy=multi-user.target
 EOF
-  systemctl daemon-reload >"$log" 2>&1 || true
-  systemctl enable keel-door.service >"$log" 2>&1 || true
+  if ! systemctl daemon-reload >"$log" 2>&1; then
+    if grep -q "not enough space" "$log" 2>/dev/null; then
+      fail "The Keel computer ran out of room to start the front door. Restart it, then press Open again."
+    fi
+    fail "Keel could not start the front door. Restart the Keel computer, then press Open again."
+  fi
+  systemctl enable keel-door.service >/dev/null 2>&1 || true
 }
 mark 8 "Opening the front door."
 install -d -m 0755 "$cfg/sites" "$cfg/data" /var/lib/keel /run/keel
@@ -108,7 +120,7 @@ if ! /usr/local/bin/caddy version 2>/dev/null | grep -q "v$ver"; then
   rm -rf "$tmp"
 fi
 mark 70 "Starting the front door."
-make_room
+make_room || fail "The Keel computer ran out of room to start the front door. Restart it, then press Open again."
 write_helper
 systemctl disable --now caddy.service >/dev/null 2>&1 || true
 systemctl stop keel-door-page >/dev/null 2>&1 || true
@@ -121,10 +133,16 @@ fi
 rm -f /var/lib/keel/door-forward.py /var/lib/keel/door-publish.sh
 /var/lib/keel/caddy-reload.sh >"$log" 2>&1 || fail "Keel could not write the front door. Try Open again."
 install_unit
+systemctl show -p ExecStart keel-door | grep -q /usr/local/bin/caddy || fail "Keel could not start the front door. Restart the Keel computer, then press Open again."
+if ! /usr/local/bin/caddy validate --config "$cfg/Caddyfile" >"$log" 2>&1; then
+  fail "Keel could not start the front door. Try Open again."
+fi
 systemctl reset-failed keel-door.service >/dev/null 2>&1 || true
 if ! systemctl restart keel-door.service >"$log" 2>&1; then
-  last=$(sed '/^$/d' "$log" 2>/dev/null | tail -n 1 | cut -c 1-140)
-  fail "${last:-Keel could not start the front door. Try Open again.}"
+  if journalctl -u keel-door -n 50 --no-pager -o cat 2>/dev/null | grep -q "address already in use"; then
+    fail "Something else is using the front door. Restart the Keel computer, then press Open again."
+  fi
+  fail "Keel could not start the front door. Try Open again."
 fi
 i=0
 while [ "$i" -lt 20 ]; do

@@ -377,6 +377,10 @@ mod tests {
         let write = script.find("/var/lib/keel/caddy-reload.sh >").expect("write the door");
         assert!(stop < write);
         assert!(script.contains("systemctl show -p ExecStart keel-door | grep -q /usr/local/bin/caddy"));
+        assert!(script.contains("not enough space"));
+        assert!(script.contains("caddy validate --config"));
+        assert!(script.contains("address already in use"));
+        assert!(!script.contains("fail \"${last"));
         assert!(!script.contains('\r'));
         assert!(!script.contains("DNAT"));
         assert!(!script.contains("-p 80:80"));
