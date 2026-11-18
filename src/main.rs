@@ -216,6 +216,11 @@ async fn main() {
             "/api/storage/sleep-try",
             post(storage_sleep_try).layer(axum::middleware::from_fn(auth::require_admin)),
         )
+        .route("/api/spare", get(spare_view))
+        .route(
+            "/api/spare/restore",
+            post(spare_restore).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/installer", get(installer_status).layer(axum::middleware::from_fn(auth::require_admin)))
         .route(
             "/api/installer/progress",
@@ -851,6 +856,9 @@ async fn watch_disks(state: AppState) {
         if crate::copies::due() {
             let _ = tokio::task::spawn_blocking(crate::copies::run_now).await;
         }
+        if crate::copies::computer_due() {
+            let _ = tokio::task::spawn_blocking(crate::copies::copy_computer).await;
+        }
         if crate::phone::wanted() {
             let text = tokio::task::spawn_blocking(|| {
                 let reds: Vec<crate::phone::Note> = crate::storage::issues()
@@ -1264,6 +1272,18 @@ fn without_keys(value: &mut serde_json::Value, keys: &[&str]) {
         }
         serde_json::Value::Array(items) => items.iter_mut().for_each(|inner| without_keys(inner, keys)),
         _ => {}
+    }
+}
+
+async fn spare_view() -> Json<crate::copies::Spare> {
+    Json(tokio::task::spawn_blocking(crate::copies::spare).await.unwrap_or_default())
+}
+
+async fn spare_restore() -> (StatusCode, Json<serde_json::Value>) {
+    match tokio::task::spawn_blocking(crate::copies::restore).await {
+        Ok(Ok(message)) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "message": message }))),
+        Ok(Err(message)) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "ok": false, "message": message }))),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "ok": false, "message": "Keel could not bring this computer back. Try again." }))),
     }
 }
 

@@ -1,3 +1,41 @@
+// A copy of this computer on a Keel disk: when it was made, in words.
+function spareWhen(text) {
+  const when = new Date(text);
+  if (!text || Number.isNaN(when.getTime())) return "an earlier day";
+  return when.toLocaleString([], { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+}
+
+// Brings the copy back, then waits for Keel to restart and reloads.
+async function bringBack(status, button) {
+  button.disabled = true;
+  status.textContent = "Bringing this computer back.";
+  try {
+    const res = await fetch("/api/spare/restore", { method: "POST", credentials: "same-origin" });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) throw new Error("Sign in first, then press it again.");
+    if (!res.ok || !data.ok) throw new Error(data.message || "Keel could not bring this computer back.");
+    status.textContent = data.message;
+  } catch (err) {
+    status.textContent = String(err.message || err);
+    button.disabled = false;
+    return;
+  }
+  const started = Date.now();
+  const wait = async () => {
+    await new Promise((done) => setTimeout(done, 2000));
+    try {
+      const health = await fetch("/api/health", { cache: "no-store" }).then((r) => r.json());
+      if (Date.now() - started > 6000 && health.uptime_ms < Date.now() - started) {
+        window.location.reload();
+        return;
+      }
+    } catch { /* Keel is restarting */ }
+    if (Date.now() - started < 120000) wait();
+    else window.location.reload();
+  };
+  wait();
+}
+
 (() => {
   const el = (id) => document.getElementById(id);
   const esc = (s) =>
@@ -75,10 +113,20 @@
     } else if (c.message) {
       text = c.message;
     } else {
-      text = "Keel can keep a copy of this computer on the Nightly copy disk, apart from the files.";
+      text = "Keel copies this computer every night onto the Nightly copy disk, apart from the files: people, the name you own, disk jobs, and the apps' settings and data.";
     }
     el("computerstatus").textContent = text;
     el("computersavego").disabled = !view.can_copy_computer;
+    renderSpare();
+  }
+
+  // Bringing a copy back replaces this computer's settings, so it asks once.
+  let spare = {};
+  async function renderSpare() {
+    spare = await fetch("/api/spare", { credentials: "same-origin" }).then((r) => r.json()).catch(() => ({}));
+    el("spare").hidden = !spare.found;
+    if (!spare.found || el("sparego").dataset.asked) return;
+    el("sparetext").textContent = `The ${spare.disk} disk holds a copy of this computer from ${spareWhen(spare.when)}. Keel makes a new one every night.`;
   }
 
   function showUse(index) {
@@ -183,6 +231,17 @@
     const reply = await post("/api/storage/copy-now");
     el("copystatus").textContent = reply.message;
     setTimeout(() => load().catch(() => {}), 1500);
+  });
+
+  el("sparego").addEventListener("click", () => {
+    const button = el("sparego");
+    if (!button.dataset.asked) {
+      button.dataset.asked = "1";
+      el("sparetext").textContent = `This replaces the settings on this computer with the copy from ${spareWhen(spare.when)}: people, the name you own, disk jobs, and the apps' data. Running apps stop. Press again to bring it back.`;
+      button.textContent = "Bring it back";
+      return;
+    }
+    bringBack(el("sparetext"), button);
   });
 
   el("computersavego").addEventListener("click", async () => {

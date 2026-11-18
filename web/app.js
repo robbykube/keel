@@ -182,6 +182,61 @@ function showNotice(lines, href, failing) {
     <a class="button" href="${escapeHtml(href)}">Fix it</a>`;
 }
 
+// A copy of this computer on a Keel disk: when it was made, in words.
+function spareWhen(text) {
+  const when = new Date(text);
+  if (!text || Number.isNaN(when.getTime())) return "an earlier day";
+  return when.toLocaleString([], { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+}
+
+// Brings the copy back, then waits for Keel to restart and reloads.
+async function bringBack(status, button) {
+  button.disabled = true;
+  status.textContent = "Bringing this computer back.";
+  try {
+    const res = await fetch("/api/spare/restore", { method: "POST", credentials: "same-origin" });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) throw new Error("Sign in first, then press it again.");
+    if (!res.ok || !data.ok) throw new Error(data.message || "Keel could not bring this computer back.");
+    status.textContent = data.message;
+  } catch (err) {
+    status.textContent = String(err.message || err);
+    button.disabled = false;
+    return;
+  }
+  const started = Date.now();
+  const wait = async () => {
+    await new Promise((done) => setTimeout(done, 2000));
+    try {
+      const health = await fetch("/api/health", { cache: "no-store" }).then((r) => r.json());
+      if (Date.now() - started > 6000 && health.uptime_ms < Date.now() - started) {
+        window.location.reload();
+        return;
+      }
+    } catch { /* Keel is restarting */ }
+    if (Date.now() - started < 120000) wait();
+    else window.location.reload();
+  };
+  wait();
+}
+
+async function showSpare() {
+  const box = $("spare-offer");
+  if (!box) return;
+  const spare = await fetch("/api/spare", { credentials: "same-origin" }).then((r) => r.json()).catch(() => ({}));
+  if (!spare.found || !spare.fresh) {
+    box.hidden = true;
+    return;
+  }
+  $("spare-offer-text").textContent = `This computer looks new, and the ${spare.disk} disk holds a copy of a Keel from ${spareWhen(spare.when)}. Bringing it back restores the people, the name you own, the disk jobs, and the apps' settings and data, such as the password vault. The files are already on their disks.`;
+  box.hidden = false;
+  const go = $("spare-offer-go");
+  if (!go.dataset.ready) {
+    go.dataset.ready = "1";
+    go.addEventListener("click", () => bringBack($("spare-offer-status"), go));
+  }
+}
+
 function showAppChoice(apps) {
   const box = $("apps-choice");
   const again = $("apps-again");
@@ -246,6 +301,7 @@ async function load() {
   }
   showNotice(lines, fix, red.length > 0);
   showAppChoice(apps.data);
+  showSpare();
 
   const owner = storage.data.owner || "";
   $("home").innerHTML = [

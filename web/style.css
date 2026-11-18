@@ -1344,6 +1344,11 @@ button:focus-visible, a.button:focus-visible, input:focus-visible, select:focus-
 /* Disks: the other-computer forms open in full, not in a short scroll box. */
 #another[open] { max-height: none; overflow: visible; }
 #another .form { margin-top: var(--space-3); }
+/* A copy of this computer to bring back. */
+.spare { margin-top: var(--space-3); }
+.spare-offer { margin-bottom: var(--space-4); }
+.spare-offer .actions { display: flex; gap: var(--space-2); }
+
 /* A page that needs a sign-in, opened without one. */
 .sign-in-needed { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
 .sign-in-needed p { margin: 0; }

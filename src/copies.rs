@@ -82,18 +82,56 @@ pub fn copy_computer() -> Result<String, String> {
 }
 
 /// Runs as root, outside Keel's sandbox. Destinations are only the two copy
-/// disks, and only while those disks are actually mounted.
-const COMPUTER_COPY_SCRIPT: &str = r#"set -euo pipefail
+/// disks, and only while those disks are actually mounted. The copy is built
+/// on the disk itself: /tmp is memory on this computer.
+///
+/// What goes in: the program, Keel's own settings (people, the name you own,
+/// disk jobs, the locks for the app names), the apps' settings and data
+/// (the password vault, Papers, Mail settings, Names, Video, Away's
+/// identity), and the admin token. Not the files, not picture copies, not
+/// downloaded programs, and not Photos' own database, which rebuilds from
+/// Media. An app is paused for the moment its data is copied, so its
+/// database is copied whole.
+const COMPUTER_COPY_SCRIPT: &str = r#"set -uo pipefail
 copy=/srv/keel/copy
 extra=/srv/keel/extra
-stage=$(mktemp -d /tmp/keel-computer.XXXXXX)
-trap 'rm -rf "$stage"' EXIT
-mkdir -p "$stage/program" "$stage/people"
-cp -a /usr/bin/keel "$stage/program/keel"
-cp -a /usr/lib/keel/web "$stage/program/web"
-if [ -d /var/lib/keel ]; then
-  tar -C /var/lib/keel --exclude=./files --exclude=./updates/staged --exclude=./updates/previous -cf - . | tar -C "$stage/people" -xf -
-fi
+fail() { echo "$1" >&2; exit 1; }
+containers_of() {
+  case "$1" in
+    vaultwarden) echo keel-passwords ;;
+    papra) echo keel-papers ;;
+    thunderbird) echo keel-mail ;;
+    technitium) echo keel-names ;;
+    jitsi) echo keel-jitsi-prosody keel-jitsi-jicofo keel-jitsi-jvb keel-jitsi-web ;;
+  esac
+}
+build() {
+  work="$1"
+  rm -rf "$work"
+  mkdir -p "$work/program" "$work/people" "$work/apps" "$work/etc" || return 1
+  cp -a /usr/bin/keel "$work/program/keel" 2>/dev/null || true
+  cp -a /usr/lib/keel/web "$work/program/web" 2>/dev/null || true
+  if [ -d /var/lib/keel ]; then
+    tar -C /var/lib/keel --exclude=./files --exclude=./previews --exclude=./updates/staged \
+      --exclude=./updates/previous --exclude='./*.tmp' -cf - . | tar -C "$work/people" -xf - || return 1
+  fi
+  for app in vaultwarden papra thunderbird technitium jitsi tailscale; do
+    [ -d "/var/lib/$app" ] || continue
+    paused=""
+    for name in $(containers_of "$app"); do
+      if podman pause "$name" >/dev/null 2>&1; then paused="$paused $name"; fi
+    done
+    mkdir -p "$work/apps/$app"
+    tar -C "/var/lib/$app" --exclude='./tmp' --exclude='*/cache2' --exclude='*/ImapMail' \
+      --exclude='*/Cache' --exclude='./web/keys' -cf - . | tar -C "$work/apps/$app" -xf -
+    result=$?
+    for name in $paused; do podman unpause "$name" >/dev/null 2>&1 || true; done
+    [ "$result" = 0 ] || return 1
+  done
+  if [ -f /etc/keel/keel.env ]; then cp -a /etc/keel/keel.env "$work/etc/keel.env"; fi
+  date -Is > "$work/when"
+  hostname > "$work/computer" 2>/dev/null || true
+}
 day=$(date +%F)
 copied=0
 for root in "$copy" "$extra"; do
@@ -101,22 +139,119 @@ for root in "$copy" "$extra"; do
     continue
   fi
   dest="$root/This computer"
-  mkdir -p "$dest/Older"
-  rm -rf "$dest/Latest"
-  mkdir -p "$dest/Latest"
-  cp -a "$stage/." "$dest/Latest/"
-  rm -rf "$dest/Older/$day"
-  mkdir -p "$dest/Older/$day"
-  cp -a "$stage/." "$dest/Older/$day/"
+  mkdir -p "$dest/Older" || fail "Keel could not write on the copy disk."
+  build "$dest/.new" || { rm -rf "$dest/.new"; fail "Keel could not copy this computer. The copy disk may be full."; }
+  rm -rf "$dest/Latest.old"
+  [ -d "$dest/Latest" ] && mv "$dest/Latest" "$dest/Latest.old"
+  mv "$dest/.new" "$dest/Latest"
+  rm -rf "$dest/Latest.old" "$dest/Older/$day"
+  cp -a "$dest/Latest" "$dest/Older/$day"
   chmod -R go-rwx "$dest"
   find "$dest/Older" -mindepth 1 -maxdepth 1 -type d -mtime +30 -exec rm -rf {} +
   copied=1
 done
 if [ "$copied" -ne 1 ]; then
-  echo "Give a disk the Nightly copy job. Keel keeps a copy of itself there, apart from the files." >&2
-  exit 1
+  fail "Give a disk the Nightly copy job. Keel keeps a copy of itself there, apart from the files."
 fi
 sync
+"#;
+
+/// Once a day, beside the file copy.
+pub fn computer_due() -> bool {
+    can_copy_computer() && storage::now_ms().saturating_sub(storage::computer_copy_status().last_run_ms) >= DAY_MS
+}
+
+/// A copy of this computer found on a connected copy disk.
+#[derive(serde::Serialize, Default)]
+pub struct Spare {
+    /// A copy is there to bring back.
+    pub found: bool,
+    /// When it was made, as the copy wrote it (date -Is).
+    pub when: String,
+    /// Which disk holds it.
+    pub disk: String,
+    /// This computer looks new: no people, no name you own, nothing brought
+    /// back yet. Home offers the copy then.
+    pub fresh: bool,
+}
+
+pub fn spare() -> Spare {
+    let data = std::path::PathBuf::from(std::env::var("KEEL_DATA").unwrap_or_else(|_| "data".into()));
+    let fresh = !data.join("people.json").exists()
+        && !data.join("owned-name.json").exists()
+        && !data.join("restored").exists();
+    for (role, disk) in [("copy", "Nightly copy"), ("extra", "Third copy")] {
+        if !storage::mounted(role) {
+            continue;
+        }
+        let latest = storage::role_root(role).join("This computer").join("Latest");
+        if !latest.join("people").is_dir() {
+            continue;
+        }
+        let when = fs::read_to_string(latest.join("when")).unwrap_or_default().trim().to_string();
+        return Spare { found: true, when, disk: disk.into(), fresh };
+    }
+    Spare { fresh, ..Spare::default() }
+}
+
+/// Bring this computer back from the newest copy on a connected copy disk:
+/// Keel's settings, the apps' settings and data, the admin token. Running
+/// apps whose data comes back are stopped first; press Open again after.
+/// Keel restarts itself a few seconds later to read it all.
+pub fn restore() -> Result<String, String> {
+    if !spare().found {
+        return Err("No copy of this computer is on a connected Keel disk. Connect the Nightly copy disk, then try again.".into());
+    }
+    storage::host("exec /bin/bash -s", &[], Some(RESTORE_SCRIPT))?;
+    Ok("This computer is coming back from the copy. Keel restarts in a few seconds; this page reloads by itself. Then open each app on Apps again.".into())
+}
+
+const RESTORE_SCRIPT: &str = r#"set -uo pipefail
+fail() { echo "$1" >&2; exit 1; }
+src=""
+for root in /srv/keel/copy /srv/keel/extra; do
+  if mountpoint -q "$root" && [ -d "$root/This computer/Latest/people" ]; then
+    src="$root/This computer/Latest"
+    break
+  fi
+done
+[ -n "$src" ] || fail "No copy of this computer is on a connected Keel disk."
+containers_of() {
+  case "$1" in
+    vaultwarden) echo keel-passwords ;;
+    papra) echo keel-papers ;;
+    thunderbird) echo keel-mail ;;
+    technitium) echo keel-names ;;
+    jitsi) echo keel-jitsi-prosody keel-jitsi-jicofo keel-jitsi-jvb keel-jitsi-web ;;
+  esac
+}
+progress_of() {
+  case "$1" in
+    vaultwarden) echo passwords ;; papra) echo papers ;; thunderbird) echo mail ;;
+    technitium) echo names ;; jitsi) echo jitsi ;;
+  esac
+}
+install -d -m 0755 /var/lib/keel
+tar -C "$src/people" -cf - . | tar -C /var/lib/keel -xf - || fail "Keel could not bring back its settings."
+for dir in "$src"/apps/*/; do
+  [ -d "$dir" ] || continue
+  app=$(basename "$dir")
+  case "$app" in vaultwarden|papra|thunderbird|technitium|jitsi|tailscale) ;; *) continue ;; esac
+  for name in $(containers_of "$app"); do podman rm -f "$name" >/dev/null 2>&1 || true; done
+  [ "$app" = tailscale ] && systemctl stop tailscaled >/dev/null 2>&1
+  install -d -m 0755 "/var/lib/$app"
+  tar -C "$dir" -cf - . | tar -C "/var/lib/$app" -xf - || fail "Keel could not bring back $app."
+  [ "$app" = tailscale ] && systemctl start tailscaled >/dev/null 2>&1
+  p=$(progress_of "$app"); [ -n "$p" ] && rm -f "/run/keel/$p.json"
+done
+if [ -f "$src/etc/keel.env" ]; then
+  install -d -m 0755 /etc/keel
+  install -m 0600 "$src/etc/keel.env" /etc/keel/keel.env
+fi
+date -Is > /var/lib/keel/restored
+sync
+systemd-run --quiet --on-active=3 --unit=keel-restore-restart systemctl restart keel.service >/dev/null 2>&1 \
+  || fail "Everything came back. Restart Keel from the Power menu to use it."
 "#;
 
 pub fn due() -> bool {
@@ -454,6 +589,24 @@ mod tests {
         assert!(!dst.join("Documents/b.txt").exists());
 
         let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_copy_of_this_computer_keeps_the_apps_and_can_come_back() {
+        let copy = super::COMPUTER_COPY_SCRIPT;
+        assert!(!copy.contains("mktemp -d /tmp"), "the copy is built on the disk, not in memory");
+        for app in ["vaultwarden", "papra", "thunderbird", "technitium", "jitsi", "tailscale"] {
+            assert!(copy.contains(app), "{app} is copied");
+        }
+        assert!(copy.contains("podman pause"));
+        assert!(copy.contains("podman unpause"));
+        assert!(copy.contains("--exclude=./previews"));
+        assert!(copy.contains("/etc/keel/keel.env"));
+        let back = super::RESTORE_SCRIPT;
+        assert!(back.contains("/srv/keel/copy /srv/keel/extra"));
+        assert!(back.contains("install -m 0600 \"$src/etc/keel.env\" /etc/keel/keel.env"));
+        assert!(back.contains("systemctl restart keel.service"));
+        assert!(back.contains("/var/lib/keel/restored"));
     }
 
     #[test]
