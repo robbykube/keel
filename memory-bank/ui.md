@@ -98,15 +98,17 @@ invent its own font size, gap, radius, or color.
 The same web UI is reached two ways, and neither is a lesser version:
 
 - **The Keel box’s own screen.** A full-screen browser on `127.0.0.1:9478`, no
-  desktop around it. Plug in a monitor and keyboard and the appliance is usable
-  by someone who has never seen a terminal. This is the first-run path.
+  desktop around it. A monitor and a pointer are enough. Choosing a box that
+  needs letters shows a keyboard on the page, and it goes away when you leave
+  the box. A keyboard plugged in later still types. This is the first-run path.
 - **This PC’s browser** against the box over LAN or overlay. The everyday path
   once the box is set up and probably headless.
 
-Design for the local screen too: it has a mouse and keyboard but no window
-manager, no address bar, no tabs, and no back button outside the page. Anything
-that assumes the user can open a second tab, read a URL, or copy a token out of
-somewhere else is broken on that surface.
+Design for the local screen too: it has a pointer, and no window manager, no
+address bar, no tabs, and no back button outside the page. The page shows a
+keyboard when a box needs letters. Anything that assumes the user can open a
+second tab, read a URL, or copy a token out of somewhere else is broken on
+that surface.
 
 SSH and the recovery console (`Ctrl+Alt+F3`) are recovery, not setup. Files open
 in File Explorer (`\\ip\share`); the GUI does not replace Explorer.

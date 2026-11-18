@@ -788,6 +788,47 @@ a.button:hover { background: var(--accent-dim); }
   gap: var(--space-2);
 }
 .category-list .button { margin: 0; }
+.screen-keyboard {
+  position: fixed;
+  z-index: 35;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  box-shadow: var(--shadow-menu);
+}
+.screen-keyboard[hidden] { display: none; }
+.screen-keyboard-row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.screen-keyboard .screen-key {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 52px;
+  margin: 0;
+  padding: 8px 4px;
+  color: var(--text);
+  font-size: 20px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.screen-keyboard .screen-key.wide { flex: 1.7 1 0; font-size: 16px; }
+.screen-keyboard .screen-key.space { flex: 4 1 0; }
+.screen-keyboard .screen-key:hover,
+.screen-keyboard .screen-key:active { transform: none; color: var(--text); }
+.screen-keyboard .screen-key[aria-pressed="true"] {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--text);
+}
+body.screen-keyboard-open .scroll { padding-bottom: 300px; }
 .photo-back {
   position: sticky;
   top: 0;

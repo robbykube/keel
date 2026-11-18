@@ -305,3 +305,194 @@ if (document.readyState === "loading") {
 } else {
   bootChrome();
 }
+
+const textBox = (el) => {
+  if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return false;
+  if (el.disabled || el.readOnly) return false;
+  if (el instanceof HTMLTextAreaElement) return true;
+  const type = (el.getAttribute("type") || "text").toLowerCase();
+  return ["text", "password", "search", "email", "url", "tel", "number"].includes(type);
+};
+
+const screenKeyboard = () => {
+  const host = location.hostname.replace(/^\[|\]$/g, "");
+  if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1") return;
+
+  const letters = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
+  const numbers = ["1234567890", "-_.:/@", ",?!'+=#"];
+  const board = document.createElement("div");
+  board.className = "screen-keyboard";
+  board.hidden = true;
+  board.setAttribute("role", "group");
+  board.setAttribute("aria-label", "Keyboard");
+  document.body.appendChild(board);
+
+  let target = null;
+  let shifted = false;
+  let digits = false;
+
+  const caret = (el) => {
+    try {
+      if (typeof el.selectionStart === "number" && typeof el.selectionEnd === "number") {
+        return [el.selectionStart, el.selectionEnd];
+      }
+    } catch {
+      /* A number box has no caret. */
+    }
+    return [el.value.length, el.value.length];
+  };
+
+  const place = (el, pos) => {
+    try { el.setSelectionRange(pos, pos); } catch { /* A number box has no caret. */ }
+  };
+
+  const write = (text) => {
+    if (!target) return;
+    const [start, end] = caret(target);
+    target.value = target.value.slice(0, start) + text + target.value.slice(end);
+    place(target, start + text.length);
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  const erase = () => {
+    if (!target) return;
+    const [start, end] = caret(target);
+    if (start !== end) {
+      target.value = target.value.slice(0, start) + target.value.slice(end);
+      place(target, start);
+    } else if (start > 0) {
+      target.value = target.value.slice(0, start - 1) + target.value.slice(end);
+      place(target, start - 1);
+    }
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  const key = (label, className, press) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = className ? `screen-key ${className}` : "screen-key";
+    button.textContent = label;
+    button.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      press();
+    });
+    return button;
+  };
+
+  const row = (...buttons) => {
+    const line = document.createElement("div");
+    line.className = "screen-keyboard-row";
+    buttons.forEach((button) => line.appendChild(button));
+    return line;
+  };
+
+  const finish = () => {
+    const el = target;
+    target = null;
+    shifted = false;
+    digits = false;
+    board.hidden = true;
+    document.body.classList.remove("screen-keyboard-open");
+    el?.blur();
+  };
+
+  const draw = () => {
+    board.replaceChildren();
+    if (digits) {
+      board.append(
+        row(...numbers[0].split("").map((char) => key(char, "", () => write(char)))),
+        row(...numbers[1].split("").map((char) => key(char, "", () => write(char)))),
+        row(...numbers[2].split("").map((char) => key(char, "", () => write(char)))),
+        row(
+          key("Letters", "wide", () => { digits = false; draw(); }),
+          key("Space", "space", () => write(" ")),
+          key("Delete", "wide", erase),
+          key("Done", "wide", finish),
+        ),
+      );
+      return;
+    }
+    letters.forEach((line, index) => {
+      const buttons = line.split("").map((char) => {
+        const shown = shifted ? char.toUpperCase() : char;
+        return key(shown, "", () => {
+          write(shown);
+          if (shifted) {
+            shifted = false;
+            draw();
+          }
+        });
+      });
+      if (index === 2) {
+        const shift = key("Shift", "wide", () => { shifted = !shifted; draw(); });
+        shift.setAttribute("aria-pressed", String(shifted));
+        buttons.unshift(shift);
+        buttons.push(key("Delete", "wide", erase));
+      }
+      board.appendChild(row(...buttons));
+    });
+    board.appendChild(row(
+      key("Numbers", "wide", () => { digits = true; shifted = false; draw(); }),
+      key("Space", "space", () => write(" ")),
+      key("Done", "wide", finish),
+    ));
+  };
+
+  const lift = (el) => {
+    const rect = el.getBoundingClientRect();
+    const limit = window.innerHeight - board.offsetHeight - 16;
+    if (rect.bottom <= limit) return;
+    const scroller = el.closest(".scroll") || document.querySelector("main");
+    if (scroller) scroller.scrollTop += rect.bottom - limit;
+  };
+
+  const show = (el) => {
+    if (target !== el) {
+      target = el;
+      shifted = false;
+      digits = false;
+    }
+    board.hidden = false;
+    document.body.classList.add("screen-keyboard-open");
+    draw();
+    requestAnimationFrame(() => lift(el));
+  };
+
+  board.addEventListener("pointerdown", (event) => event.preventDefault(), true);
+
+  const boxFrom = (node) => {
+    if (textBox(node)) return node;
+    if (!(node instanceof Element)) return null;
+    const label = node.closest("label");
+    if (!label) return null;
+    return [...label.querySelectorAll("input, textarea")].find(textBox) || null;
+  };
+
+  document.addEventListener("focusin", (event) => {
+    if (board.contains(event.target)) return;
+    const box = boxFrom(event.target);
+    if (box) show(box);
+  });
+
+  document.addEventListener("pointerdown", (event) => {
+    const box = boxFrom(event.target);
+    if (box) {
+      show(box);
+      return;
+    }
+    if (board.hidden) return;
+    const node = event.target;
+    if (!(node instanceof Node) || board.contains(node)) return;
+    finish();
+  });
+
+  draw();
+  if (textBox(document.activeElement)) show(document.activeElement);
+};
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", screenKeyboard, { once: true });
+} else {
+  screenKeyboard();
+}

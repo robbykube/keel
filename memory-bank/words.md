@@ -21,6 +21,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Open / closed | Like a computer: the app is on disk; running only when you need it |
 | Away | Same files, not on the house Wi‑Fi. The overlay is how you reach them |
 | Sign in | A name and password for the page. Settings on the Keel screen adds a person. The page records who signed in |
+| Keyboard on the screen | On the Keel screen, choosing a box that needs letters shows a keyboard. It goes away when you leave the box. A keyboard you plug in still works |
 | Download | Save that file to the phone or computer you are using. A folder is opened, not downloaded |
 | Try it on one disk | Ask one spinning disk in the USB box to sleep. If it is already asleep, Keel leaves the box to do that |
 | Copy this computer | Save the Keel program, the people, and the settings onto the Nightly copy disk, in a folder of their own, apart from the files. A second copy goes on the Third copy disk when that disk is connected |
