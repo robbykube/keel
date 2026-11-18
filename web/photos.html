@@ -28,8 +28,30 @@
       <div id="more" hidden></div>
     </div>
     <div class="photo-viewer" id="viewer" hidden>
-      <p class="photo-back"><button type="button" class="button" id="viewer-back">Back</button></p>
-      <img id="viewer-image" alt="">
+      <div class="viewer-bar">
+        <div class="viewer-steps">
+          <button type="button" class="button" id="viewer-back">Back</button>
+          <button type="button" id="viewer-prev">Previous</button>
+          <span class="viewer-count" id="viewer-count" aria-live="polite"></span>
+          <button type="button" id="viewer-next">Next</button>
+        </div>
+        <div class="crop-shapes" id="crop-shapes" role="group" aria-label="Try a crop">
+          <button type="button" data-ratio="" aria-pressed="true">Whole</button>
+          <button type="button" data-ratio="1" title="1:1">Square</button>
+          <button type="button" data-ratio="0.8" title="4:5">Tall</button>
+          <button type="button" data-ratio="1.5" title="3:2">Print</button>
+          <button type="button" data-ratio="1.7778" title="16:9">Wide</button>
+          <button type="button" data-ratio="0.5625" title="9:16">Phone</button>
+        </div>
+      </div>
+      <div class="viewer-stage" id="viewer-stage">
+        <img id="viewer-image" alt="" draggable="false">
+        <video id="viewer-video" controls playsinline preload="metadata" hidden></video>
+        <div class="crop-area" id="crop-area" hidden>
+          <div class="crop-frame" id="crop-frame" tabindex="0" aria-label="Crop frame. Drag it, or use the arrow keys."></div>
+        </div>
+      </div>
+      <p class="crop-note" id="crop-note" hidden>Drag the frame to choose what stays. The picture on the disk is not changed.</p>
     </div>
   </main>
   <script src="/photos.js"></script>

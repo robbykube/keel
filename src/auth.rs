@@ -7,6 +7,7 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -119,6 +120,23 @@ const PENDING_TTL: Duration = Duration::from_secs(120);
 const ANSWER_TTL: Duration = Duration::from_secs(60);
 const SESSION_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 const MAX_WAITING: usize = 4;
+/// The Keel screen waits this long for a sign-in request before asking again.
+/// A waiting request still clears within this time when it expires.
+const SCREEN_WAIT: Duration = Duration::from_secs(25);
+
+/// Goes up whenever a sign-in request arrives or is answered, so the Keel
+/// screen can wait for a change instead of asking every few seconds.
+static REQUESTS_SEEN: AtomicU64 = AtomicU64::new(1);
+
+fn requests_changed() {
+    REQUESTS_SEEN.fetch_add(1, Ordering::AcqRel);
+    requests_signal().notify_waiters();
+}
+
+fn requests_signal() -> &'static tokio::sync::Notify {
+    static SIGNAL: OnceLock<tokio::sync::Notify> = OnceLock::new();
+    SIGNAL.get_or_init(tokio::sync::Notify::new)
+}
 
 #[derive(Clone)]
 enum RequestState {
@@ -242,6 +260,8 @@ pub fn create_request(from: IpAddr) -> Result<String, String> {
         state: RequestState::Waiting,
         keep_until: now + PENDING_TTL,
     });
+    drop(gate);
+    requests_changed();
     Ok(id)
 }
 
@@ -300,6 +320,8 @@ pub fn decide(id: &str, allow: bool) -> Result<(), String> {
         gate.requests[index].state = RequestState::Denied;
     }
     gate.requests[index].keep_until = now + ANSWER_TTL;
+    drop(gate);
+    requests_changed();
     Ok(())
 }
 
@@ -382,16 +404,38 @@ pub async fn create_sign_in(
     Ok(Json(serde_json::json!({ "id": id })))
 }
 
+#[derive(Deserialize, Default)]
+pub struct ScreenWait {
+    /// The change the screen last saw. With it, the answer waits for the next
+    /// change, or until SCREEN_WAIT.
+    #[serde(default)]
+    seen: Option<u64>,
+}
+
 pub async fn sign_in_requests(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-) -> Result<Json<Vec<ScreenRequest>>, (StatusCode, String)> {
+    axum::extract::Query(wait): axum::extract::Query<ScreenWait>,
+) -> Result<Response, (StatusCode, String)> {
     if !screen_may_answer(addr.ip().is_loopback()) {
         return Err((
             StatusCode::FORBIDDEN,
             "Sign-in requests show on the Keel computer's own screen.".into(),
         ));
     }
-    Ok(Json(pending_for_screen()))
+    if let Some(seen) = wait.seen {
+        let changed = requests_signal().notified();
+        tokio::pin!(changed);
+        changed.as_mut().enable();
+        if REQUESTS_SEEN.load(Ordering::Acquire) == seen {
+            let _ = tokio::time::timeout(SCREEN_WAIT, changed).await;
+        }
+    }
+    let seen = REQUESTS_SEEN.load(Ordering::Acquire);
+    let mut response = Json(pending_for_screen()).into_response();
+    if let Ok(value) = HeaderValue::from_str(&seen.to_string()) {
+        response.headers_mut().insert("x-keel-seen", value);
+    }
+    Ok(response)
 }
 
 pub async fn sign_in_status(

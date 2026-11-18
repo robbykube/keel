@@ -55,7 +55,7 @@ function renderFolders() {
       const note = folder.read_only ? " · copy only" : "";
       return `<button type="button" class="roster-item${folder.name === share ? " active" : ""}" data-share="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}${note}</button>`;
     })
-    .join("") || `<p class="meta">${escapeHtml(home.message || "No folders yet.")}</p>`;
+    .join("") || `<p class="meta">No folders yet.</p>`;
 }
 
 function renderCrumb() {
@@ -99,6 +99,48 @@ function renderPending() {
   }
 }
 
+// Pictures in the Photos library show the small copy Photos already keeps.
+const PICTURE = /\.(jpe?g|png|gif|webp|heic|heif)$/i;
+
+function thumbFor(entry) {
+  if (share !== "Media" || entry.kind !== "file" || !PICTURE.test(entry.name)) return "";
+  const rel = joinPath(path, entry.name);
+  const top = rel.split("/")[0];
+  if (top !== "Photos" && top !== "Pictures") return "";
+  const v = `${Number(entry.modified_ms || 0).toString(16)}${Number(entry.size || 0).toString(16)}`;
+  const src = `/api/photos/picture?${new URLSearchParams({ path: rel, small: "1", v })}`;
+  return `<img class="file-thumb" alt="" loading="lazy" src="${escapeHtml(src)}">`;
+}
+
+// A long folder would keep every picture scrolled past in memory. Pictures
+// well away from view let go of their image and get it back when near.
+let thumbWatch = null;
+
+function watchThumbs() {
+  if (thumbWatch) thumbWatch.disconnect();
+  thumbWatch = null;
+  const thumbs = $("rows").querySelectorAll("img.file-thumb");
+  for (const img of thumbs) img.addEventListener("error", () => img.remove(), { once: true });
+  if (!thumbs.length || !("IntersectionObserver" in window)) return;
+  let root = $("rows").parentElement;
+  while (root && root !== document.body && !/(auto|scroll)/.test(getComputedStyle(root).overflowY)) root = root.parentElement;
+  thumbWatch = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      const img = entry.target;
+      if (entry.isIntersecting) {
+        if (img.dataset.src) {
+          img.src = img.dataset.src;
+          delete img.dataset.src;
+        }
+      } else if (img.getAttribute("src")) {
+        img.dataset.src = img.getAttribute("src");
+        img.removeAttribute("src");
+      }
+    }
+  }, { root: root === document.body ? null : root, rootMargin: "800px 0px" });
+  for (const img of thumbs) thumbWatch.observe(img);
+}
+
 function renderListing() {
   const folder = currentFolder();
   const readOnly = Boolean(folder && folder.read_only) || Boolean(listing && listing.read_only);
@@ -112,7 +154,7 @@ function renderListing() {
   const rows = listing.entries.map((entry) => {
     const name = entry.kind === "folder"
       ? `<button type="button" class="texty" data-open="${escapeHtml(entry.name)}">${escapeHtml(entry.name)}</button>`
-      : escapeHtml(entry.name);
+      : `${thumbFor(entry)}${escapeHtml(entry.name)}`;
     const canMove = !readOnly && entry.kind !== "link";
     const canCopy = entry.kind !== "link";
     const download = entry.kind === "file"
@@ -126,6 +168,7 @@ function renderListing() {
     return `<tr><td>${name}</td><td>${kindWord(entry.kind)}</td><td>${sizeOf(entry)}</td><td class="row-actions">${actions}</td></tr>`;
   });
   $("rows").innerHTML = rows.join("") || `<tr><td colspan="4">Nothing in this folder yet. Make a folder here, or copy files in from another computer.</td></tr>`;
+  watchThumbs();
   renderCrumb();
   renderPending();
 }

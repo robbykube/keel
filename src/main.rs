@@ -1,5 +1,6 @@
 mod advisor;
 mod apps;
+mod assets;
 mod auth;
 mod catalog;
 mod config;
@@ -18,6 +19,7 @@ mod jellyfin;
 mod locked;
 mod logs;
 mod mail;
+mod memory;
 mod names;
 mod model;
 mod overlay;
@@ -27,6 +29,7 @@ mod passwords;
 mod photos;
 mod phone;
 mod people;
+mod picture_dates;
 mod remote;
 mod services;
 mod copies;
@@ -123,6 +126,7 @@ async fn main() {
         .unwrap_or(9478);
 
     let web = std::env::current_dir().expect("cwd").join("web");
+    crate::assets::serve_from(web.clone());
 
     let app = Router::new()
         .route("/api/health", get(health))
@@ -411,8 +415,20 @@ async fn main() {
                 store: Arc::new(Mutex::new(store)),
             };
             tokio::spawn(watch_disks(state.clone()));
+            // Picture copies on the files disk: clean them a while after
+            // start, then once a day.
+            tokio::spawn(async {
+                tokio::time::sleep(std::time::Duration::from_secs(10 * 60)).await;
+                loop {
+                    let _ = tokio::task::spawn_blocking(crate::gallery::tidy_previews).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(24 * 60 * 60)).await;
+                }
+            });
             tokio::spawn(async {
                 let _ = tokio::task::spawn_blocking(|| {
+                    if let Err(message) = crate::memory::guard() {
+                        eprintln!("keel: memory guard: {message}");
+                    }
                     if crate::firewall::wanted() {
                         let _ = crate::firewall::enable(&local_addresses());
                     }
@@ -423,10 +439,14 @@ async fn main() {
             state
         })
         .fallback_service(ServeDir::new(web))
-        // Everything keel serves is local and live. A cached GUI is always
-        // wrong here: after an update the appliance's own kiosk would keep
-        // drawing the previous version's pages from disk cache. "no-cache"
-        // still allows revalidation, so unchanged files come back as 304.
+        // Scripts and styles named by fingerprint may be kept for good; the
+        // pages that name them are checked every time.
+        .layer(axum::middleware::from_fn(crate::assets::versioned))
+        // Everything else keel serves is local and live. A cached GUI is
+        // always wrong here: after an update the appliance's own kiosk would
+        // keep drawing the previous version's pages from disk cache.
+        // "no-cache" still allows revalidation, so unchanged files come back
+        // as 304.
         .layer(axum::middleware::from_fn(no_cache));
 
     let bind = std::env::var("KEEL_BIND").unwrap_or_else(|_| "127.0.0.1".into());
@@ -460,10 +480,13 @@ async fn no_cache(
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     let mut response = next.run(request).await;
-    response.headers_mut().insert(
-        axum::http::header::CACHE_CONTROL,
-        HeaderValue::from_static("no-cache"),
-    );
+    // A picture copy asked for by version may be kept; it says so itself.
+    if !response.headers().contains_key(axum::http::header::CACHE_CONTROL) {
+        response.headers_mut().insert(
+            axum::http::header::CACHE_CONTROL,
+            HeaderValue::from_static("no-cache"),
+        );
+    }
     response
 }
 
@@ -1280,26 +1303,68 @@ struct PictureQuery {
     path: String,
     #[serde(default)]
     small: String,
+    #[serde(default)]
+    size: String,
+    /// The picture's version. With it, the browser may keep the copy.
+    #[serde(default)]
+    v: String,
 }
 
 async fn picture_file(
     Query(query): Query<PictureQuery>,
+    request: axum::extract::Request,
 ) -> Result<Response, (StatusCode, String)> {
-    let opened = tokio::task::spawn_blocking(move || {
-        if query.small == "1" {
-            crate::gallery::open_small(&query.path)
-        } else {
-            crate::gallery::open_picture(&query.path)
-        }
-    })
+    use crate::gallery::Size;
+    let refused = |message: String| (StatusCode::BAD_REQUEST, message);
+    let size = if query.small == "1" || query.size == "small" {
+        Some(Size::Small)
+    } else if query.size == "screen" {
+        Some(Size::Screen)
+    } else {
+        None
+    };
+    let Some(size) = size else {
+        // The picture or video itself. Videos need to start part way through.
+        let path = query.path.clone();
+        let full = tokio::task::spawn_blocking(move || crate::gallery::original(&path))
+            .await
+            .unwrap_or_else(|_| Err("Keel could not open that picture.".into()))
+            .map_err(refused)?;
+        let response = tower::ServiceExt::oneshot(tower_http::services::ServeFile::new(full), request)
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Keel could not open that picture.".to_string()))?;
+        return Ok(response.map(Body::new));
+    };
+    let path = query.path.clone();
+    let plan = tokio::task::spawn_blocking(move || crate::gallery::plan_copy(&path, size))
         .await
         .unwrap_or_else(|_| Err("Keel could not open that picture.".into()))
-        .map_err(|message| (StatusCode::BAD_REQUEST, message))?;
+        .map_err(refused)?;
+    // If the page stops waiting, this request is dropped and so is its place
+    // in the line for copies.
+    let written = if plan.ready {
+        false
+    } else {
+        crate::gallery::queue_copies(&plan)
+            .await
+            .unwrap_or_else(|_| Err("Keel could not make a small copy of that picture.".into()))
+            .map_err(refused)?
+    };
+    let opened = tokio::task::spawn_blocking(move || crate::gallery::finish_copy(&plan, written))
+        .await
+        .unwrap_or_else(|_| Err("Keel could not open that picture.".into()))
+        .map_err(refused)?;
+    let keep = if query.v.is_empty() {
+        "no-cache"
+    } else {
+        "private, max-age=31536000, immutable"
+    };
     let file = tokio::fs::File::from_std(opened.file);
     let body = Body::from_stream(tokio_util::io::ReaderStream::new(file));
     Response::builder()
         .header(CONTENT_TYPE, opened.kind)
         .header(CONTENT_LENGTH, opened.len.to_string())
+        .header(axum::http::header::CACHE_CONTROL, keep)
         .body(body)
         .map_err(|_| {
             (
@@ -1693,13 +1758,29 @@ fn timing_header(d: Duration) -> [(axum::http::header::HeaderName, HeaderValue);
     )]
 }
 
-fn collect_system() -> SystemSnapshot {
-    let mut sys = System::new();
-    sys.refresh_cpu_all();
-    sys.refresh_memory();
-    sys.refresh_processes(ProcessesToUpdate::All, true);
+/// One reader kept between calls. CPU use is the change since the last
+/// reading, so a fresh reader always says 0%; keeping it gives a real figure.
+static SYSTEM_READER: std::sync::Mutex<Option<(System, Instant)>> = std::sync::Mutex::new(None);
 
+fn collect_system() -> SystemSnapshot {
+    let mut guard = SYSTEM_READER.lock().unwrap_or_else(|poison| poison.into_inner());
+    let (sys, last) = guard.get_or_insert_with(|| {
+        // Two readings must be a moment apart; only the very first call waits.
+        let mut sys = System::new();
+        sys.refresh_cpu_usage();
+        std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+        let at = Instant::now() - sysinfo::MINIMUM_CPU_UPDATE_INTERVAL;
+        (sys, at)
+    });
+    // Calls close together share the last reading.
+    if last.elapsed() >= sysinfo::MINIMUM_CPU_UPDATE_INTERVAL {
+        sys.refresh_cpu_usage();
+        *last = Instant::now();
+    }
+    sys.refresh_memory();
+    // Only Keel's own entry, not every program on the computer.
     let pid = Pid::from_u32(std::process::id());
+    sys.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
     let rss = sys.process(pid).map(|p| p.memory()).unwrap_or(0);
 
     SystemSnapshot {

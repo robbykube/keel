@@ -8,20 +8,34 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
+// The title of a card and, when it has one, how the app is right now.
+function head(title, state, tone = "") {
+  const pill = state ? `<span class="pill${tone ? ` ${tone}` : ""}">${escapeHtml(state)}</span>` : "";
+  return `<div class="app-head"><h3>${escapeHtml(title)}</h3>${pill}</div>`;
+}
+
 function row(app, added) {
   const action = added
-    ? `<span class="pill">Closed</span>`
+    ? ""
     : `<button type="button" data-app="${escapeHtml(app.id)}">Add</button>`;
   const note = added
     ? "Added. It stays closed until the program is on this computer."
     : app.why;
   return `<article class="app-row">
     <div>
-      <h3>${escapeHtml(app.role)}</h3>
+      ${head(app.role, added ? "Closed" : "")}
       <p>${escapeHtml(note)}</p>
     </div>
     ${action}
   </article>`;
+}
+
+function stateOf(status, waiting) {
+  if (status.ready) return ["Running", "ok"];
+  if (status.state === "running") return ["Opening", ""];
+  if (status.state === "error") return ["Stopped", "bad"];
+  if (status.state === "unavailable") return ["Not on this computer", ""];
+  return [waiting ? "Waiting" : "Closed", ""];
 }
 
 const programs = {
@@ -60,9 +74,10 @@ function programRow(spec, status) {
   const close = status.ready && status.signups_open
     ? `<button type="button" data-close="${escapeHtml(spec.id)}">Close new accounts</button>`
     : "";
+  const [state, tone] = stateOf(status, waiting);
   return `<article class="app-row" id="${escapeHtml(spec.id)}-row">
     <div>
-      <h3>${escapeHtml(spec.title)}</h3>
+      ${head(spec.title, state, tone)}
       <p class="install-message${failed ? " install-error" : ""}">${escapeHtml(message)}</p>
       ${address}
       ${bar}
@@ -220,7 +235,7 @@ function photosCard(status) {
   }
   return `<article class="app-row" id="photos-row">
     <div>
-      <h3>Photos</h3>
+      ${head("Photos", "Ready", "ok")}
       <p class="install-message">Pictures already in Media. Open shows them here.</p>
       ${full}
     </div>

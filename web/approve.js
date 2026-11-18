@@ -73,12 +73,42 @@ const watchSignInRequests = () => {
       }
       paint(await res.json());
     } catch {
-      /* the screen tries again on the next tick */
+      /* the next wait asks again */
     }
   }
 
-  refresh();
-  setInterval(refresh, 2000);
+  // Keel answers when a request arrives or is answered, or after about 25
+  // seconds with nothing new. The screen asks again only then, and not at all
+  // while the page is out of sight.
+  let seen = null;
+  let waiting = false;
+  async function wait() {
+    if (waiting || document.hidden) return;
+    waiting = true;
+    try {
+      const query = seen === null ? "" : `?seen=${encodeURIComponent(seen)}`;
+      const res = await fetch(`/api/auth/requests${query}`, { credentials: "same-origin", cache: "no-store" });
+      if (!res.ok) {
+        bar.hidden = true;
+        waiting = false;
+        setTimeout(wait, 30000);
+        return;
+      }
+      seen = res.headers.get("x-keel-seen");
+      paint(await res.json());
+      waiting = false;
+      // An older Keel answers at once; do not ask it in a tight loop.
+      setTimeout(wait, seen === null ? 10000 : 0);
+    } catch {
+      waiting = false;
+      setTimeout(wait, 5000);
+    }
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) wait();
+  });
+  wait();
 };
 
 if (document.readyState === "loading") {

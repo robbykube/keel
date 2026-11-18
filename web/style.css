@@ -515,6 +515,15 @@ button.texty {
 }
 .folder-tools input { min-width: 14rem; }
 .row-actions { white-space: nowrap; }
+.file-thumb {
+  width: 40px;
+  height: 40px;
+  margin-right: var(--space-2);
+  vertical-align: middle;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--panel-2);
+}
 .row-actions button,
 .row-actions a.button { margin-right: var(--space-2); padding: var(--space-1) var(--space-3); }
 a.button { display: inline-block; background: var(--panel-2); color: var(--text); }
@@ -781,13 +790,70 @@ a.button:hover { background: var(--accent-dim); }
 .app-row .install-message.install-error { color: var(--red); }
 .app-row .install-bar { width: 100%; margin-top: var(--space-3); }
 .app-row > button, .app-row > a.button { margin-top: var(--space-1); }
+.app-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.app-head .pill { white-space: nowrap; }
+/* Apps are cards: title and state on top, what it does, then the buttons. */
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.app-grid > .meta { grid-column: 1 / -1; }
+.app-grid .app-row {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.app-grid .app-row > div { flex: 1 1 auto; }
+.app-grid .app-row > button,
+.app-grid .app-row > a.button { align-self: flex-start; margin: 0; }
 .category-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+.category-list[hidden] { display: none; }
+.category-tile {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.category-list .button { margin: 0; }
+.category-cover {
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+.category-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.category-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.category-tile:hover .category-cover,
+.category-tile:focus-visible .category-cover { outline: 2px solid var(--accent); outline-offset: 2px; }
+.category-tile:focus-visible { outline: none; }
 .screen-keyboard {
   position: fixed;
   z-index: 35;
@@ -852,20 +918,120 @@ body.screen-keyboard-open .scroll { padding-bottom: 300px; }
   background: var(--bg);
 }
 .photo-viewer[hidden] { display: none; }
-.photo-viewer .photo-back { position: static; }
-.photo-viewer img {
+.viewer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+.viewer-steps { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.viewer-steps button { margin: 0; }
+.viewer-count { min-width: 5.5em; color: var(--muted); font-size: 13px; text-align: center; }
+.crop-shapes { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.crop-shapes button { margin: 0; }
+.crop-shapes button[aria-pressed="true"] {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--text);
+}
+.viewer-stage {
+  position: relative;
+  touch-action: pan-y;
   flex: 1;
   min-height: 0;
-  width: 100%;
-  object-fit: contain;
+  overflow: hidden;
   background: var(--panel-2);
 }
+.viewer-stage img {
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.viewer-stage video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+.viewer-stage img[hidden],
+.viewer-stage video[hidden],
+.crop-shapes[hidden] { display: none; }
+.crop-area { position: absolute; overflow: hidden; }
+.crop-area[hidden] { display: none; }
+.crop-frame {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.6);
+  cursor: grab;
+  touch-action: none;
+}
+.crop-frame:active { cursor: grabbing; }
+.crop-frame:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.crop-note { margin: 0; color: var(--muted); font-size: 13px; }
+.crop-note[hidden] { display: none; }
 .photo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: var(--space-3);
 }
 .photo-grid a { display: block; }
+.photo-waiting { display: block; height: 140px; background: var(--panel-2); }
+.category-waiting { display: block; aspect-ratio: 4 / 3; border-radius: var(--radius); background: var(--panel-2); }
+.is-waiting { animation: keel-waiting 1.4s ease-in-out infinite; }
+@keyframes keel-waiting { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .is-waiting { animation: none; } }
+.photo-month {
+  grid-column: 1 / -1;
+  margin: var(--space-4) 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.photo-month:first-child { margin-top: 0; }
+.photo-video {
+  position: relative;
+  height: 140px;
+  overflow: hidden;
+  background: var(--panel-2);
+  color: var(--text);
+  text-decoration: none;
+}
+.video-mark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -30px 0 0 -22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+}
+.video-mark::after {
+  content: "";
+  position: absolute;
+  top: 13px;
+  left: 17px;
+  border-style: solid;
+  border-width: 9px 0 9px 14px;
+  border-color: transparent transparent transparent #fff;
+}
+.video-name {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 6px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .photo-grid img {
   width: 100%;
   height: 140px;
@@ -1263,6 +1429,7 @@ html[data-theme="light"] .home-card:hover { box-shadow: 0 20px 38px rgba(93, 78,
   .power-toggle span { display: none; }
   main { overflow: auto; }
   .photo-viewer { left: 0; padding: 16px; }
+  .category-list { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-3); }
   .scroll,
   .table-wrap,
   .table-wrap.scroll,
@@ -1320,4 +1487,21 @@ html[data-theme="light"] .home-card:hover { box-shadow: 0 20px 38px rgba(93, 78,
   .token-row input { flex: 1 1 100%; }
   .token-row button { flex: 0 0 auto; }
   #updates button { margin-left: 0; }
+}
+
+/* Touch screens, such as the Pi's 7-inch panel: every control at least
+   44 px, about the size of a fingertip. */
+@media (any-pointer: coarse) {
+  button,
+  a.button,
+  select,
+  input:not([type="checkbox"]):not([type="radio"]) { min-height: 44px; }
+  .power-toggle,
+  .more-toggle { min-width: 44px; min-height: 44px; }
+}
+
+/* Short screens: the 7-inch panel is 480 px tall, so less goes above the page. */
+@media (max-height: 520px) {
+  h1 { font-size: 26px; }
+  .photo-viewer { gap: var(--space-2); padding: var(--space-2) var(--space-3); }
 }
