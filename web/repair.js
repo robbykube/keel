@@ -12,18 +12,22 @@ async function repair(id) {
   await load();
 }
 
+// Red needs fixing; yellow is worth a look. What Keel measured stays out of
+// the way, on the card's title, for whoever wants it.
 function issueCard(i) {
-  return `<article class="opp">
-    <h3><span class="${i.severity === "red" ? "hdd" : "ssd"}">${i.severity}</span> · ${i.title}</h3>
+  const red = i.severity === "red";
+  const word = red ? "Needs fixing" : "Worth a look";
+  const measured = String(i.evidence || "").replace(/"/g, "&quot;");
+  return `<article class="opp" title="${measured}">
+    <h3><span class="pill ${red ? "bad" : "warn"}">${word}</span> ${i.title}</h3>
     <p>${keelLinkTerms(i.why)}</p>
-    <div class="ev">${keelLinkTerms(i.evidence)}</div>
   </article>`;
 }
 
 async function load() {
   const data = await fetch("/api/issues").then((r) => r.json());
-  $("banner").textContent = data.red ? "red" : "no red — yellow is expected on this PC";
-  $("health").textContent = data.red ? "red" : "yellow/ok";
+  $("banner").textContent = data.red ? "Something needs fixing" : data.items.length ? "Nothing urgent" : "All good";
+  $("health").textContent = data.red ? "Needs fixing" : "No problems";
   $("items").innerHTML = data.items.map(issueCard).join("") || "<p class='prose'>Nothing to fix.</p>";
   $("playbook").innerHTML = data.playbook
     .map((p) => {

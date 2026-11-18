@@ -128,6 +128,11 @@ fn parse_lsblk(raw: &[u8]) -> Result<Vec<Disk>, String> {
             continue;
         }
         let name = json_str(d, "name");
+        // Compressed memory (zram), memory disks and loop files call
+        // themselves disks too. They are not disks someone can give a job.
+        if ["zram", "ram", "loop", "nbd"].iter().any(|prefix| name.starts_with(prefix)) {
+            continue;
+        }
         let mut mounts = Vec::new();
         let mut labels = Vec::new();
         let mut fstypes = Vec::new();
@@ -205,7 +210,8 @@ mod tests {
           {"name":"sdb","size":500107862016,"type":"disk","model":"WDC","rota":true,"tran":"usb","mountpoint":null,"fstype":null,"label":null},
           {"name":"sdc","size":500107862016,"type":"disk","model":"ST500","rota":true,"tran":"usb","mountpoint":null,"fstype":null,"label":null,
            "children":[{"name":"sdc1","size":500000000000,"type":"part","mountpoint":"/srv/keel/files","fstype":"ext4","label":"keel-files"}]},
-          {"name":"loop0","size":1,"type":"loop","mountpoint":null,"fstype":null,"label":null}
+          {"name":"loop0","size":1,"type":"loop","mountpoint":null,"fstype":null,"label":null},
+          {"name":"zram0","size":2147483648,"type":"disk","mountpoint":"[SWAP]","fstype":null,"label":null}
         ]}"#;
         let disks = parse_lsblk(raw).unwrap();
         assert_eq!(disks.len(), 3);

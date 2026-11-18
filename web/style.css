@@ -1336,6 +1336,12 @@ button:focus-visible, a.button:focus-visible, input:focus-visible, select:focus-
 .pill.ok { color: var(--success); background: var(--success-dim); }
 .pill.ok::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 6px 1px 0; border-radius: 50%; background: currentColor; }
 .pill.bad { border-color: rgba(228, 134, 121, .5); background: rgba(228, 134, 121, .1); }
+.pill.warn { color: var(--warn); border: 1px solid currentColor; background: transparent; }
+.opp h3 .pill { margin-right: var(--space-2); vertical-align: 2px; }
+/* Home: the app choices, then their buttons in one row underneath. */
+#apps-choice-form { align-items: start; }
+#apps-choice-form > * { grid-column: 1 / -1; }
+#apps-choice-form .actions button { grid-column: auto; }
 .home-card p:not(.display):not(.card-note) { line-height: 1.5; }
 .path-box { display: grid; gap: 12px; padding: 14px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; }
 .path-box code { display: block; color: var(--text); font-size: 13px; }

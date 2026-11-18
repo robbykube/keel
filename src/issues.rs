@@ -24,8 +24,8 @@ pub fn report(
         items.push(Issue {
             id: "no-pool",
             severity: "yellow",
-            title: "No pool",
-            why: "There is no place for files yet. Open Pools and add one. Prefer “on another computer” so Proxmox is left alone.",
+            title: "No disk for files yet",
+            why: "Files are kept on the system disk for now. Open Disks and give a disk the job of keeping files.",
             evidence: "pools=0".into(),
             repair: None,
         });
@@ -35,8 +35,8 @@ pub fn report(
         items.push(Issue {
             id: "no-share",
             severity: "yellow",
-            title: "No share",
-            why: "Keel is active but there is no share name for a PC to open. Open Shares and add one.",
+            title: "No shared folder",
+            why: "Keel is on, but there is no folder for other computers to open. Open Files and add one.",
             evidence: "shares=0".into(),
             repair: None,
         });
@@ -57,19 +57,19 @@ pub fn report(
         },
         RepairAction {
             id: "restart-samba",
-            label: "Restart SMB",
+            label: "Restart file sharing",
             safe: true,
             available: matches!(inventory, Inventory::Linux),
         },
         RepairAction {
             id: "restart-tailscale",
-            label: "Restart Tailscale",
+            label: "Restart Away",
             safe: true,
             available: matches!(inventory, Inventory::Linux),
         },
         RepairAction {
             id: "open-ports",
-            label: "Open 9478 and 445",
+            label: "Open the page and files to the house",
             safe: true,
             available: false,
         },
@@ -93,12 +93,12 @@ pub fn apply(id: &str) -> RepairResult {
         "rescan-disks" => RepairResult {
             ok: true,
             id: id.into(),
-            message: "Rescan queued. On Linux this is lsblk/udevadm settle. Here it is a no-op besides acknowledging the playbook.".into(),
+            message: "Keel looked for disks again.".into(),
         },
         "restart-samba" | "restart-tailscale" | "open-ports" => RepairResult {
             ok: false,
             id: id.into(),
-            message: "Not available until keel is the Linux appliance (systemctl / nft).".into(),
+            message: "This works on the Keel computer itself.".into(),
         },
         other => RepairResult {
             ok: false,
