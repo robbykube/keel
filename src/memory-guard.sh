@@ -99,10 +99,133 @@ if [ "$changed" = 1 ]; then
 fi
 [ "$journal_before" = 1 ] && changed=1
 
+# Apps (every container) share one part of memory, so Photos or Video
+# slows down or stops on its own instead of locking up the whole computer.
+put /etc/systemd/system/machine.slice.d/90-keel.conf 0644 <<'EOF'
+[Slice]
+MemoryHigh=55%
+MemoryMax=65%
+EOF
+
+# When memory stays jammed for three minutes, stop the largest app. Restart
+# the computer only if that did not help. A slow minute is left alone.
+put /usr/lib/keel/memory-watch 0755 <<'EOF'
+#!/bin/bash
+set -u
+pressure=/proc/pressure/memory
+[ -r "$pressure" ] || exit 0
+note=/var/lib/keel/memory-watch.log
+jam_for=6        # checks of 30 seconds: three minutes
+limit=40         # % of the last minute everything waited for memory
+jammed=0
+stopped_at=0
+app_of() {
+  case "$1" in
+    keel-photos*) echo photos ;;
+    keel-jitsi*) echo jitsi ;;
+    keel-jellyfin*) echo jellyfin ;;
+    keel-passwords*) echo passwords ;;
+    keel-papers*) echo papers ;;
+    keel-mail*) echo mail ;;
+    *) echo "" ;;   # Names and the front door are never stopped.
+  esac
+}
+title_of() {
+  case "$1" in
+    photos) echo Photos ;; jitsi) echo Video ;; jellyfin) echo Jellyfin ;;
+    passwords) echo Passwords ;; papers) echo Papers ;; mail) echo Mail ;;
+  esac
+}
+largest_app() {
+  declare -A used=()
+  while read -r id name; do
+    app=$(app_of "$name")
+    [ -n "$app" ] || continue
+    mem=$(cat "/sys/fs/cgroup/machine.slice/libpod-$id.scope/memory.current" 2>/dev/null || echo 0)
+    used[$app]=$(( ${used[$app]:-0} + mem ))
+  done < <(timeout 60 podman ps --no-trunc --format '{{.ID}} {{.Names}}' 2>/dev/null)
+  best=""; most=0
+  for app in "${!used[@]}"; do
+    if [ "${used[$app]}" -gt "$most" ]; then best=$app; most=${used[$app]}; fi
+  done
+  echo "$best"
+}
+while sleep 30; do
+  full=$(sed -n 's/^full .*avg60=\([0-9]*\).*/\1/p' "$pressure")
+  if [ "${full:-0}" -ge "$limit" ]; then jammed=$((jammed + 1)); else jammed=0; fi
+  [ "$jammed" -ge "$jam_for" ] || continue
+  jammed=0
+  now=$(date +%s)
+  if [ "$stopped_at" -gt 0 ] && [ $((now - stopped_at)) -lt 600 ]; then
+    up=$(cut -d. -f1 /proc/uptime)
+    if [ "$up" -ge 900 ]; then
+      echo "$(date -Is) restart Memory stayed full after an app was stopped." >> "$note"
+      echo "keel: memory stayed full after stopping an app; restarting the computer"
+      systemctl reboot
+      exit 0
+    fi
+    continue
+  fi
+  app=$(largest_app)
+  [ -n "$app" ] || continue
+  echo "keel: memory was full for three minutes; stopping $(title_of "$app")"
+  for name in $(timeout 60 podman ps --format '{{.Names}}' 2>/dev/null); do
+    [ "$(app_of "$name")" = "$app" ] && timeout 60 podman stop -t 10 "$name" >/dev/null 2>&1
+  done
+  rm -f "/run/keel/$app.json"
+  echo "$(date -Is) stopped $(title_of "$app")" >> "$note"
+  stopped_at=$now
+done
+EOF
+
+put /etc/systemd/system/keel-memory-watch.service 0644 <<'EOF'
+[Unit]
+Description=Keel stops the largest app when memory stays full
+After=keel.service
+
+[Service]
+ExecStart=/usr/lib/keel/memory-watch
+Restart=always
+RestartSec=30s
+OOMScoreAdjust=-900
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# A computer that stops answering completely restarts by itself. The chip
+# waits 15 seconds without a sign of life (the most a Pi 4 can wait). A slow
+# or busy computer still gives that sign, so it is left alone.
+watchdog_before=$changed
+changed=0
+if [ -e /dev/watchdog0 ] || [ -e /dev/watchdog ]; then
+  put /etc/systemd/system.conf.d/90-keel-watchdog.conf 0644 <<'EOF'
+[Manager]
+RuntimeWatchdogSec=15s
+RebootWatchdogSec=2min
+EOF
+fi
+[ "$changed" = 1 ] && systemctl daemon-reexec >/dev/null 2>&1
+[ "$watchdog_before" = 1 ] && changed=1
+
+# A slow start (a disk check after the power was pulled) shows on the
+# screen instead of a black screen. Quick starts stay quiet.
+cmdline=/boot/firmware/cmdline.txt
+if [ -w "$cmdline" ] && grep -q 'systemd\.show_status=false' "$cmdline"; then
+  sed 's/systemd\.show_status=false/systemd.show_status=auto/' "$cmdline" > "$cmdline.keel-new" \
+    && grep -q 'root=' "$cmdline.keel-new" \
+    && mv "$cmdline.keel-new" "$cmdline"
+  rm -f "$cmdline.keel-new"
+fi
+
 [ "$changed" = 1 ] && systemctl daemon-reload >/dev/null 2>&1
 sysctl -q -p /etc/sysctl.d/90-keel-memory.conf >/dev/null 2>&1 || true
 systemctl enable keel-zram.service >/dev/null 2>&1 || true
 systemctl start keel-zram.service >/dev/null 2>&1 || true
+systemctl enable keel-memory-watch.service >/dev/null 2>&1 || true
+systemctl restart keel-memory-watch.service >/dev/null 2>&1 || true
+systemctl set-property --runtime machine.slice MemoryHigh=55% MemoryMax=65% >/dev/null 2>&1 || true
 
 # Apply to what is already running, without restarting it.
 if systemctl cat keel-kiosk.service >/dev/null 2>&1; then

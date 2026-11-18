@@ -28,4 +28,18 @@ mod tests {
         assert!(script.contains("zramctl --find"));
         assert!(script.contains("WantedBy=swap.target"));
     }
+
+    #[test]
+    fn a_frozen_computer_restarts_and_apps_give_way_first() {
+        let script = super::script();
+        assert!(script.contains("RuntimeWatchdogSec=15s"));
+        assert!(script.contains("machine.slice.d/90-keel.conf"));
+        assert!(script.contains("MemoryMax=65%"));
+        assert!(script.contains("keel-memory-watch.service"));
+        assert!(script.contains("jam_for=6"));
+        // Names and the front door are never chosen to stop.
+        assert!(!script.contains("keel-door*)"));
+        assert!(script.contains("systemd.show_status=auto"));
+        assert!(script.contains("RuntimeMaxUse=16M"));
+    }
 }

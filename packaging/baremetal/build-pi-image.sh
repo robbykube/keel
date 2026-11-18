@@ -227,7 +227,7 @@ if ! compgen -G "${ROOT}/boot/firmware/*.dtb" > /dev/null; then
   exit 1
 fi
 cat > "${ROOT}/boot/firmware/cmdline.txt" <<'EOF'
-console=tty1 root=LABEL=keel-root rw rootwait fsck.repair=yes quiet loglevel=3 systemd.show_status=false cma=128M
+console=tty1 root=LABEL=keel-root rw rootwait fsck.repair=yes quiet loglevel=3 systemd.show_status=auto cma=128M
 EOF
 if [[ ! -f "${ROOT}/boot/firmware/config.txt" ]] || ! grep -q 'kernel=vmlinuz' "${ROOT}/boot/firmware/config.txt"; then
   cat > "${ROOT}/boot/firmware/config.txt" <<'EOF'
