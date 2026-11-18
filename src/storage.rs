@@ -970,33 +970,11 @@ pub fn issues() -> Vec<Issue> {
 /// Run a script outside Keel's sandbox and wait for it. The script's last
 /// line on stderr is the sentence shown when it fails.
 pub(crate) fn host(script: &str, args: &[&str], input: Option<&str>) -> Result<(), String> {
-    let mut command = if Path::new("/usr/bin/systemd-run").exists() || Path::new("/bin/systemd-run").exists() {
-        let mut c = Command::new("systemd-run");
-        c.args(["--quiet", "--wait", "--pipe", "--collect", "--", "/bin/bash", "-c", script, "keel-host"]);
-        c
-    } else {
-        let mut c = Command::new("/bin/bash");
-        c.args(["-c", script, "keel-host"]);
-        c
-    };
-    command
-        .args(args)
-        .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped());
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("Keel could not start the disk helper: {error}"))?;
-    if let (Some(text), Some(mut stdin)) = (input, child.stdin.take()) {
-        let _ = stdin.write_all(text.as_bytes());
-    }
-    let output = child
-        .wait_with_output()
-        .map_err(|error| format!("The disk helper stopped: {error}"))?;
+    let output = host_output(script, args, input, false)?;
     if output.status.success() {
         return Ok(());
     }
-    Err(last_stderr(&output.stderr))
+    Err(host_error(&output.stderr))
 }
 
 /// Like `host`, but the script's stdout is the result. Use this when the
@@ -1004,39 +982,37 @@ pub(crate) fn host(script: &str, args: &[&str], input: Option<&str>) -> Result<(
 /// goes on stdin (`exec /bin/bash -s`), because systemd expands `$` on the
 /// command line.
 pub(crate) fn host_text(script: &str, args: &[&str], input: Option<&str>) -> Result<String, String> {
-    let mut command = if Path::new("/usr/bin/systemd-run").exists() || Path::new("/bin/systemd-run").exists() {
-        let mut c = Command::new("systemd-run");
-        c.args(["--quiet", "--wait", "--pipe", "--collect", "--", "/bin/bash", "-c", script, "keel-host"]);
-        c
-    } else {
-        let mut c = Command::new("/bin/bash");
-        c.args(["-c", script, "keel-host"]);
-        c
-    };
-    command
-        .args(args)
-        .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("Keel could not start the disk helper: {error}"))?;
-    if let (Some(text), Some(mut stdin)) = (input, child.stdin.take()) {
-        let _ = stdin.write_all(text.as_bytes());
-    }
-    let output = child
-        .wait_with_output()
-        .map_err(|error| format!("The disk helper stopped: {error}"))?;
+    let output = host_output(script, args, input, true)?;
     if output.status.success() {
         let text = String::from_utf8_lossy(&output.stdout);
         return Ok(text.lines().map(str::trim).filter(|line| !line.is_empty()).last().unwrap_or("").to_string());
     }
-    Err(last_stderr(&output.stderr))
+    Err(host_error(&output.stderr))
 }
 
 /// Like `host_text`, but the whole stdout is the result, newest text kept
 /// when it is long. Use this for logs. A script with `$` goes on stdin.
 pub(crate) fn host_all(script: &str, args: &[&str], input: Option<&str>) -> Result<String, String> {
+    let output = host_output(script, args, input, true)?;
+    if output.status.success() {
+        return Ok(tail_text(&output.stdout, 24_000));
+    }
+    Err(host_error(&output.stderr))
+}
+
+/// Runs the script once. When systemd could not even start it, because the
+/// temporary space in /run is full, Keel makes room itself and tries again.
+/// The cleanup inside the scripts cannot help then: they never start.
+fn host_output(script: &str, args: &[&str], input: Option<&str>, capture: bool) -> Result<std::process::Output, String> {
+    let output = host_once(script, args, input, capture)?;
+    if output.status.success() || !could_not_start(&output.stderr) {
+        return Ok(output);
+    }
+    make_room_in_run();
+    host_once(script, args, input, capture)
+}
+
+fn host_once(script: &str, args: &[&str], input: Option<&str>, capture: bool) -> Result<std::process::Output, String> {
     let mut command = if Path::new("/usr/bin/systemd-run").exists() || Path::new("/bin/systemd-run").exists() {
         let mut c = Command::new("systemd-run");
         c.args(["--quiet", "--wait", "--pipe", "--collect", "--", "/bin/bash", "-c", script, "keel-host"]);
@@ -1049,7 +1025,7 @@ pub(crate) fn host_all(script: &str, args: &[&str], input: Option<&str>) -> Resu
     command
         .args(args)
         .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
-        .stdout(Stdio::piped())
+        .stdout(if capture { Stdio::piped() } else { Stdio::null() })
         .stderr(Stdio::piped());
     let mut child = command
         .spawn()
@@ -1057,13 +1033,58 @@ pub(crate) fn host_all(script: &str, args: &[&str], input: Option<&str>) -> Resu
     if let (Some(text), Some(mut stdin)) = (input, child.stdin.take()) {
         let _ = stdin.write_all(text.as_bytes());
     }
-    let output = child
+    child
         .wait_with_output()
-        .map_err(|error| format!("The disk helper stopped: {error}"))?;
-    if output.status.success() {
-        return Ok(tail_text(&output.stdout, 24_000));
+        .map_err(|error| format!("The disk helper stopped: {error}"))
+}
+
+/// systemd's answer when it could not write the one-off task, which is what
+/// happens when /run is full.
+fn could_not_start(stderr: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(stderr);
+    text.contains("Failed to start transient service unit")
+        || text.contains("Failed to start transient scope unit")
+}
+
+fn host_error(stderr: &[u8]) -> String {
+    if could_not_start(stderr) {
+        return "Keel could not start the task, because the temporary space on this computer is full. Restart the computer to empty it.".into();
     }
-    Err(last_stderr(&output.stderr))
+    last_stderr(stderr)
+}
+
+/// Frees /run without systemd's help. Keel's sandbox leaves /run writable.
+/// The kept logs are the usual tenant: older ones go first, then the
+/// current one is closed and goes too.
+fn make_room_in_run() {
+    let before = free_in_run();
+    let _ = Command::new("journalctl")
+        .args(["--vacuum-size=8M"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    if free_in_run().is_some_and(|kb| kb < 32 * 1024) {
+        let _ = Command::new("journalctl")
+            .args(["--rotate", "--vacuum-size=1M"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    eprintln!(
+        "keel: temporary space was full; freed /run from {} KB to {} KB",
+        before.map(|kb| kb.to_string()).unwrap_or_else(|| "?".into()),
+        free_in_run().map(|kb| kb.to_string()).unwrap_or_else(|| "?".into())
+    );
+}
+
+/// Free kilobytes in /run, read with df.
+fn free_in_run() -> Option<u64> {
+    let output = Command::new("df").args(["-Pk", "/run"]).stderr(Stdio::null()).output().ok()?;
+    free_from_df(&String::from_utf8_lossy(&output.stdout))
+}
+
+fn free_from_df(text: &str) -> Option<u64> {
+    text.lines().nth(1)?.split_whitespace().nth(3)?.parse().ok()
 }
 
 fn tail_text(bytes: &[u8], max: usize) -> String {
@@ -1189,6 +1210,20 @@ fn folder_summary(folders: &[String]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_full_run_folder_is_recognised_and_said_plainly() {
+        let systemd = b"Failed to start transient service unit: Unit run-p14506-i14806.service not found.\n";
+        assert!(super::could_not_start(systemd));
+        assert!(!super::could_not_start(b"That disk is no longer connected.\n"));
+        let said = super::host_error(systemd);
+        assert!(said.contains("temporary space"));
+        assert!(!said.contains("transient"));
+        assert_eq!(super::host_error(b"That disk is no longer connected.\n"), "That disk is no longer connected.");
+        let df = "Filesystem     1024-blocks  Used Available Capacity Mounted on\ntmpfs               388460 388428        32     100% /run\n";
+        assert_eq!(super::free_from_df(df), Some(32));
+        assert_eq!(super::free_from_df(""), None);
+    }
+
     use super::*;
 
     #[test]

@@ -83,6 +83,22 @@ put /etc/systemd/system/smbd.service.d/keel-memory.conf 0644 <<'EOF'
 OOMScoreAdjust=-300
 EOF
 
+# The kept logs live in /run, which is memory. Uncapped they filled it, and
+# then no task could start: Video would not open and Logs would not load.
+journal_before=$changed
+changed=0
+put /etc/systemd/journald.conf.d/90-keel.conf 0644 <<'EOF'
+[Journal]
+RuntimeMaxUse=16M
+RuntimeKeepFree=64M
+SystemMaxUse=200M
+EOF
+if [ "$changed" = 1 ]; then
+  systemctl restart systemd-journald >/dev/null 2>&1 || true
+  journalctl --vacuum-size=16M >/dev/null 2>&1 || true
+fi
+[ "$journal_before" = 1 ] && changed=1
+
 [ "$changed" = 1 ] && systemctl daemon-reload >/dev/null 2>&1
 sysctl -q -p /etc/sysctl.d/90-keel-memory.conf >/dev/null 2>&1 || true
 systemctl enable keel-zram.service >/dev/null 2>&1 || true

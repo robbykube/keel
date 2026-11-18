@@ -23,6 +23,8 @@ if [ -f /var/lib/immich/setup.log ]; then
   tail -n 20 /var/lib/immich/setup.log || true
 fi
 df -Pk /run / 2>/dev/null | awk 'NR==1 || $6=="/run" || $6=="/" { print }'
+# What takes the temporary space, largest last.
+du -xsk /run/* 2>/dev/null | sort -n | tail -n 5 || true
 # Where a visitor stops on the way to the front door page. This goes last,
 # because the page keeps the end of what is written here.
 show "Front door, path"
