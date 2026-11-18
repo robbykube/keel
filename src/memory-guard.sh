@@ -200,6 +200,20 @@ Nice=-5
 WantedBy=multi-user.target
 EOF
 
+# The screen's browser keeps its profile in /run, which is memory. Its
+# cache of pictures seen on the screen filled /run and then nothing could
+# start. 32 MB is plenty for pages served by this computer.
+screen_before=$changed
+changed=0
+put /etc/chromium/policies/managed/keel.json 0644 <<'EOF'
+{ "DiskCacheSize": 33554432 }
+EOF
+if [ "$changed" = 1 ] && systemctl is-active --quiet keel-kiosk.service 2>/dev/null; then
+  rm -rf /run/keel-kiosk/profile*/Default/Cache /run/keel-kiosk/profile*/Default/"Code Cache" 2>/dev/null || true
+  systemctl restart keel-kiosk.service >/dev/null 2>&1 || true
+fi
+[ "$screen_before" = 1 ] && changed=1
+
 # A computer that stops answering completely restarts by itself. The chip
 # waits 15 seconds without a sign of life (the most a Pi 4 can wait). A slow
 # or busy computer still gives that sign, so it is left alone.

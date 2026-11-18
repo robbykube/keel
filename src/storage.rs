@@ -1058,6 +1058,9 @@ fn host_error(stderr: &[u8]) -> String {
 /// current one is closed and goes too.
 fn make_room_in_run() {
     let before = free_in_run();
+    // The screen's browser keeps its profile in /run. Its caches are the
+    // usual tenant: pictures seen on the screen. They are safe to drop.
+    drop_screen_caches(Path::new("/run/keel-kiosk"));
     let _ = Command::new("journalctl")
         .args(["--vacuum-size=8M"])
         .stdout(Stdio::null())
@@ -1075,6 +1078,22 @@ fn make_room_in_run() {
         before.map(|kb| kb.to_string()).unwrap_or_else(|| "?".into()),
         free_in_run().map(|kb| kb.to_string()).unwrap_or_else(|| "?".into())
     );
+}
+
+/// Removes the browser caches under each screen profile in `root`.
+fn drop_screen_caches(root: &Path) {
+    let Ok(profiles) = std::fs::read_dir(root) else {
+        return;
+    };
+    for profile in profiles.flatten() {
+        if !profile.file_name().to_string_lossy().starts_with("profile") {
+            continue;
+        }
+        let base = profile.path();
+        for cache in ["Default/Cache", "Default/Code Cache", "Default/GPUCache", "GrShaderCache", "GraphiteDawnCache", "ShaderCache", "Default/Service Worker/CacheStorage"] {
+            let _ = std::fs::remove_dir_all(base.join(cache));
+        }
+    }
 }
 
 /// Free kilobytes in /run, read with df.
@@ -1210,6 +1229,21 @@ fn folder_summary(folders: &[String]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_screen_caches_go_and_the_profile_stays() {
+        let root = std::env::temp_dir().join(format!("keel-kiosk-{}", std::process::id()));
+        let cache = root.join("profile-0/Default/Cache/Cache_Data");
+        std::fs::create_dir_all(&cache).unwrap();
+        std::fs::write(cache.join("f_000001"), vec![0u8; 1024]).unwrap();
+        std::fs::write(root.join("profile-0/Default/Preferences"), "{}").unwrap();
+        std::fs::create_dir_all(root.join("sway")).unwrap();
+        super::drop_screen_caches(&root);
+        assert!(!root.join("profile-0/Default/Cache").exists());
+        assert!(root.join("profile-0/Default/Preferences").exists());
+        assert!(root.join("sway").exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn a_full_run_folder_is_recognised_and_said_plainly() {
         let systemd = b"Failed to start transient service unit: Unit run-p14506-i14806.service not found.\n";

@@ -41,6 +41,7 @@ browser_flags() {
     --kiosk \
     --ozone-platform=wayland \
     --user-data-dir="$1" \
+    --disk-cache-size=33554432 \
     --no-first-run \
     --noerrdialogs \
     --disable-infobars \
