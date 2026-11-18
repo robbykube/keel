@@ -15,7 +15,16 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 /// The doors the apps need: the front door for every app name, and the call.
-pub const PORTS: &[(Proto, u16)] = &[(Proto::Tcp, 80), (Proto::Tcp, 443), (Proto::Udp, 10000)];
+pub const PORTS: &[(Proto, u16)] = &[
+    (Proto::Tcp, 80),
+    (Proto::Tcp, 443),
+    // Calls: one port for the full Video, twenty for the light one.
+    (Proto::Udp, 10000), (Proto::Udp, 10001), (Proto::Udp, 10002), (Proto::Udp, 10003),
+    (Proto::Udp, 10004), (Proto::Udp, 10005), (Proto::Udp, 10006), (Proto::Udp, 10007),
+    (Proto::Udp, 10008), (Proto::Udp, 10009), (Proto::Udp, 10010), (Proto::Udp, 10011),
+    (Proto::Udp, 10012), (Proto::Udp, 10013), (Proto::Udp, 10014), (Proto::Udp, 10015),
+    (Proto::Udp, 10016), (Proto::Udp, 10017), (Proto::Udp, 10018), (Proto::Udp, 10019),
+];
 /// How long one request lasts. Keel asks again well before it runs out.
 const LEASE_SECONDS: u32 = 3600;
 pub const RENEW_EVERY: Duration = Duration::from_secs(20 * 60);
@@ -154,7 +163,7 @@ pub fn classify(outside: Option<Ipv4Addr>, public: Option<Ipv4Addr>, method: &st
         (None, Some(public)) => (
             "unknown",
             format!(
-                "The internet sees this house as {public}. The router did not answer Keel, so Keel cannot ask it for the ports. Its settings page can send TCP 80 and 443 and UDP 10000 to this computer by hand."
+                "The internet sees this house as {public}. The router did not answer Keel, so Keel cannot ask it for the ports. Its settings page can send TCP 80 and 443 and UDP 10000-10019 to this computer by hand."
             ),
         ),
         (None, None) => (
@@ -221,17 +230,17 @@ pub fn ask() -> Result<View, String> {
         }
         ("NAT-PMP", forwarded, refused)
     } else {
-        return Err("The router did not answer. Its settings may have UPnP turned off. Its settings page can send TCP 80 and 443 and UDP 10000 to this computer by hand.".into());
+        return Err("The router did not answer. Its settings may have UPnP turned off. Its settings page can send TCP 80 and 443 and UDP 10000-10019 to this computer by hand.".into());
     };
     let note = if refused.is_empty() {
-        format!("The router sends {} to this computer. Keel asks again every 20 minutes.", forwarded.join(", "))
+        format!("The router sends {} to this computer. Keel asks again every 20 minutes.", said(&forwarded))
     } else if forwarded.is_empty() {
-        format!("The router answered but would not send {}. Another device may already use those ports.", refused.join(", "))
+        format!("The router answered but would not send {}. Another device may already use those ports.", said(&refused))
     } else {
         format!(
             "The router sends {} here, but would not send {}. Another device may already use those.",
-            forwarded.join(", "),
-            refused.join(", ")
+            said(&forwarded),
+            said(&refused)
         )
     };
     let saved = Saved {
@@ -284,6 +293,34 @@ pub fn stop() -> Result<(), String> {
         ..Saved::default()
     });
     Ok(())
+}
+
+/// "TCP 80, TCP 443, UDP 10000-10019" instead of twenty-two names.
+fn said(labels: &[String]) -> String {
+    let mut out: Vec<String> = Vec::new();
+    let mut run: Option<(u16, u16)> = None;
+    let flush = |run: &mut Option<(u16, u16)>, out: &mut Vec<String>| {
+        if let Some((a, b)) = run.take() {
+            out.push(if a == b { format!("UDP {a}") } else { format!("UDP {a}-{b}") });
+        }
+    };
+    for label in labels {
+        match label.strip_prefix("UDP ").and_then(|p| p.parse::<u16>().ok()) {
+            Some(port) => match run {
+                Some((a, b)) if port == b + 1 => run = Some((a, port)),
+                _ => {
+                    flush(&mut run, &mut out);
+                    run = Some((port, port));
+                }
+            },
+            None => {
+                flush(&mut run, &mut out);
+                out.push(label.clone());
+            }
+        }
+    }
+    flush(&mut run, &mut out);
+    out.join(", ")
 }
 
 fn label(proto: Proto, port: u16) -> String {
@@ -404,6 +441,13 @@ pub fn address_in_trace(text: &str) -> Option<Ipv4Addr> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_ports_are_said_in_few_words() {
+        let labels: Vec<String> = super::PORTS.iter().map(|(p, n)| super::label(*p, *n)).collect();
+        assert_eq!(super::said(&labels), "TCP 80, TCP 443, UDP 10000-10019");
+        assert_eq!(super::said(&["UDP 10000".into(), "UDP 10002".into()]), "UDP 10000, UDP 10002");
+    }
+
     use super::*;
 
     #[test]

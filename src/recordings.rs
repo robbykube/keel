@@ -172,7 +172,7 @@ fn rooms() -> std::sync::MutexGuard<'static, BTreeMap<String, u64>> {
 }
 
 fn video_open() -> bool {
-    crate::jitsi::view().ready || std::env::var_os("KEEL_RECORDINGS").is_some()
+    crate::jitsi::view().ready || crate::galene::view().ready || std::env::var_os("KEEL_RECORDINGS").is_some()
 }
 
 async fn room_view(UrlPath(room): UrlPath<String>) -> Answer {

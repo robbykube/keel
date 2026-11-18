@@ -77,11 +77,11 @@ pub fn ruleset_for(subnets: &[String], outside: bool) -> Result<String, String> 
     let mut house = String::new();
     for subnet in subnets {
         house.push_str(&format!(
-            "    ip saddr {subnet} tcp dport {{ 53, 80, 81, 443, 445, 5380, 9478 }} accept\n    ip saddr {subnet} udp dport {{ 53, 10000 }} accept\n"
+            "    ip saddr {subnet} tcp dport {{ 53, 80, 81, 443, 445, 5380, 9478 }} accept\n    ip saddr {subnet} udp dport {{ 53, 10000-10019 }} accept\n"
         ));
     }
     if outside {
-        house.push_str("    tcp dport { 80, 443 } accept\n    udp dport 10000 accept\n");
+        house.push_str("    tcp dport { 80, 443 } accept\n    udp dport 10000-10019 accept\n");
     }
     Ok(format!(
         r#"table inet keel {{
@@ -95,7 +95,7 @@ pub fn ruleset_for(subnets: &[String], outside: bool) -> Result<String, String> 
     udp sport 67 udp dport 68 accept
     udp dport 41641 accept
     iifname "tailscale0" tcp dport {{ 53, 80, 81, 443, 445, 5380, 9478, 9479 }} accept
-    iifname "tailscale0" udp dport {{ 53, 10000 }} accept
+    iifname "tailscale0" udp dport {{ 53, 10000-10019 }} accept
 {house}  }}
 }}
 "#
@@ -151,9 +151,9 @@ mod tests {
         assert!(!rules.contains("8443"));
         assert!(!rules.contains("8444"));
         assert!(!rules.contains("ip saddr 192.168.0.0/24 tcp dport { 53, 80, 81, 443, 445, 5380, 8443, 8444, 9478 }"));
-        assert!(rules.contains("iifname \"tailscale0\" udp dport { 53, 10000 } accept"));
+        assert!(rules.contains("iifname \"tailscale0\" udp dport { 53, 10000-10019 } accept"));
         assert!(rules.contains("ip saddr 192.168.0.0/24 tcp dport { 53, 80, 81, 443, 445, 5380, 9478 } accept"));
-        assert!(rules.contains("ip saddr 192.168.0.0/24 udp dport { 53, 10000 } accept"));
+        assert!(rules.contains("ip saddr 192.168.0.0/24 udp dport { 53, 10000-10019 } accept"));
         assert!(!rules.contains("ip saddr 192.168.0.0/24 tcp dport { 445, 9478, 9479 }"));
         assert!(!rules.contains("dport 22"));
         assert!(ruleset(&[]).is_err());
@@ -165,7 +165,7 @@ mod tests {
     fn asking_the_router_lets_only_the_app_ports_in_from_outside() {
         let rules = ruleset_for(&["192.168.0.0/24".into()], true).unwrap();
         assert!(rules.contains("    tcp dport { 80, 443 } accept\n"));
-        assert!(rules.contains("    udp dport 10000 accept\n"));
+        assert!(rules.contains("    udp dport 10000-10019 accept\n"));
         assert!(rules.contains("policy drop"));
         assert!(rules.contains("ip saddr 192.168.0.0/24 tcp dport { 53, 80, 81, 443, 445, 5380, 9478 } accept"));
         assert!(!rules.contains("    tcp dport { 81"));

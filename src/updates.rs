@@ -819,6 +819,12 @@ fn install_staged(staged: &Path) -> Result<(), String> {
     }
     replace_file(&binary, Path::new("/usr/bin/keel"))?;
     replace_dir(&web, Path::new("/usr/lib/keel/web"))?;
+    // Programs Keel ships for its light apps (Galène for Video). Older
+    // packages have none, and the ones already here stay.
+    let apps = staged.join("apps");
+    if apps.is_dir() {
+        replace_dir(&apps, Path::new("/usr/lib/keel/apps"))?;
+    }
     Ok(())
 }
 

@@ -417,6 +417,72 @@ $("wake-prepare").addEventListener("click", async () => {
   $("wake-prepare").disabled = false;
 });
 
+// Light or full, per app. Keel's suggestion comes from this computer's memory.
+async function loadVersions() {
+  const box = $("versions-list");
+  let list = [];
+  try {
+    const res = await fetch("/api/versions", { credentials: "same-origin" });
+    list = res.ok ? await res.json() : [];
+  } catch {
+    list = [];
+  }
+  if (!list.length) {
+    box.innerHTML = '<p class="meta">Keel could not read this computer.</p>';
+    return;
+  }
+  box.replaceChildren(...list.map((app) => {
+    const row = document.createElement("fieldset");
+    row.className = "version-row";
+    const legend = document.createElement("legend");
+    legend.textContent = app.title;
+    row.appendChild(legend);
+    for (const [version, name, is, mb] of [["light", app.light, app.light_is, app.light_mb], ["full", app.full, app.full_is, app.full_mb]]) {
+      const label = document.createElement("label");
+      label.className = "version-option";
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = `version-${app.app}`;
+      input.value = version;
+      input.checked = app.chosen === version;
+      input.disabled = version === "light" && !app.light_ready;
+      input.addEventListener("change", () => chooseVersion(app.app, version));
+      const text = document.createElement("span");
+      const title = document.createElement("strong");
+      title.textContent = `${version === "light" ? "Light" : "Full"}: ${name}`;
+      const size = document.createElement("span");
+      size.className = "meta";
+      const notes = [`about ${mb} MB`];
+      if (app.suggested === version) notes.push("Suggested for this computer");
+      if (version === "light" && !app.light_ready) notes.push("Comes with the next Keel update");
+      size.textContent = ` ${notes.join(" · ")}`;
+      const line = document.createElement("span");
+      line.className = "meta version-is";
+      line.textContent = is;
+      text.append(title, size, line);
+      label.append(input, text);
+      row.appendChild(label);
+    }
+    const why = document.createElement("p");
+    why.className = "meta";
+    why.textContent = app.why;
+    row.appendChild(why);
+    return row;
+  }));
+}
+
+async function chooseVersion(app, version) {
+  $("versions-status").textContent = "Keeping that.";
+  try {
+    const { message } = await postJson("/api/versions", { app, version });
+    $("versions-status").textContent = message || "";
+  } catch (err) {
+    $("versions-status").textContent = String(err.message || err);
+  }
+  await loadVersions();
+}
+
+loadVersions();
 loadWake();
 loadPeople();
 loadUpdates();

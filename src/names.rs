@@ -418,7 +418,7 @@ mod tests {
     #[test]
     fn video_takes_recordings_at_one_path_and_nothing_else_moves() {
         let link = link_script("klaingar.com", "video.klaingar.com", "keel-jitsi-web", 8080);
-        assert!(link.contains(r#"[ "$forward" = keel-jitsi-web ] && extra=" rec""#));
+        assert!(link.contains(r#"keel-jitsi-web|keel-galene) extra=" rec" ;;"#));
         assert!(link.contains("cat > /var/lib/keel/caddy-reload.sh.new"));
         let helper = super::DOOR_HELPER;
         assert!(helper.contains("reverse_proxy /keel-recording/* 127.0.0.1:9477"));

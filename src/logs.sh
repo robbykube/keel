@@ -26,6 +26,10 @@ df -Pk /run / 2>/dev/null | awk 'NR==1 || $6=="/run" || $6=="/" { print }'
 # What takes the temporary space, largest last.
 du -xsk /run/* 2>/dev/null | sort -n | tail -n 5 || true
 show "Video"
+if systemctl cat keel-galene.service >/dev/null 2>&1; then
+  printf 'Light Video (Galene): %s\n' "$(systemctl is-active keel-galene.service 2>/dev/null)"
+  journalctl -u keel-galene -n 20 --no-pager -o cat 2>/dev/null | tail -n 20 || true
+fi
 podman ps -a --filter name=keel-jitsi --format '{{.Names}} {{.Status}}' 2>/dev/null || true
 if [ -f /var/lib/jitsi/web.log ]; then
   tail -n 30 /var/lib/jitsi/web.log || true

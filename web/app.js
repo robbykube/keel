@@ -254,6 +254,22 @@ function showAppChoice(apps) {
       <input type="checkbox" name="app" value="${escapeHtml(app.id)}">
       <span><strong>${escapeHtml(app.role)}</strong> ${escapeHtml(app.why)}</span>
     </label>`).join("");
+  // Which version Keel suggests for this computer, under the app it is for.
+  fetch("/api/versions", { credentials: "same-origin" })
+    .then((res) => (res.ok ? res.json() : []))
+    .then((list) => {
+      const forApp = { video: "jitsi" };
+      for (const v of list) {
+        const input = rows.querySelector(`input[value="${forApp[v.app] || v.app}"]`);
+        if (!input || input.closest("label").querySelector(".version-hint")) continue;
+        const hint = document.createElement("span");
+        hint.className = "meta version-hint";
+        const name = v.suggested === "light" ? v.light : v.full;
+        hint.textContent = ` Keel suggests the ${v.suggested} version here (${name}). ${v.why} Settings can change it.`;
+        input.closest("label").querySelector("span").appendChild(hint);
+      }
+    })
+    .catch(() => {});
   const use = $("apps-use");
   const refresh = () => {
     use.disabled = !rows.querySelector("input:checked");

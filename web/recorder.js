@@ -119,7 +119,23 @@
   // A canvas keeps it one recording when Jitsi swaps the camera (turning it
   // off and on): a camera that is off is black, never recorded behind it.
   let rec = null;
+  // Galène's page keeps its connection and group in page-wide variables.
+  const galene = () => {
+    try {
+      // eslint-disable-next-line no-undef
+      return typeof serverConnection !== "undefined" && serverConnection && serverConnection.socket ? serverConnection : null;
+    } catch {
+      return null;
+    }
+  };
   const meeting = () => {
+    const sc = galene();
+    if (sc) {
+      // eslint-disable-next-line no-undef
+      const room = typeof group !== "undefined" ? group : "";
+      // In the room once Galène has joined it and knows who this is.
+      return room && sc.username ? { room, name: sc.username } : null;
+    }
     const app = window.APP;
     if (!app || !app.conference || !app.store) return null;
     const room = app.conference.roomName || (app.conference._room && app.conference._room.getName && app.conference._room.getName());
@@ -130,6 +146,13 @@
     return { room, name };
   };
   const localTrack = (kind) => {
+    const sc = galene();
+    if (sc) {
+      const camera = Object.values(sc.up || {}).find((c) => c.label === "camera" && c.stream);
+      const found = camera ? (kind === "audio" ? camera.stream.getAudioTracks() : camera.stream.getVideoTracks()) : [];
+      const live = found.find((t) => t.readyState === "live" && t.enabled);
+      return live || null;
+    }
     const tracks = (window.APP.store.getState()["features/base/tracks"] || []).filter((t) => t.local && t.mediaType === (kind === "audio" ? "audio" : "video"));
     const jt = tracks.length && tracks[0].jitsiTrack;
     const track = jt && (jt.getTrack ? jt.getTrack() : jt.track);

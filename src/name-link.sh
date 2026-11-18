@@ -31,7 +31,7 @@ case "$forward" in
 esac
 printf '%s\n' "$upstream" | grep -Eq '^127\.0\.0\.1:[0-9]+$' || fail "Keel could not send $host to the app."
 extra=""
-[ "$forward" = keel-jitsi-web ] && extra=" rec"
+case "$forward" in keel-jitsi-web|keel-galene) extra=" rec" ;; esac
 printf '%s %s%s\n' "$upstream" "admin@$owned" "$extra" > "/var/lib/keel/caddy/sites/$host"
 [ -x /var/lib/keel/caddy-reload.sh ] || fail "The front door is not ready, so the name was not sent."
 # The door's helper as this Keel writes it, so an update reaches a door

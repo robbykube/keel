@@ -7,6 +7,7 @@ mod config;
 mod devices;
 mod discover;
 mod files;
+mod galene;
 mod firewall;
 mod folders;
 mod gallery;
@@ -33,6 +34,7 @@ mod picture_dates;
 mod remote;
 mod recordings;
 mod router;
+mod versions;
 mod services;
 mod copies;
 mod diskhealth;
@@ -325,6 +327,10 @@ async fn main() {
             post(apps_choose).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route("/api/apps/jitsi", get(jitsi_status))
+        .route(
+            "/api/versions",
+            get(versions_view).post(versions_choose.layer(axum::middleware::from_fn(auth::require_admin))),
+        )
         .route(
             "/api/apps/jitsi/install",
             post(jitsi_install).layer(axum::middleware::from_fn(auth::require_admin)),
@@ -1189,11 +1195,39 @@ async fn installer_plan(
 }
 
 async fn jitsi_status() -> Json<crate::jitsi::Status> {
-    Json(crate::jitsi::view())
+    Json(tokio::task::spawn_blocking(video_view).await.unwrap_or_else(|_| crate::jitsi::view()))
+}
+
+/// Video is Galène or Jitsi, by the choice in Settings.
+fn video_view() -> crate::jitsi::Status {
+    if crate::versions::light("video") {
+        crate::galene::view()
+    } else {
+        crate::jitsi::view()
+    }
+}
+
+async fn versions_view() -> Json<Vec<crate::versions::Choice>> {
+    Json(tokio::task::spawn_blocking(crate::versions::list).await.unwrap_or_default())
+}
+
+#[derive(Deserialize)]
+struct VersionAsk {
+    app: String,
+    version: String,
+}
+
+async fn versions_choose(Json(ask): Json<VersionAsk>) -> (StatusCode, Json<serde_json::Value>) {
+    match tokio::task::spawn_blocking(move || crate::versions::choose(&ask.app, &ask.version)).await {
+        Ok(Ok(message)) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "message": message }))),
+        Ok(Err(message)) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "ok": false, "message": message }))),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "ok": false, "message": "Keel could not keep that." }))),
+    }
 }
 
 async fn jitsi_install() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
-    match crate::jitsi::start() {
+    let started = if crate::versions::light("video") { crate::galene::start() } else { crate::jitsi::start() };
+    match started {
         Ok(status) => Ok((
             if status.ready { StatusCode::OK } else { StatusCode::ACCEPTED },
             Json(serde_json::json!({
@@ -1213,7 +1247,7 @@ async fn jitsi_install() -> Result<(StatusCode, Json<serde_json::Value>), (Statu
 }
 
 async fn jitsi_close() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
-    let closed = tokio::task::spawn_blocking(crate::jitsi::close).await;
+    let closed = tokio::task::spawn_blocking(|| if crate::versions::light("video") { crate::galene::close() } else { crate::jitsi::close() }).await;
     match closed {
         Ok(Ok(status)) => Ok((
             StatusCode::OK,
