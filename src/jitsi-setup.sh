@@ -87,7 +87,21 @@ JIBRI_RECORDER_PASSWORD=$jibri_recorder
 JIBRI_XMPP_PASSWORD=$jibri_pass
 EOF
 chmod 0600 "$cfg/meet.env" || fail "Keel could not store the meeting settings."
-want="$name $house"
+# The meeting page loads Keel's call recorder, and phones stay in the
+# browser (the Jitsi app cannot record to Keel). Jitsi adds this file to
+# its config.js when the page program starts.
+cat > "$cfg/web/custom-config.js" <<'EOF'
+// Keel: pressing Record in a call records each person's camera to Keel.
+config.disableDeepLinking = true;
+(function () {
+  var s = document.createElement('script');
+  s.src = '/keel-recording/recorder.js';
+  s.async = true;
+  (document.head || document.documentElement).appendChild(s);
+})();
+EOF
+chmod 0644 "$cfg/web/custom-config.js"
+want="$name $house recorder-1"
 page_up() {
   curl -fsS -o /dev/null --max-time 3 "http://127.0.0.1:8080/"
 }

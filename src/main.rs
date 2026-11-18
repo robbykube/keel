@@ -31,6 +31,7 @@ mod phone;
 mod people;
 mod picture_dates;
 mod remote;
+mod recordings;
 mod router;
 mod services;
 mod copies;
@@ -499,6 +500,7 @@ async fn main() {
     let tls_app = app.clone();
             tokio::spawn(crate::locked::serve(tls_app));
             tokio::spawn(crate::phone::serve());
+            tokio::spawn(crate::recordings::serve());
     eprintln!("keel listening on http://{addr}");
     if crate::auth::loopback_trusted() {
         eprintln!("keel trusts loopback requests without a token (local console)");
@@ -857,6 +859,7 @@ async fn watch_disks(state: AppState) {
             let _ = tokio::task::spawn_blocking(crate::copies::run_now).await;
         }
         let _ = tokio::task::spawn_blocking(crate::jitsi::close_if_quiet).await;
+        let _ = tokio::task::spawn_blocking(crate::recordings::tidy).await;
         if crate::copies::computer_due() {
             let _ = tokio::task::spawn_blocking(crate::copies::copy_computer).await;
         }

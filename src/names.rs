@@ -107,8 +107,12 @@ pub(crate) fn names_script() -> String {
 }
 
 pub(crate) fn door_script() -> String {
-    include_str!("names-door.sh").to_string()
+    include_str!("names-door.sh").replace("__KEEL_DOOR_HELPER__\n", DOOR_HELPER)
 }
+
+/// The front door's helper: it writes the Caddyfile from the sites list and
+/// reloads the door. Written when the door is set up and with each name.
+const DOOR_HELPER: &str = include_str!("door-helper.sh");
 
 pub fn prepared() -> Result<(), String> {
     if !names_view().ready {
@@ -176,6 +180,7 @@ pub(crate) fn link_script(owned: &str, host: &str, forward: &str, port: u16) -> 
     script = script.replace("__KEEL_HOST__", host);
     script = script.replace("__KEEL_FORWARD__", forward);
     script = script.replace("__KEEL_PORT__", &port.to_string());
+    script = script.replace("__KEEL_DOOR_HELPER__\n", DOOR_HELPER);
     script
 }
 
@@ -408,5 +413,17 @@ mod tests {
         assert!(!script.contains("9478"));
         assert!(!script.contains("0.0.0.0"));
         assert!(!script.contains("__KEEL_"));
+    }
+
+    #[test]
+    fn video_takes_recordings_at_one_path_and_nothing_else_moves() {
+        let link = link_script("klaingar.com", "video.klaingar.com", "keel-jitsi-web", 8080);
+        assert!(link.contains(r#"[ "$forward" = keel-jitsi-web ] && extra=" rec""#));
+        assert!(link.contains("cat > /var/lib/keel/caddy-reload.sh.new"));
+        let helper = super::DOOR_HELPER;
+        assert!(helper.contains("reverse_proxy /keel-recording/* 127.0.0.1:9477"));
+        assert!(!helper.contains("9478"));
+        assert!(super::door_script().contains("reverse_proxy /keel-recording/* 127.0.0.1:9477"));
+        assert!(!super::door_script().contains("__KEEL_"));
     }
 }

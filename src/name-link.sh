@@ -30,8 +30,16 @@ case "$forward" in
   *) upstream="127.0.0.1:$port" ;;
 esac
 printf '%s\n' "$upstream" | grep -Eq '^127\.0\.0\.1:[0-9]+$' || fail "Keel could not send $host to the app."
-printf '%s %s\n' "$upstream" "admin@$owned" > "/var/lib/keel/caddy/sites/$host"
+extra=""
+[ "$forward" = keel-jitsi-web ] && extra=" rec"
+printf '%s %s%s\n' "$upstream" "admin@$owned" "$extra" > "/var/lib/keel/caddy/sites/$host"
 [ -x /var/lib/keel/caddy-reload.sh ] || fail "The front door is not ready, so the name was not sent."
+# The door's helper as this Keel writes it, so an update reaches a door
+# that was set up by an older Keel.
+cat > /var/lib/keel/caddy-reload.sh.new <<'EOF'
+__KEEL_DOOR_HELPER__
+EOF
+chmod 755 /var/lib/keel/caddy-reload.sh.new && mv /var/lib/keel/caddy-reload.sh.new /var/lib/keel/caddy-reload.sh
 /var/lib/keel/caddy-reload.sh || fail "Keel could not send $host to the app."
 lock=waiting
 code=$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' --resolve "$host:443:$house" "https://$host/" || true)

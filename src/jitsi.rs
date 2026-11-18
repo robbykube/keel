@@ -338,6 +338,8 @@ mod tests {
         assert!(script.contains("-p 127.0.0.1:8080:80"));
         // The meeting programs need a writable system folder, as upstream runs them.
         assert!(!script.contains("--read-only"));
+        assert!(script.contains("/keel-recording/recorder.js"));
+        assert!(script.contains("config.disableDeepLinking = true;"));
         assert!(script.contains("podman logs --tail 80 keel-jitsi-web"));
         assert!(script.contains("-p 10000:10000/udp"));
         assert!(!script.contains("8443"));
