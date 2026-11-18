@@ -27,7 +27,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Copy this computer | Save the Keel program, the people, and the settings onto the Nightly copy disk, in a folder of their own, apart from the files. A second copy goes on the Third copy disk when that disk is connected |
 | Only the house and Away | The page and the folders answer on this network and on Away. The Keel screen still works. Other computers are refused |
 | Lock the page | The same page at the Away name, with a lock the browser trusts. The password app asks for that address. The Keel screen stays as it is |
-| Video | A call at video and the name you own. Open it on Apps when you want one. It keeps going until people leave |
+| Video | A call at video and the name you own. Open it on Apps when you want one. Close turns it off. The call also ends when people leave |
 | Passwords | The Bitwarden app, at passwords and the name you own. Create the house account, then close new accounts |
 | Papers | Documents filed at papers and the name you own. Papers you add are stored in Documents. Documents stays the files |
 | Mail | A mailbox on this computer. Link Gmail and other accounts. Mail you move here stays here |

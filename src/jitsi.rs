@@ -3,6 +3,9 @@
 //! The meeting address is video.<the name you own>. The front door holds the
 //! lock. The page itself stays on this computer. UDP 10000 carries the call.
 //! Nothing here turns on a meeting timer. The call ends when people leave.
+//! Close stops the programs. They stay on disk, and Open starts them again.
+//! How many people a call holds, and how much memory the meeting programs
+//! may take, come from this computer's memory: two people on a small one.
 
 use std::fs;
 use std::path::Path;
@@ -97,13 +100,62 @@ pub fn start() -> Result<Status, String> {
     Ok(view())
 }
 
+pub fn close() -> Result<Status, String> {
+    if !cfg!(target_os = "linux") {
+        return Err("Video installs on the Keel computer.".into());
+    }
+    if OPENING.load(Ordering::SeqCst) {
+        return Err("Video is still opening. Try Close again in a moment.".into());
+    }
+    crate::storage::host("exec /bin/bash -s", &[], Some(close_script()))
+        .map_err(|_| "Keel could not close Video. Try Close again.".to_string())?;
+    let _ = fs::remove_file(PROGRESS_PATH);
+    Ok(idle())
+}
+
+pub fn close_script() -> &'static str {
+    "podman rm -f keel-jitsi-web keel-jitsi-jvb keel-jitsi-jicofo keel-jitsi-prosody >/dev/null 2>&1 || true\n"
+}
+
+/// How large a call this computer can carry: the people in one call, and
+/// the most memory the video router and the meeting organiser may use.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CallSize {
+    pub people: u32,
+    pub bridge_mb: u32,
+    pub focus_mb: u32,
+}
+
+pub fn call_size(memory_bytes: u64) -> CallSize {
+    const GB: u64 = 1024 * 1024 * 1024;
+    if memory_bytes < 6 * GB {
+        CallSize { people: 2, bridge_mb: 512, focus_mb: 256 }
+    } else if memory_bytes < 12 * GB {
+        CallSize { people: 5, bridge_mb: 1024, focus_mb: 512 }
+    } else {
+        CallSize { people: 10, bridge_mb: 2048, focus_mb: 1024 }
+    }
+}
+
+/// The call size for this computer, read from its memory.
+pub fn this_call_size() -> CallSize {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_memory();
+    call_size(sys.total_memory())
+}
+
+fn people_line(size: CallSize) -> String {
+    format!("Calls of up to {} people on this computer.", size.people)
+}
+
 pub fn meeting_address(owned: &str) -> Result<String, String> {
     crate::owned::app_address(owned, "video")
 }
 
 fn ready_message(address: &str, waiting: bool) -> String {
     format!(
-        "The meeting is {address}. The call keeps going until people leave. For a call from outside the house, the router also sends UDP 10000 to this computer.{} You do not type addresses.",
+        "The meeting is {address}. {} The call keeps going until people leave. For a call from outside the house, the router also sends UDP 10000 to this computer.{} You do not type addresses.",
+        people_line(this_call_size()),
         crate::names::lock_note(waiting)
     )
 }
@@ -114,9 +166,12 @@ fn idle() -> Status {
         ready: false,
         address: String::new(),
         message: if installed {
-            "Video is on this computer. Press Open when you want a call.".into()
+            format!("Video is on this computer. Press Open when you want a call. {}", people_line(this_call_size()))
         } else {
-            "Press Open when you want a call. Keel makes the video name and asks for the lock. The first time downloads the meeting program.".into()
+            format!(
+                "Press Open when you want a call. Keel makes the video name and asks for the lock. The first time downloads the meeting program. {}",
+                people_line(this_call_size())
+            )
         },
         state: "idle".into(),
         percent: 0,
@@ -147,9 +202,16 @@ fn write_progress(state: &str, percent: u8, message: &str, address: &str, ready:
 }
 
 pub fn setup_script(name: &str) -> String {
+    setup_script_for(name, this_call_size())
+}
+
+fn setup_script_for(name: &str, size: CallSize) -> String {
     let mut script = include_str!("jitsi-setup.sh").to_string();
     script = script.replace("__KEEL_NAME__", name);
     script = script.replace("__KEEL_TAG__", TAG);
+    script = script.replace("__KEEL_PEOPLE__", &size.people.to_string());
+    script = script.replace("__KEEL_BRIDGE__", &size.bridge_mb.to_string());
+    script = script.replace("__KEEL_FOCUS__", &size.focus_mb.to_string());
     script
 }
 
@@ -189,5 +251,26 @@ mod tests {
         assert!(!script.contains("time_restricted"));
         assert!(!script.contains("conference_max_minutes"));
         assert!(!script.contains("meet.jit.si"));
+    }
+
+    #[test]
+    fn the_call_fits_the_computer() {
+        const GB: u64 = 1024 * 1024 * 1024;
+        let small = super::call_size(4 * GB);
+        assert_eq!(small, super::CallSize { people: 2, bridge_mb: 512, focus_mb: 256 });
+        assert_eq!(super::call_size(8 * GB).people, 5);
+        assert_eq!(super::call_size(16 * GB).people, 10);
+        let script = super::setup_script_for("video.example.com", small);
+        assert!(script.contains("MAX_PARTICIPANTS=2\n"));
+        assert!(script.contains("VIDEOBRIDGE_MAX_MEMORY=512m\n"));
+        assert!(script.contains("JICOFO_MAX_MEMORY=256m\n"));
+        assert!(!script.contains("__KEEL_"));
+    }
+
+    #[test]
+    fn close_stops_the_call_and_keeps_the_program() {
+        let script = super::close_script();
+        assert!(script.contains("podman rm -f keel-jitsi-web keel-jitsi-jvb keel-jitsi-jicofo keel-jitsi-prosody"));
+        assert!(!script.contains("/var/lib/jitsi"));
     }
 }

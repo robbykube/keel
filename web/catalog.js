@@ -55,8 +55,12 @@ let sharedReady = false;
 function programRow(spec, status) {
   const failed = status.state === "error";
   const opening = status.state === "running";
+  // The meeting link is what people send each other, so it can be copied.
+  const copy = spec.id === "video"
+    ? ` <button type="button" class="texty" data-copy="${escapeHtml(status.address || "")}">Copy link</button>`
+    : "";
   const address = status.ready && status.address
-    ? `<p><a href="${escapeHtml(status.address)}">${escapeHtml(status.address)}</a></p>`
+    ? `<p><a href="${escapeHtml(status.address)}">${escapeHtml(status.address)}</a>${copy}</p>`
     : "";
   const percent = Math.max(0, Math.min(100, Number(status.percent) || 0));
   const bar = opening
@@ -74,6 +78,9 @@ function programRow(spec, status) {
   const close = status.ready && status.signups_open
     ? `<button type="button" data-close="${escapeHtml(spec.id)}">Close new accounts</button>`
     : "";
+  const stop = spec.id === "video" && status.ready
+    ? `<button type="button" data-stop="${escapeHtml(spec.id)}">Close</button>`
+    : "";
   const [state, tone] = stateOf(status, waiting);
   return `<article class="app-row" id="${escapeHtml(spec.id)}-row">
     <div>
@@ -82,7 +89,7 @@ function programRow(spec, status) {
       ${address}
       ${bar}
     </div>
-    ${open}${close}
+    ${open}${close}${stop}
   </article>`;
 }
 
@@ -304,7 +311,82 @@ async function openJellyfin() {
   }
 }
 
+// Closing ends any call in progress, so the first press asks.
+function askBeforeStop(button) {
+  if (button.dataset.sure === "1") return true;
+  button.dataset.sure = "1";
+  button.textContent = "End the call and close";
+  button.classList.add("danger");
+  window.setTimeout(() => {
+    if (!button.isConnected) return;
+    delete button.dataset.sure;
+    button.textContent = "Close";
+    button.classList.remove("danger");
+  }, 4000);
+  return false;
+}
+
+async function copyLink(button) {
+  const link = button.dataset.copy;
+  if (!link) return;
+  let done = false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(link);
+      done = true;
+    }
+  } catch (_) { /* tried the other way below */ }
+  if (!done) {
+    // A page on the house address is not a secure page, so the clipboard
+    // is reached the older way.
+    const box = document.createElement("textarea");
+    box.value = link;
+    box.setAttribute("readonly", "");
+    box.style.position = "fixed";
+    box.style.opacity = "0";
+    document.body.appendChild(box);
+    box.select();
+    try { done = document.execCommand("copy"); } catch (_) { done = false; }
+    box.remove();
+  }
+  button.textContent = done ? "Copied" : "Copy did not work. Hold the link instead.";
+  window.setTimeout(() => { if (button.isConnected) button.textContent = "Copy link"; }, 2000);
+}
+
+async function stopVideo(spec) {
+  if (programTimers[spec.id]) window.clearTimeout(programTimers[spec.id]);
+  paintProgram(spec, { state: "running", percent: 2, message: "Closing Video.", ready: false, address: "" });
+  try {
+    const res = await fetch(`${spec.path}/close`, { method: "POST", credentials: "same-origin" });
+    const data = await readAnswer(res);
+    if (!res.ok || data.ok === false) {
+      paintProgram(spec, { state: "error", percent: 0, message: data.message || "Keel could not close Video.", ready: false, address: "" });
+      return;
+    }
+    paintProgram(spec, {
+      state: data.state || "idle",
+      percent: Number(data.percent) || 0,
+      message: data.message || "Video is on this computer. Press Open when you want a call.",
+      ready: false,
+      address: "",
+    });
+  } catch (err) {
+    paintProgram(spec, { state: "error", percent: 0, message: String(err), ready: false, address: "" });
+  }
+}
+
 function onProgramClick(event) {
+  const copy = event.target.closest("button[data-copy]");
+  if (copy) {
+    copyLink(copy);
+    return;
+  }
+  const stop = event.target.closest("button[data-stop]");
+  if (stop) {
+    const spec = programs[stop.dataset.stop];
+    if (spec && askBeforeStop(stop)) stopVideo(spec);
+    return;
+  }
   const close = event.target.closest("button[data-close]");
   if (close) {
     const spec = programs[close.dataset.close];

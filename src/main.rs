@@ -318,6 +318,10 @@ async fn main() {
             "/api/apps/jitsi/install",
             post(jitsi_install).layer(axum::middleware::from_fn(auth::require_admin)),
         )
+        .route(
+            "/api/apps/jitsi/close",
+            post(jitsi_close).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/apps/technitium", get(names_status))
         .route(
             "/api/apps/technitium/install",
@@ -1166,6 +1170,31 @@ async fn jitsi_install() -> Result<(StatusCode, Json<serde_json::Value>), (Statu
         Err(message) => Err((
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({ "ok": false, "message": message })),
+        )),
+    }
+}
+
+async fn jitsi_close() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    let closed = tokio::task::spawn_blocking(crate::jitsi::close).await;
+    match closed {
+        Ok(Ok(status)) => Ok((
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "ok": true,
+                "ready": status.ready,
+                "address": status.address,
+                "message": status.message,
+                "state": status.state,
+                "percent": status.percent,
+            })),
+        )),
+        Ok(Err(message)) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": message })),
+        )),
+        Err(_) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "message": "Keel could not close Video. Try Close again." })),
         )),
     }
 }
