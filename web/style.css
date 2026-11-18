@@ -1344,6 +1344,10 @@ button:focus-visible, a.button:focus-visible, input:focus-visible, select:focus-
 /* Disks: the other-computer forms open in full, not in a short scroll box. */
 #another[open] { max-height: none; overflow: visible; }
 #another .form { margin-top: var(--space-3); }
+/* A page that needs a sign-in, opened without one. */
+.sign-in-needed { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
+.sign-in-needed p { margin: 0; }
+
 /* Apps: from outside the house. */
 .outside-card { margin-bottom: var(--space-4); }
 .outside-card h3 { margin: 0; font-size: var(--text-lg); font-weight: 600; color: var(--text); }

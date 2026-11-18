@@ -91,6 +91,12 @@ fn is_authorized(request: &Request) -> bool {
         || session_from(request.headers()).is_some_and(|value| credential_ok(&value, &expected))
 }
 
+/// Whether this request may see what only a signed-in person sees: the
+/// Keel screen, a signed-in browser, or the admin token.
+pub fn allowed(request: &Request) -> bool {
+    is_authorized(request)
+}
+
 pub async fn require_admin(request: Request, next: Next) -> Response {
     if is_authorized(&request) {
         next.run(request).await

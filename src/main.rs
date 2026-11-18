@@ -135,8 +135,8 @@ async fn main() {
             "/api/logs",
             get(logs_view).layer(axum::middleware::from_fn(auth::require_admin)),
         )
-        .route("/api/updates", get(updates_status))
-        .route("/api/updates/progress", get(updates_progress))
+        .route("/api/updates", get(updates_status).layer(axum::middleware::from_fn(auth::require_admin)))
+        .route("/api/updates/progress", get(updates_progress).layer(axum::middleware::from_fn(auth::require_admin)))
         .route(
             "/api/updates/install",
             post(updates_install).layer(axum::middleware::from_fn(auth::require_admin)),
@@ -190,8 +190,8 @@ async fn main() {
             get(auth::sign_in_status).post(auth::answer_sign_in),
         )
         .route("/api/system", get(system))
-        .route("/api/disks", get(disks))
-        .route("/api/storage", get(storage_view))
+        .route("/api/disks", get(disks).layer(axum::middleware::from_fn(auth::require_admin)))
+        .route("/api/storage", get(storage_view).layer(axum::middleware::from_fn(|r, n| visitors_without(DISK_PLACES, r, n))))
         .route(
             "/api/storage/prepare",
             post(storage_prepare).layer(axum::middleware::from_fn(auth::require_admin)),
@@ -216,7 +216,7 @@ async fn main() {
             "/api/storage/sleep-try",
             post(storage_sleep_try).layer(axum::middleware::from_fn(auth::require_admin)),
         )
-        .route("/api/installer", get(installer_status))
+        .route("/api/installer", get(installer_status).layer(axum::middleware::from_fn(auth::require_admin)))
         .route(
             "/api/installer/progress",
             get(installer_progress).layer(axum::middleware::from_fn(auth::require_admin)),
@@ -227,11 +227,15 @@ async fn main() {
         )
         .route(
             "/api/pools",
-            get(pools).post(pools_create.layer(axum::middleware::from_fn(auth::require_admin))),
+            get(pools)
+                .layer(axum::middleware::from_fn(auth::require_admin))
+                .post(pools_create.layer(axum::middleware::from_fn(auth::require_admin))),
         )
         .route(
             "/api/shares",
-            get(shares).post(shares_create.layer(axum::middleware::from_fn(auth::require_admin))),
+            get(shares)
+                .layer(axum::middleware::from_fn(|r, n| visitors_without(SHARE_SECRETS, r, n)))
+                .post(shares_create.layer(axum::middleware::from_fn(auth::require_admin))),
         )
         .route(
             "/api/folders",
@@ -265,7 +269,7 @@ async fn main() {
             "/api/folders/move",
             post(folders_move).layer(axum::middleware::from_fn(auth::require_admin)),
         )
-        .route("/api/power", get(power))
+        .route("/api/power", get(power).layer(axum::middleware::from_fn(auth::require_admin)))
         .route(
             "/api/power/wake",
             get(wake_view).post(wake_prepare).layer(axum::middleware::from_fn(auth::require_admin)),
@@ -282,14 +286,14 @@ async fn main() {
             "/api/power/cancel",
             post(power_active).layer(axum::middleware::from_fn(auth::require_admin)),
         )
-        .route("/api/power/opportunities", get(power_opportunities))
+        .route("/api/power/opportunities", get(power_opportunities).layer(axum::middleware::from_fn(auth::require_admin)))
         .route(
             "/api/shutdown",
             post(shutdown).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route("/api/overlay", get(overlay_status))
-        .route("/api/services", get(services_status))
-        .route("/api/network/ports", get(network_ports))
+        .route("/api/services", get(services_status).layer(axum::middleware::from_fn(auth::require_admin)))
+        .route("/api/network/ports", get(network_ports).layer(axum::middleware::from_fn(auth::require_admin)))
         .route("/api/overlay/progress", get(overlay_progress))
         .route(
             "/api/overlay/install",
@@ -377,7 +381,7 @@ async fn main() {
             "/api/apps/papra/install",
             post(papers_install).layer(axum::middleware::from_fn(auth::require_admin)),
         )
-        .route("/api/apps/thunderbird", get(mail_status))
+        .route("/api/apps/thunderbird", get(mail_status).layer(axum::middleware::from_fn(|r, n| visitors_without(SHARE_SECRETS, r, n))))
         .route(
             "/api/apps/thunderbird/install",
             post(mail_install).layer(axum::middleware::from_fn(auth::require_admin)),
@@ -386,12 +390,12 @@ async fn main() {
             "/api/apps/{id}/action",
             post(app_action).layer(axum::middleware::from_fn(auth::require_admin)),
         )
-        .route("/api/issues", get(issues_list))
+        .route("/api/issues", get(issues_list).layer(axum::middleware::from_fn(|r, n| visitors_without(ISSUE_DETAILS, r, n))))
         .route(
             "/api/repair",
             post(repair_run).layer(axum::middleware::from_fn(auth::require_admin)),
         )
-        .route("/api/devices", get(devices_view))
+        .route("/api/devices", get(devices_view).layer(axum::middleware::from_fn(auth::require_admin)))
         .route(
             "/api/devices/look",
             post(devices_look).layer(axum::middleware::from_fn(auth::require_admin)),
@@ -399,6 +403,7 @@ async fn main() {
         .route(
             "/api/notes",
             get(notes_list)
+                .layer(axum::middleware::from_fn(auth::require_admin))
                 .post(notes_create.layer(axum::middleware::from_fn(auth::require_admin))),
         )
         .route(
@@ -415,12 +420,12 @@ async fn main() {
             "/api/look/login",
             post(look_login).layer(axum::middleware::from_fn(auth::require_admin)),
         )
-        .route("/api/look/saved", get(look_saved))
+        .route("/api/look/saved", get(look_saved).layer(axum::middleware::from_fn(auth::require_admin)))
         .route(
             "/api/look/forget",
             post(look_forget).layer(axum::middleware::from_fn(auth::require_admin)),
         )
-        .route("/api/look/session", get(look_session))
+        .route("/api/look/session", get(look_session).layer(axum::middleware::from_fn(auth::require_admin)))
         .route("/api/look/files", get(look_files))
         .route(
             "/api/look/browse",
@@ -1217,6 +1222,48 @@ async fn jitsi_close() -> Result<(StatusCode, Json<serde_json::Value>), (StatusC
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({ "ok": false, "message": "Keel could not close Video. Try Close again." })),
         )),
+    }
+}
+
+/// Passwords never go to a visitor who has not signed in.
+const SHARE_SECRETS: &[&str] = &["password"];
+/// Disk names and sizes stay for Home; where they sit on the system does not.
+const DISK_PLACES: &[&str] = &["path", "mount", "uuid"];
+/// Repair's titles stay for Home; the details behind them do not.
+const ISSUE_DETAILS: &[&str] = &["evidence"];
+
+/// For a visitor who has not signed in, the answer is sent without `keys`,
+/// wherever they sit in it. A signed-in person gets it whole.
+async fn visitors_without(keys: &'static [&'static str], request: axum::extract::Request, next: axum::middleware::Next) -> Response {
+    let allowed = auth::allowed(&request);
+    let response = next.run(request).await;
+    if allowed {
+        return response;
+    }
+    let (mut parts, body) = response.into_parts();
+    let Ok(bytes) = axum::body::to_bytes(body, 16 * 1024 * 1024).await else {
+        return axum::response::IntoResponse::into_response((StatusCode::INTERNAL_SERVER_ERROR, "Keel could not read that."));
+    };
+    let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return Response::from_parts(parts, Body::from(bytes));
+    };
+    without_keys(&mut value, keys);
+    parts.headers.remove(CONTENT_LENGTH);
+    Response::from_parts(parts, Body::from(serde_json::to_vec(&value).unwrap_or_default()))
+}
+
+fn without_keys(value: &mut serde_json::Value, keys: &[&str]) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for key in keys {
+                map.remove(*key);
+            }
+            for inner in map.values_mut() {
+                without_keys(inner, keys);
+            }
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(|inner| without_keys(inner, keys)),
+        _ => {}
     }
 }
 

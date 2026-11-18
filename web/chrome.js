@@ -297,6 +297,40 @@ const installKeelChrome = (state = {}) => {
   if (themeSlot && !themeSlot.querySelector(".theme-toggle")) themeSlot.appendChild(themeControl());
 };
 
+// A page that needs a signed-in person says so in words when Keel refuses
+// its data, instead of staying empty. Signing in comes back to the page.
+const SIGN_IN_PAGES = new Set([...NEEDS_SIGN_IN, "/notes.html", "/sleep.html"]);
+const showSignInNeeded = () => {
+  if (!SIGN_IN_PAGES.has(window.location.pathname) || document.getElementById("sign-in-needed")) return;
+  const main = document.querySelector("main");
+  if (!main) return;
+  const box = document.createElement("section");
+  box.id = "sign-in-needed";
+  box.className = "card sign-in-needed";
+  const text = document.createElement("p");
+  text.textContent = "Sign in to see this page. It shows how this computer is set up, so it opens only for someone signed in.";
+  const link = document.createElement("a");
+  link.className = "button";
+  link.href = `/login.html?next=${encodeURIComponent(window.location.pathname)}`;
+  link.textContent = "Sign in";
+  box.append(text, link);
+  const title = main.querySelector("h1");
+  if (title) title.after(box);
+  else main.prepend(box);
+};
+const plainFetch = window.fetch.bind(window);
+window.fetch = async (input, init) => {
+  const response = await plainFetch(input, init);
+  try {
+    const url = new URL(typeof input === "string" ? input : input.url, window.location.href);
+    const method = ((init && init.method) || (typeof input === "string" ? "GET" : input.method) || "GET").toUpperCase();
+    if (response.status === 401 && method === "GET" && url.origin === window.location.origin && url.pathname.startsWith("/api/")) {
+      showSignInNeeded();
+    }
+  } catch { /* the page still gets its answer */ }
+  return response;
+};
+
 // What Keel said last time, so the sidebar is drawn once, right, instead
 // of a guess that changes when the answers come.
 const CHROME_KEY = "keel-chrome";
