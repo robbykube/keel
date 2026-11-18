@@ -935,7 +935,7 @@ dependencies = [
 
 [[package]]
 name = "keel"
-version = "0.1.71"
+version = "0.1.72"
 dependencies = [
  "axum",
  "axum-server",

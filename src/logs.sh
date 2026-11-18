@@ -25,6 +25,11 @@ fi
 df -Pk /run / 2>/dev/null | awk 'NR==1 || $6=="/run" || $6=="/" { print }'
 # What takes the temporary space, largest last.
 du -xsk /run/* 2>/dev/null | sort -n | tail -n 5 || true
+# How long this start took, and what took longest.
+show "Start"
+systemd-analyze 2>/dev/null | head -n 2 || true
+systemd-analyze blame --no-pager 2>/dev/null | head -n 12 || true
+systemd-analyze critical-chain keel.service --no-pager 2>/dev/null | tail -n +2 | head -n 12 || true
 # The last lines before the computer last stopped, when the logs were kept.
 show "Before the last stop"
 journalctl -b -1 -n 60 -o short --no-pager -q 2>/dev/null | tail -n 60 || true

@@ -214,6 +214,42 @@ if [ "$changed" = 1 ] && systemctl is-active --quiet keel-kiosk.service 2>/dev/n
 fi
 [ "$screen_before" = 1 ] && changed=1
 
+# A quicker start. Keel does not need the network to start, and copes when
+# it comes later, so the start waits for it 10 seconds at most instead of
+# two minutes (an unplugged cable, or a router still starting after a power
+# cut, left the screen black that long).
+start_before=$changed
+changed=0
+wait_online=$(command -v systemd-networkd-wait-online 2>/dev/null || echo /usr/lib/systemd/systemd-networkd-wait-online)
+if [ -x "$wait_online" ]; then
+  put /etc/systemd/system/systemd-networkd-wait-online.service.d/90-keel.conf 0644 <<EOF
+[Service]
+ExecStart=
+ExecStart=$wait_online --any --timeout=10
+EOF
+fi
+[ "$changed" = 1 ] && systemctl daemon-reload >/dev/null 2>&1
+[ "$start_before" = 1 ] && changed=1
+
+# Programs Keel does not use stop starting with the computer: printing,
+# Bluetooth, finding printers on the network, modems, cron and sensors.
+# Wi-Fi only when no Wi-Fi connection is in use. They stay installed.
+for unit in cups.service cups-browsed.service cups.socket bluetooth.service \
+    avahi-daemon.service avahi-daemon.socket ModemManager.service cron.service \
+    lm-sensors.service; do
+  if systemctl is-enabled "$unit" >/dev/null 2>&1; then
+    systemctl disable --now "$unit" >/dev/null 2>&1 || true
+  fi
+done
+wifi_used=0
+for dev in /sys/class/net/*; do
+  [ -d "$dev/wireless" ] || continue
+  [ "$(cat "$dev/operstate" 2>/dev/null)" = up ] && wifi_used=1
+done
+if [ "$wifi_used" = 0 ] && systemctl is-enabled wpa_supplicant.service >/dev/null 2>&1; then
+  systemctl disable --now wpa_supplicant.service >/dev/null 2>&1 || true
+fi
+
 # A computer that stops answering completely restarts by itself. The chip
 # waits 15 seconds without a sign of life (the most a Pi 4 can wait). A slow
 # or busy computer still gives that sign, so it is left alone.

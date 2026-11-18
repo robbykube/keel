@@ -119,6 +119,9 @@ mod tests {
         assert!(script.contains("systemd.show_status=auto"));
         assert!(script.contains("RuntimeMaxUse=16M"));
         assert!(script.contains("Storage=persistent"));
+        assert!(script.contains("--any --timeout=10"));
+        assert!(script.contains("bluetooth.service"));
+        assert!(script.contains("wifi_used"));
         assert!(script.contains("\"DiskCacheSize\": 33554432"));
         assert!(script.contains("SystemMaxUse=64M"));
     }
