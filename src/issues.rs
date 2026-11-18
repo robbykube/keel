@@ -45,6 +45,9 @@ pub fn report(
     if matches!(inventory, Inventory::Linux) {
         items.extend(power_issue(power_now(), &kernel_messages()));
         items.extend(stopped_issue(&std::fs::read_to_string("/var/lib/keel/memory-watch.log").unwrap_or_default(), now_seconds()));
+        items.extend(last_stop_issue(&std::fs::read_to_string(crate::memory::LAST_STOP).unwrap_or_default(), now_seconds()));
+        items.extend(space_issues(&df_text()));
+        items.extend(clock_issue(&clock_synced(), uptime_seconds()));
     }
 
     let playbook = vec![
@@ -203,6 +206,108 @@ fn stopped_issue(log: &str, now: i64) -> Option<Issue> {
     })
 }
 
+/// The computer stopped without shutting down in the last three days.
+fn last_stop_issue(note: &str, now: i64) -> Option<Issue> {
+    let when: i64 = note.trim().parse().ok()?;
+    if now - when > 3 * 24 * 3600 {
+        return None;
+    }
+    let said = std::process::Command::new("date")
+        .args(["-d", &format!("@{when}"), "+%A %-d %B at %H:%M"])
+        .output()
+        .ok()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .filter(|text| !text.is_empty())
+        .unwrap_or_else(|| when.to_string());
+    Some(Issue {
+        id: "stopped-unexpectedly",
+        severity: "yellow",
+        title: "The computer stopped without shutting down",
+        why: "If nobody switched it off, it froze or lost power. Logs shows the last lines from before it stopped, under Before the last stop. If this keeps happening, check the power supply first.",
+        evidence: format!("last answered {said}"),
+        repair: None,
+    })
+}
+
+fn df_text() -> String {
+    std::process::Command::new("df")
+        .args(["-Pk"])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
+        .unwrap_or_default()
+}
+
+/// The system disk, the Keel disks, and the temporary space, when they are
+/// nearly full. Full temporary space stops every task (0.1.63).
+fn space_issues(df: &str) -> Vec<Issue> {
+    const MB: u64 = 1024;
+    let mut items = Vec::new();
+    for line in df.lines().skip(1) {
+        let cols: Vec<&str> = line.split_whitespace().collect();
+        if cols.len() < 6 {
+            continue;
+        }
+        let (Ok(size), Ok(avail)) = (cols[1].parse::<u64>(), cols[3].parse::<u64>()) else {
+            continue;
+        };
+        let mount = cols[5];
+        if size == 0 {
+            continue;
+        }
+        let percent = avail * 100 / size;
+        let found = match mount {
+            "/" if avail < 300 * MB => Some(("system-full", "red", "The system disk is full", "Apps, updates and logs stop when the system disk is full. Remove apps you do not use on Apps, or move Media to a Keel disk.")),
+            "/" if avail < 1536 * MB => Some(("system-low", "yellow", "The system disk is almost full", "Apps, updates and logs stop when the system disk fills. Remove apps you do not use on Apps, or move Media to a Keel disk.")),
+            "/run" if avail < 8 * MB => Some(("run-full", "red", "The temporary space is full", "Keel cannot start tasks when the temporary space is full. Restart the computer to empty it.")),
+            "/run" if avail < 32 * MB => Some(("run-low", "yellow", "The temporary space is almost full", "Keel cannot start tasks when the temporary space fills. Restart the computer if apps stop opening.")),
+            m if m.starts_with("/srv/keel/") && percent < 2 => Some(("disk-full", "red", "A Keel disk is full", "New files and copies cannot be saved on this disk. Delete files you do not need, or give the job to a larger disk on Disks.")),
+            m if m.starts_with("/srv/keel/") && percent < 10 => Some(("disk-low", "yellow", "A Keel disk is almost full", "New files and copies stop when this disk fills. Delete files you do not need, or give the job to a larger disk on Disks.")),
+            _ => None,
+        };
+        if let Some((id, severity, title, why)) = found {
+            items.push(Issue {
+                id,
+                severity,
+                title,
+                why,
+                evidence: format!("{mount}: {} MB free of {} MB ({percent}%)", avail / MB, size / MB),
+                repair: None,
+            });
+        }
+    }
+    items
+}
+
+fn clock_synced() -> String {
+    std::process::Command::new("timedatectl")
+        .args(["show", "-p", "NTPSynchronized", "--value"])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
+fn uptime_seconds() -> u64 {
+    std::fs::read_to_string("/proc/uptime")
+        .ok()
+        .and_then(|text| text.split('.').next()?.parse().ok())
+        .unwrap_or(0)
+}
+
+/// A Pi has no clock battery. It sets the time from the internet after it
+/// starts; until then the locks on the app names and update checks fail.
+fn clock_issue(synced: &str, uptime: u64) -> Option<Issue> {
+    (synced == "no" && uptime > 600).then(|| Issue {
+        id: "clock-unset",
+        severity: "yellow",
+        title: "The clock is not set",
+        why: "This computer sets its clock from the internet, and has not yet. Until it does, app names can lose their lock and updates cannot be checked. Check that the internet works in the house.",
+        evidence: "NTPSynchronized=no".into(),
+        repair: None,
+    })
+}
+
 /// Seconds since 1970 for "2026-11-18T18:13:54+01:00" (what date -Is writes).
 fn seconds_of(stamp: &str) -> Option<i64> {
     let num = |range: std::ops::Range<usize>| stamp.get(range)?.parse::<i64>().ok();
@@ -222,6 +327,36 @@ fn seconds_of(stamp: &str) -> Option<i64> {
 
 #[cfg(test)]
 mod power_tests {
+    #[test]
+    fn space_is_warned_about_before_it_runs_out() {
+        let df = "Filesystem 1024-blocks Used Available Capacity Mounted on\n\
+/dev/mmcblk0p2 30000000 29500000 500000 99% /\n\
+tmpfs 400000 380000 20000 95% /run\n\
+/dev/sda1 1000000000 50000000 950000000 5% /srv/keel/files\n\
+/dev/sdb1 1000000000 995000000 5000000 99% /srv/keel/copies\n\
+/dev/sdc1 100 100 0 100% /media/usb\n";
+        let found: Vec<(&str, &str)> = super::space_issues(df).iter().map(|i| (i.id, i.severity)).collect();
+        assert_eq!(found, vec![("system-low", "yellow"), ("run-low", "yellow"), ("disk-full", "red")]);
+        assert!(super::space_issues("").is_empty());
+    }
+
+    #[test]
+    fn an_unset_clock_waits_ten_minutes() {
+        assert!(super::clock_issue("no", 60).is_none());
+        assert!(super::clock_issue("yes", 6000).is_none());
+        assert!(super::clock_issue("", 6000).is_none());
+        assert_eq!(super::clock_issue("no", 6000).unwrap().id, "clock-unset");
+    }
+
+    #[test]
+    fn an_unexpected_stop_shows_for_three_days() {
+        let now = 1_795_100_000;
+        let issue = super::last_stop_issue("1795000000\n", now).unwrap();
+        assert!(issue.evidence.starts_with("last answered "));
+        assert!(super::last_stop_issue("1795000000", now + 4 * 24 * 3600).is_none());
+        assert!(super::last_stop_issue("", now).is_none());
+    }
+
     #[test]
     fn weak_power_is_said_plainly() {
         assert!(super::power_issue(false, "usb 1-1: new device\n").is_none());

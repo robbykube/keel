@@ -89,13 +89,19 @@ journal_before=$changed
 changed=0
 put /etc/systemd/journald.conf.d/90-keel.conf 0644 <<'EOF'
 [Journal]
+Storage=persistent
+SystemMaxUse=64M
+SystemKeepFree=1G
 RuntimeMaxUse=16M
 RuntimeKeepFree=64M
-SystemMaxUse=200M
 EOF
+# Logs kept on the disk survive a freeze, so the next start can show what
+# happened just before. They are capped small for the SD card.
 if [ "$changed" = 1 ]; then
+  install -d -m 2755 -g systemd-journal /var/log/journal 2>/dev/null || install -d -m 2755 /var/log/journal
   systemctl restart systemd-journald >/dev/null 2>&1 || true
-  journalctl --vacuum-size=16M >/dev/null 2>&1 || true
+  journalctl --flush >/dev/null 2>&1 || true
+  journalctl --vacuum-size=64M >/dev/null 2>&1 || true
 fi
 [ "$journal_before" = 1 ] && changed=1
 
