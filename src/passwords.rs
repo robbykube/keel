@@ -94,7 +94,12 @@ pub fn start(close: bool) -> Result<Status, String> {
     let host = address.trim_start_matches("https://").to_string();
     let script = setup_script(&host, close);
     std::thread::spawn(move || {
-        write_progress("running", 36, "Opening Passwords.", "", false, false);
+        let step = if close {
+            "Closing new accounts."
+        } else {
+            "Opening Passwords."
+        };
+        write_progress("running", 36, step, "", false, false);
         let result = crate::storage::host_text("exec /bin/bash -s", &[], Some(&script));
         match result {
             Ok(word) if word == "open" || word == "closed" => {
@@ -132,14 +137,25 @@ pub fn password_address(owned: &str) -> Result<String, String> {
 }
 
 fn ready_message(address: &str, signups_open: bool, waiting: bool) -> String {
+    let house = crate::router::house_address().map(|ip| ip.to_string());
+    message_for(address, signups_open, waiting, house.as_deref())
+}
+
+fn message_for(address: &str, signups_open: bool, waiting: bool, house: Option<&str>) -> String {
     let lock = crate::names::lock_note(waiting);
+    let names = match house {
+        Some(ip) => format!(
+            " On the phone, set DNS for the house Wi-Fi to {ip}. Leave the router's own DNS as it is."
+        ),
+        None => String::new(),
+    };
     if signups_open {
         format!(
-            "Passwords are at {address}. Open that and create the account for this house. In the Bitwarden app, set the server to that same address. Then press Close new accounts.{lock} You do not type addresses."
+            "Passwords are at {address}. Install Bitwarden on your phone, paste that address as the server, and create the account for this house. Then press Close new accounts.{names}{lock}"
         )
     } else {
         format!(
-            "Passwords are at {address}. New accounts are closed. In the Bitwarden app, set the server to that same address.{lock} You do not type addresses."
+            "Passwords are at {address}. New accounts are closed. Bitwarden on your phone uses that address as the server.{names}{lock}"
         )
     }
 }
@@ -239,5 +255,32 @@ mod tests {
         let close_at = script.find("touch \"$cfg/signups.closed\"").unwrap();
         let run_at = script.find("podman run -d --name keel-passwords ").unwrap();
         assert!(close_at < run_at);
+        assert!(script.contains("doing=\"Closing new accounts.\""));
+    }
+
+    #[test]
+    fn opening_and_closing_say_which_one_they_are() {
+        let open = setup_script("passwords.klaingar.com", false);
+        assert!(open.contains("doing=\"Opening Passwords.\""));
+        assert!(open.contains("close='no'"));
+        let close = setup_script("passwords.klaingar.com", true);
+        assert!(close.contains("doing=\"Closing new accounts.\""));
+        assert!(close.contains("close='yes'"));
+        assert!(close.contains("mark 75 \"$doing\""));
+    }
+
+    #[test]
+    fn the_card_tells_the_phone_what_to_do() {
+        let open = super::message_for("https://passwords.klaingar.com", true, false, Some("192.168.0.127"));
+        assert!(open.contains("Install Bitwarden"));
+        assert!(open.contains("https://passwords.klaingar.com"));
+        assert!(open.contains("Close new accounts"));
+        assert!(open.contains("set DNS for the house Wi-Fi to 192.168.0.127"));
+        assert!(open.contains("Leave the router's own DNS as it is."));
+        let closed = super::message_for("https://passwords.klaingar.com", false, true, None);
+        assert!(closed.contains("New accounts are closed"));
+        assert!(!closed.contains("Close new accounts"));
+        assert!(closed.contains("The lock is not ready yet."));
+        assert!(!closed.contains("set DNS"));
     }
 }

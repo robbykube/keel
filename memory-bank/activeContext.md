@@ -33,6 +33,12 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Next
 
+Papers: open it on a phone or another computer and create the account for this house. Papers you add are stored in Documents. Files already in Documents stay where they are. The Apps card shows the address with copy. On the Keel screen that address stays as text. On the phone, DNS for the house Wi-Fi is this computer. Leave the router's own DNS as it is.
+
+Mail: open it on a phone or another computer, sign in as mail, and add Gmail or another account. The Apps card shows the address and the password, each with copy. On the Keel screen those stay as text. On the phone, DNS for the house Wi-Fi is this computer. Leave the router's own DNS as it is. The first download is large.
+
+Passwords: the card tells the phone to install Bitwarden, paste the address, create the house account, then close new accounts. On the Keel screen that address stays as text. On the phone, DNS for the house Wi-Fi is this computer. Leave the router's own DNS as it is. Closing new accounts says so, instead of saying it is opening.
+
 Video: the call size and Close are in v0.1.61. A call holds as many people as the memory Keel reads allows: two under 6 GB (this Pi), five under 12 GB, ten above; the video router and the meeting organiser are held to 512 MB and 256 MB, 1 GB and 512 MB, or 2 GB and 1 GB. Two is not a limit for every Keel. Close asks once, then turns Video off and leaves the program on disk. Leaving the call also ends it. Still to do: close Video by itself when no call has happened for a while, which needs Keel to ask the meeting program who is in a call. Someone outside the house needs the name sent to this computer once, router ports 80 and 443, and UDP 10000. Leave the router DNS as it is. Apps → From outside the house (v0.1.62) says whether that can work here, and Ask the router sends those three ports without a password (UPnP or NAT-PMP). If the router answers neither, a router sign-in may come later for routers with a real settings API (OpenWrt, MikroTik, Fritz!Box), once the brand is known. That sign-in would stay on this computer. It does not change the router DNS, and it does not replace sending the name from the place it was bought.
 
 ## Recent

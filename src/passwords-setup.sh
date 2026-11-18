@@ -9,7 +9,12 @@ mark() {
   printf '{"state":"running","percent":%s,"message":"%s","address":"","ready":false,"signups_open":false}\n' "$1" "$2" > /run/keel/passwords.json.tmp
   mv /run/keel/passwords.json.tmp /run/keel/passwords.json
 }
-mark 8 "Opening Passwords."
+if [ "$close" = yes ]; then
+  doing="Closing new accounts."
+else
+  doing="Opening Passwords."
+fi
+mark 8 "$doing"
 install -d -m 0755 "$cfg/data" /run/keel
 if [ "$close" = yes ]; then
   touch "$cfg/signups.closed"
@@ -31,9 +36,9 @@ if ! podman image exists "$vault" >/dev/null 2>&1; then
   mark 50 "Downloading Passwords. This can take a while."
   podman pull "$vault" >"$log" 2>&1 || fail "Keel could not download Passwords. Check the network and try again."
 else
-  mark 50 "Opening Passwords."
+  mark 50 "$doing"
 fi
-mark 75 "Starting Passwords."
+mark 75 "$doing"
 podman network exists keel-passwords >/dev/null 2>&1 || podman network create keel-passwords >"$log" 2>&1 || fail "Keel could not start Passwords. Try Open again."
 podman rm -f keel-passwords-web keel-passwords >"$log" 2>&1 || true
 if ! podman run -d --name keel-passwords --hostname passwords \

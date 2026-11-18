@@ -52,15 +52,29 @@ const latest = {};
 let ownedName = "";
 let sharedReady = false;
 
+function onKeelScreen() {
+  const host = location.hostname;
+  return host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "[::1]";
+}
+
 function programRow(spec, status) {
   const failed = status.state === "error";
   const opening = status.state === "running";
-  // The meeting link is what people send each other, so it can be copied.
-  const copy = spec.id === "video"
-    ? ` <button type="button" class="texty" data-copy="${escapeHtml(status.address || "")}">Copy link</button>`
+  // The meeting link is what people send each other. Passwords, Papers, and
+  // Mail addresses are opened on a phone. On the Keel screen they stay as
+  // text, so the page is not left behind.
+  const copyLabel = spec.id === "video" ? "Copy link" : "Copy address";
+  const copy = (spec.id === "video" || spec.id === "passwords" || spec.id === "papers" || spec.id === "mail") && status.address
+    ? ` <button type="button" class="texty" data-copy="${escapeHtml(status.address)}" data-label="${escapeHtml(copyLabel)}">${copyLabel}</button>`
     : "";
+  const stayHere = (spec.id === "passwords" || spec.id === "papers" || spec.id === "mail") && onKeelScreen();
   const address = status.ready && status.address
-    ? `<p><a href="${escapeHtml(status.address)}">${escapeHtml(status.address)}</a>${copy}</p>`
+    ? (stayHere
+      ? `<p>${escapeHtml(status.address)}${copy}</p>`
+      : `<p><a href="${escapeHtml(status.address)}">${escapeHtml(status.address)}</a>${copy}</p>`)
+    : "";
+  const signIn = spec.id === "mail" && status.ready && status.password
+    ? `<p>Sign in as mail. ${escapeHtml(status.password)} <button type="button" class="texty" data-copy="${escapeHtml(status.password)}" data-label="Copy password">Copy password</button></p>`
     : "";
   const percent = Math.max(0, Math.min(100, Number(status.percent) || 0));
   const bar = opening
@@ -87,6 +101,7 @@ function programRow(spec, status) {
       ${head(spec.title, state, tone)}
       <p class="install-message${failed ? " install-error" : ""}">${escapeHtml(message)}</p>
       ${address}
+      ${signIn}
       ${bar}
     </div>
     ${open}${close}${stop}
@@ -180,7 +195,7 @@ async function openProgram(spec) {
       return;
     }
     if (data.ready) {
-      paintProgram(spec, { state: "done", percent: 100, message: data.message, ready: true, address: data.address, signups_open: data.signups_open });
+      paintProgram(spec, { state: "done", percent: 100, message: data.message, ready: true, address: data.address, signups_open: data.signups_open, password: data.password || "" });
       return;
     }
     paintProgram(spec, {
@@ -350,7 +365,7 @@ async function copyLink(button) {
     box.remove();
   }
   button.textContent = done ? "Copied" : "Copy did not work. Hold the link instead.";
-  window.setTimeout(() => { if (button.isConnected) button.textContent = "Copy link"; }, 2000);
+  window.setTimeout(() => { if (button.isConnected) button.textContent = button.dataset.label || "Copy link"; }, 2000);
 }
 
 async function stopVideo(spec) {

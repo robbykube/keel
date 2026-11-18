@@ -23,6 +23,7 @@ pub struct Status {
     pub message: String,
     pub state: String,
     pub percent: u8,
+    pub password: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -34,6 +35,8 @@ struct Saved {
     address: String,
     #[serde(default)]
     ready: bool,
+    #[serde(default)]
+    password: String,
 }
 
 pub fn view() -> Status {
@@ -44,6 +47,7 @@ pub fn view() -> Status {
             message: "Mail installs on the Keel computer.".into(),
             state: "unavailable".into(),
             percent: 0,
+            password: String::new(),
         };
     }
     if let Some(saved) = read_progress() {
@@ -57,6 +61,7 @@ pub fn view() -> Status {
                 message: saved.message,
                 state: saved.state,
                 percent: saved.percent,
+                password: saved.password,
             };
         }
     }
@@ -76,15 +81,15 @@ pub fn start() -> Result<Status, String> {
     {
         return Ok(view());
     }
-    write_progress("running", 8, "Opening Mail. This can take a while.", "", false);
+    write_progress("running", 8, "Opening Mail. This can take a while.", "", false, "");
     let script = setup_script(&address.trim_start_matches("https://"));
     std::thread::spawn(move || {
-        write_progress("running", 36, "Opening Mail.", "", false);
+        write_progress("running", 36, "Opening Mail.", "", false, "");
         let result = crate::storage::host_text("exec /bin/bash -s", &[], Some(&script));
         match result {
             Ok(line) => match page_password(&line) {
                 Some(password) => {
-                    write_progress("running", 92, "Writing the name.", "", false);
+                    write_progress("running", 92, "Writing the name.", "", false, "");
                     match crate::names::publish("mail", "keel-mail", 3000) {
                         Ok(waiting) => write_progress(
                             "done",
@@ -92,8 +97,9 @@ pub fn start() -> Result<Status, String> {
                             &ready_message(&address, &password, waiting),
                             &address,
                             true,
+                            &password,
                         ),
-                        Err(message) => write_progress("error", 0, &message, "", false),
+                        Err(message) => write_progress("error", 0, &message, "", false, ""),
                     }
                 }
                 None => write_progress(
@@ -102,9 +108,10 @@ pub fn start() -> Result<Status, String> {
                     "Keel could not tell whether Mail is ready.",
                     "",
                     false,
+                    "",
                 ),
             },
-            Err(message) => write_progress("error", 0, &message, "", false),
+            Err(message) => write_progress("error", 0, &message, "", false, ""),
         }
         OPENING.store(false, Ordering::SeqCst);
     });
@@ -120,9 +127,20 @@ fn page_password(line: &str) -> Option<String> {
 }
 
 fn ready_message(address: &str, password: &str, waiting: bool) -> String {
+    let house = crate::router::house_address().map(|ip| ip.to_string());
+    message_for(address, password, waiting, house.as_deref())
+}
+
+fn message_for(address: &str, password: &str, waiting: bool, house: Option<&str>) -> String {
+    let lock = crate::names::lock_note(waiting);
+    let names = match house {
+        Some(ip) => format!(
+            " On the phone, set DNS for the house Wi-Fi to {ip}. Leave the router's own DNS as it is."
+        ),
+        None => String::new(),
+    };
     format!(
-        "Mail is at {address}. Sign in as mail. The password is {password}. Add Gmail or another account there. Mail you move into this computer stays here.{} You do not type addresses.",
-        crate::names::lock_note(waiting)
+        "Mail is at {address}. On your phone or another computer, open that address and sign in as mail. The password is {password}. Add Gmail or another account there. Mail you move into this computer stays here.{names}{lock}"
     )
 }
 
@@ -134,10 +152,11 @@ fn idle() -> Status {
         message: if installed {
             "Mail is on this computer. Press Open to start it.".into()
         } else {
-            "Press Open. Keel makes the mail name and asks for the lock. The first time downloads the program.".into()
+            "Press Open. Keel makes the mail name and asks for the lock. The first time downloads the program, and that download is large.".into()
         },
         state: "idle".into(),
         percent: 0,
+        password: String::new(),
     }
 }
 
@@ -146,13 +165,14 @@ fn read_progress() -> Option<Saved> {
     serde_json::from_slice(&bytes).ok()
 }
 
-fn write_progress(state: &str, percent: u8, message: &str, address: &str, ready: bool) {
+fn write_progress(state: &str, percent: u8, message: &str, address: &str, ready: bool, password: &str) {
     let saved = Saved {
         state: state.into(),
         percent,
         message: message.into(),
         address: address.into(),
         ready,
+        password: password.into(),
     };
     let Ok(body) = serde_json::to_vec(&saved) else {
         return;
@@ -196,5 +216,24 @@ mod tests {
         assert!(!script.contains("--privileged"));
         assert!(!script.contains("docker.sock"));
         assert!(!script.contains("9478"));
+    }
+
+    #[test]
+    fn the_card_tells_you_where_to_open_mail() {
+        let text = super::message_for(
+            "https://mail.klaingar.com",
+            "abc123",
+            false,
+            Some("192.168.0.127"),
+        );
+        assert!(text.contains("https://mail.klaingar.com"));
+        assert!(text.contains("sign in as mail"));
+        assert!(text.contains("abc123"));
+        assert!(text.contains("Add Gmail or another account"));
+        assert!(text.contains("set DNS for the house Wi-Fi to 192.168.0.127"));
+        assert!(text.contains("Leave the router's own DNS as it is."));
+        let waiting = super::message_for("https://mail.klaingar.com", "abc123", true, None);
+        assert!(waiting.contains("The lock is not ready yet."));
+        assert!(!waiting.contains("set DNS"));
     }
 }

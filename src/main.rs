@@ -1332,6 +1332,7 @@ async fn mail_install() -> Result<(StatusCode, Json<serde_json::Value>), (Status
                 "message": status.message,
                 "state": status.state,
                 "percent": status.percent,
+                "password": status.password,
             })),
         )),
         Err(message) => Err((

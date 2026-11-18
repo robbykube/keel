@@ -28,9 +28,9 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Only the house and Away | The page and the folders answer on this network and on Away. The Keel screen still works. Other computers are refused |
 | Lock the page | The same page at the Away name, with a lock the browser trusts. The password app asks for that address. The Keel screen stays as it is |
 | Video | A call at video and the name you own. Open it on Apps when you want one. Close turns it off. The call also ends when people leave |
-| Passwords | The Bitwarden app, at passwords and the name you own. Create the house account, then close new accounts |
-| Papers | Documents filed at papers and the name you own. Papers you add are stored in Documents. Documents stays the files |
-| Mail | A mailbox on this computer. Link Gmail and other accounts. Mail you move here stays here |
+| Passwords | The Bitwarden app, at passwords and the name you own. On the phone, paste that address as the server, create the house account, then close new accounts. On the phone, DNS for the house Wi-Fi is this computer. Leave the router's own DNS as it is |
+| Papers | Documents filed at papers and the name you own. Open that address on your phone or another computer and create the account for this house. Papers you add are stored in Documents. Files already in Documents stay where they are. On the phone, DNS for the house Wi-Fi is this computer. Leave the router's own DNS as it is |
+| Mail | A mailbox on this computer, at mail and the name you own. Open it on your phone or another computer. Sign in as mail with the password Keel shows, then add Gmail or another account. Mail you move here stays here. On the phone, DNS for the house Wi-Fi is this computer. Leave the router's own DNS as it is |
 | Devices | Computers that answered on the house network. Look now writes the list. Nothing is blocked |
 | The name you own | The name you bought, such as klaingar.com. Keel makes each app name, such as photos.klaingar.com, and asks for the lock. You do not type addresses |
 | Names | The book of names for this house. Keel opens it on its own. Leave the router DNS as it is |

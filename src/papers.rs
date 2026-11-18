@@ -110,9 +110,20 @@ pub fn start() -> Result<Status, String> {
 }
 
 fn ready_message(address: &str, waiting: bool) -> String {
+    let house = crate::router::house_address().map(|ip| ip.to_string());
+    message_for(address, waiting, house.as_deref())
+}
+
+fn message_for(address: &str, waiting: bool, house: Option<&str>) -> String {
+    let lock = crate::names::lock_note(waiting);
+    let names = match house {
+        Some(ip) => format!(
+            " On the phone, set DNS for the house Wi-Fi to {ip}. Leave the router's own DNS as it is."
+        ),
+        None => String::new(),
+    };
     format!(
-        "Papers are at {address}. Create the account for this house. Papers you add are stored in Documents. Documents stays the files.{} You do not type addresses.",
-        crate::names::lock_note(waiting)
+        "Papers are at {address}. On your phone or another computer, open that address and create the account for this house. Papers you add are stored in Documents. Files already in Documents stay where they are.{names}{lock}"
     )
 }
 
@@ -177,5 +188,19 @@ mod tests {
         assert!(!script.contains("0.0.0.0"));
         assert!(!script.contains("-p 1221:1221"));
         assert!(!script.contains("9478"));
+    }
+
+    #[test]
+    fn the_card_tells_you_where_to_open_papers() {
+        let text = super::message_for("https://papers.klaingar.com", false, Some("192.168.0.127"));
+        assert!(text.contains("https://papers.klaingar.com"));
+        assert!(text.contains("create the account for this house"));
+        assert!(text.contains("Papers you add are stored in Documents"));
+        assert!(text.contains("Files already in Documents stay where they are."));
+        assert!(text.contains("set DNS for the house Wi-Fi to 192.168.0.127"));
+        assert!(text.contains("Leave the router's own DNS as it is."));
+        let waiting = super::message_for("https://papers.klaingar.com", true, None);
+        assert!(waiting.contains("The lock is not ready yet."));
+        assert!(!waiting.contains("set DNS"));
     }
 }
