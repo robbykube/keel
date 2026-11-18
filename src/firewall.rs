@@ -18,7 +18,7 @@ pub fn enable(addresses: &[String]) -> Result<String, String> {
         return Err("This applies on the Keel computer.".into());
     }
     let subnets = house_subnets(addresses);
-    let rules = ruleset(&subnets)?;
+    let rules = ruleset_for(&subnets, crate::router::wanted())?;
     let script = format!(
         r#"set -uo pipefail
 fail() {{ echo "$1" >&2; exit 1; }}
@@ -58,7 +58,14 @@ pub fn house_subnets(addresses: &[String]) -> Vec<String> {
     found
 }
 
+#[cfg(test)]
 pub fn ruleset(subnets: &[String]) -> Result<String, String> {
+    ruleset_for(subnets, false)
+}
+
+/// The rules. With `outside`, the router sends the app ports here, so the
+/// front door and the call take them from anywhere. Nothing else does.
+pub fn ruleset_for(subnets: &[String], outside: bool) -> Result<String, String> {
     if subnets.is_empty() {
         return Err("Keel could not see the house network, so it did not change the firewall.".into());
     }
@@ -72,6 +79,9 @@ pub fn ruleset(subnets: &[String]) -> Result<String, String> {
         house.push_str(&format!(
             "    ip saddr {subnet} tcp dport {{ 53, 80, 81, 443, 445, 5380, 9478 }} accept\n    ip saddr {subnet} udp dport {{ 53, 10000 }} accept\n"
         ));
+    }
+    if outside {
+        house.push_str("    tcp dport { 80, 443 } accept\n    udp dport 10000 accept\n");
     }
     Ok(format!(
         r#"table inet keel {{
@@ -148,5 +158,16 @@ mod tests {
         assert!(!rules.contains("dport 22"));
         assert!(ruleset(&[]).is_err());
         assert!(ruleset(&["10.0.0.1/32".into()]).is_err());
+        assert!(!rules.contains("    tcp dport { 80, 443 } accept"));
+    }
+
+    #[test]
+    fn asking_the_router_lets_only_the_app_ports_in_from_outside() {
+        let rules = ruleset_for(&["192.168.0.0/24".into()], true).unwrap();
+        assert!(rules.contains("    tcp dport { 80, 443 } accept\n"));
+        assert!(rules.contains("    udp dport 10000 accept\n"));
+        assert!(rules.contains("policy drop"));
+        assert!(rules.contains("ip saddr 192.168.0.0/24 tcp dport { 53, 80, 81, 443, 445, 5380, 9478 } accept"));
+        assert!(!rules.contains("    tcp dport { 81"));
     }
 }

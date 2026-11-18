@@ -1,6 +1,6 @@
 [package]
 name = "keel"
-version = "0.1.61"
+version = "0.1.62"
 edition = "2021"
 description = "Fast, opinionated NAS with a Proxmox-style web GUI"
 
@@ -21,6 +21,7 @@ getrandom = "0.2"
 sha2 = "0.10"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 jpeg-decoder = { version = "0.3", default-features = false }
+igd-next = { version = "0.16", default-features = false }
 tar = "0.4"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 

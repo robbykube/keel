@@ -31,6 +31,7 @@ mod phone;
 mod people;
 mod picture_dates;
 mod remote;
+mod router;
 mod services;
 mod copies;
 mod diskhealth;
@@ -322,6 +323,18 @@ async fn main() {
             "/api/apps/jitsi/close",
             post(jitsi_close).layer(axum::middleware::from_fn(auth::require_admin)),
         )
+        .route(
+            "/api/router",
+            get(router_view).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/router/ask",
+            post(router_ask).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/router/stop",
+            post(router_stop).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
         .route("/api/apps/technitium", get(names_status))
         .route(
             "/api/apps/technitium/install",
@@ -423,6 +436,14 @@ async fn main() {
                 store: Arc::new(Mutex::new(store)),
             };
             tokio::spawn(watch_disks(state.clone()));
+            // The router forgets a request after an hour; ask again while
+            // Keel is asking at all.
+            tokio::spawn(async {
+                loop {
+                    let _ = tokio::task::spawn_blocking(crate::router::renew).await;
+                    tokio::time::sleep(crate::router::RENEW_EVERY).await;
+                }
+            });
             // Picture copies on the files disk: clean them a while after
             // start, then once a day.
             tokio::spawn(async {
@@ -1196,6 +1217,45 @@ async fn jitsi_close() -> Result<(StatusCode, Json<serde_json::Value>), (StatusC
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({ "ok": false, "message": "Keel could not close Video. Try Close again." })),
         )),
+    }
+}
+
+async fn router_view() -> Json<crate::router::View> {
+    let public = crate::router::public_address().await;
+    Json(
+        tokio::task::spawn_blocking(move || crate::router::check(public))
+            .await
+            .unwrap_or_default(),
+    )
+}
+
+/// After the router changes, the firewall follows, when it is on.
+async fn refresh_firewall() {
+    if crate::firewall::wanted() {
+        let addresses = local_addresses();
+        let _ = tokio::task::spawn_blocking(move || crate::firewall::enable(&addresses)).await;
+    }
+}
+
+async fn router_ask() -> (StatusCode, Json<serde_json::Value>) {
+    let asked = tokio::task::spawn_blocking(crate::router::ask)
+        .await
+        .unwrap_or_else(|_| Err("Keel could not ask the router. Try again.".into()));
+    refresh_firewall().await;
+    match asked {
+        Ok(view) => (StatusCode::OK, Json(serde_json::json!({ "ok": view.asked, "message": view.note, "forwarded": view.forwarded }))),
+        Err(message) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "ok": false, "message": message }))),
+    }
+}
+
+async fn router_stop() -> (StatusCode, Json<serde_json::Value>) {
+    let stopped = tokio::task::spawn_blocking(crate::router::stop)
+        .await
+        .unwrap_or_else(|_| Err("Keel could not reach the router. Try again.".into()));
+    refresh_firewall().await;
+    match stopped {
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "message": "Keel stopped asking the router. The ports close at the router." }))),
+        Err(message) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "ok": false, "message": message }))),
     }
 }
 

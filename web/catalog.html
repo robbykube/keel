@@ -29,6 +29,21 @@
         <button type="submit">Save</button>
       </form>
       <p class="meta" id="owned-status"></p>
+      <h2>From outside the house</h2>
+      <section class="card outside-card" id="outside">
+        <div class="app-head"><h3>Can people outside reach the apps?</h3><span class="pill" id="outside-pill">Checking</span></div>
+        <p id="outside-sentence">Keel is looking at the router and at how the internet sees this house.</p>
+        <p class="meta" id="outside-note"></p>
+        <div class="actions">
+          <button type="button" id="outside-ask" hidden>Ask the router</button>
+          <button type="button" id="outside-stop" hidden>Stop asking the router</button>
+          <button type="button" class="texty" id="outside-again">Check again</button>
+        </div>
+        <details class="why">
+          <summary>What Ask the router does</summary>
+          <p>Keel asks the router to send three doors to this computer: TCP 80 and 443 for the app names, and UDP 10000 for calls. Most routers take this from a computer in the house without a password. The request lasts an hour, and Keel asks again every 20 minutes and after a restart. Stop takes the doors back. Nothing else is opened, and Away keeps working either way.</p>
+        </details>
+      </section>
       <h2>Names</h2>
       <div class="app-grid" id="names"></div>
       <h2>On this computer</h2>

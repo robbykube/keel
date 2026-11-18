@@ -511,6 +511,61 @@ $("more").addEventListener("click", async (event) => {
   }
 });
 
+// From outside the house: whether people outside can reach the apps here,
+// and asking the router to send the doors.
+async function loadOutside() {
+  const pill = $("outside-pill");
+  pill.textContent = "Checking";
+  pill.className = "pill";
+  $("outside-sentence").textContent = "Keel is looking at the router and at how the internet sees this house.";
+  try {
+    const res = await fetch("/api/router", { credentials: "same-origin" });
+    if (!res.ok) {
+      $("outside").hidden = true;
+      return;
+    }
+    paintOutside(await res.json());
+  } catch (err) {
+    $("outside-sentence").textContent = String(err);
+  }
+}
+
+function paintOutside(view) {
+  const pill = $("outside-pill");
+  const words = { open: ["Yes", "ok"], shared: ["Not this way", "bad"], unknown: ["Not sure", "warn"], unavailable: ["On the Keel computer", ""] };
+  const [word, tone] = words[view.state] || ["Not sure", "warn"];
+  pill.textContent = view.asked ? "Router asked" : word;
+  pill.className = `pill${view.asked ? " ok" : tone ? ` ${tone}` : ""}`;
+  $("outside-sentence").textContent = view.sentence || "";
+  $("outside-note").textContent = view.note || "";
+  // Asking only helps when the house has its own address, or Keel cannot tell yet.
+  $("outside-ask").hidden = view.asked || view.state === "shared" || view.state === "unavailable" || !view.method;
+  $("outside-stop").hidden = !view.asked;
+}
+
+async function routerAction(path, button, waiting) {
+  button.disabled = true;
+  const before = button.textContent;
+  button.textContent = waiting;
+  try {
+    const res = await fetch(path, { method: "POST", credentials: "same-origin" });
+    const data = await res.json().catch(() => ({}));
+    $("outside-note").textContent = data.message || "";
+  } catch (err) {
+    $("outside-note").textContent = String(err);
+  }
+  button.textContent = before;
+  button.disabled = false;
+  const note = $("outside-note").textContent;
+  await loadOutside();
+  if (!$("outside-note").textContent) $("outside-note").textContent = note;
+}
+
+$("outside-ask").addEventListener("click", (event) => routerAction("/api/router/ask", event.currentTarget, "Asking the router…"));
+$("outside-stop").addEventListener("click", (event) => routerAction("/api/router/stop", event.currentTarget, "Stopping…"));
+$("outside-again").addEventListener("click", () => loadOutside());
+
 load().catch((err) => {
   $("status").textContent = String(err);
 });
+loadOutside();
