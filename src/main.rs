@@ -856,6 +856,7 @@ async fn watch_disks(state: AppState) {
         if crate::copies::due() {
             let _ = tokio::task::spawn_blocking(crate::copies::run_now).await;
         }
+        let _ = tokio::task::spawn_blocking(crate::jitsi::close_if_quiet).await;
         if crate::copies::computer_due() {
             let _ = tokio::task::spawn_blocking(crate::copies::copy_computer).await;
         }

@@ -20,6 +20,13 @@ const TAG: &str = "stable-11248-2";
 
 static OPENING: AtomicBool = AtomicBool::new(false);
 
+/// Video closes by itself after this long without a call, to give the
+/// memory back. About 1 GB on a Pi.
+pub const IDLE_MINUTES: u64 = 30;
+const CLOSED_NOTE: &str = "/run/keel/jitsi-closed";
+/// When a call was last seen, or Video was last found open, in seconds.
+static LAST_CALL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 #[derive(Serialize)]
 pub struct Status {
     pub ready: bool,
@@ -80,6 +87,8 @@ pub fn start() -> Result<Status, String> {
     {
         return Ok(view());
     }
+    let _ = fs::remove_file(CLOSED_NOTE);
+    LAST_CALL.store(0, Ordering::SeqCst);
     write_progress("running", 8, "Opening Video. This can take a while.", "", false);
     let host = address.trim_start_matches("https://").to_string();
     let script = setup_script(&host);
@@ -111,6 +120,73 @@ pub fn close() -> Result<Status, String> {
         .map_err(|_| "Keel could not close Video. Try Close again.".to_string())?;
     let _ = fs::remove_file(PROGRESS_PATH);
     Ok(idle())
+}
+
+/// Called about once a minute. Closes Video when it is open and nobody has
+/// been in a call for IDLE_MINUTES. When Keel cannot tell, it counts as a
+/// call: a call is never cut off by a guess.
+pub fn close_if_quiet() {
+    if !cfg!(target_os = "linux") || OPENING.load(Ordering::SeqCst) || !view().ready {
+        LAST_CALL.store(0, Ordering::SeqCst);
+        return;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let last = LAST_CALL.load(Ordering::SeqCst);
+    if last == 0 {
+        // Just opened, or Keel just started: the quiet time starts now.
+        LAST_CALL.store(now, Ordering::SeqCst);
+        return;
+    }
+    // Asking costs a little, so ask only every few minutes until the time is near.
+    if now.saturating_sub(last) < (IDLE_MINUTES - 5) * 60 && now % 300 >= 60 {
+        return;
+    }
+    let stats = crate::storage::host_all("exec /bin/bash -s", &[], Some(STATS_SCRIPT)).unwrap_or_default();
+    if busy_from_stats(&stats).unwrap_or(true) {
+        LAST_CALL.store(now, Ordering::SeqCst);
+        return;
+    }
+    if now.saturating_sub(last) < IDLE_MINUTES * 60 {
+        return;
+    }
+    if close().is_ok() {
+        let _ = fs::write(CLOSED_NOTE, format!("{now}\n"));
+        LAST_CALL.store(0, Ordering::SeqCst);
+        eprintln!("keel: Video closed by itself after {IDLE_MINUTES} minutes without a call");
+    }
+}
+
+/// The meeting organiser's and the video router's own counts. Prints the
+/// first answer, or {} when neither answers.
+const STATS_SCRIPT: &str = r#"set -uo pipefail
+for pair in keel-jitsi-jicofo:8888/stats keel-jitsi-jvb:8080/colibri/stats; do
+  name=${pair%%:*}
+  rest=${pair#*:}
+  out=$(podman exec "$name" curl -fsS --max-time 4 "http://127.0.0.1:$rest" 2>/dev/null) && { printf '%s\n' "$out"; exit 0; }
+  ip=$(podman inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$name" 2>/dev/null)
+  [ -n "$ip" ] || continue
+  out=$(curl -fsS --max-time 4 "http://$ip:$rest" 2>/dev/null) && { printf '%s\n' "$out"; exit 0; }
+done
+echo '{}'
+"#;
+
+/// Whether a call is going on, from Jicofo's /stats or the video router's
+/// /colibri/stats: any conference or participant, including two people
+/// talking directly (p2p). None when the answer says nothing.
+fn busy_from_stats(text: &str) -> Option<bool> {
+    let value: serde_json::Value = serde_json::from_str(text.trim()).ok()?;
+    let mut seen = false;
+    let mut busy = false;
+    for key in ["conferences", "participants", "p2p_conferences"] {
+        if let Some(count) = value.get(key).and_then(serde_json::Value::as_u64) {
+            seen = true;
+            busy |= count > 0;
+        }
+    }
+    seen.then_some(busy)
 }
 
 pub fn close_script() -> &'static str {
@@ -162,11 +238,16 @@ fn ready_message(address: &str, waiting: bool) -> String {
 
 fn idle() -> Status {
     let installed = Path::new(INSTALLED).is_file();
+    let by_itself = if Path::new(CLOSED_NOTE).is_file() {
+        format!("Video closed by itself after {IDLE_MINUTES} minutes without a call, to give the memory back. ")
+    } else {
+        String::new()
+    };
     Status {
         ready: false,
         address: String::new(),
         message: if installed {
-            format!("Video is on this computer. Press Open when you want a call. {}", people_line(this_call_size()))
+            format!("{by_itself}Video is on this computer. Press Open when you want a call. {}", people_line(this_call_size()))
         } else {
             format!(
                 "Press Open when you want a call. Keel makes the video name and asks for the lock. The first time downloads the meeting program. {}",
@@ -218,6 +299,19 @@ fn setup_script_for(name: &str, size: CallSize) -> String {
 #[cfg(test)]
 mod tests {
     use super::{meeting_address, setup_script};
+
+    #[test]
+    fn a_quiet_call_is_told_from_a_busy_one() {
+        assert_eq!(super::busy_from_stats(r#"{"conferences":0,"participants":0}"#), Some(false));
+        assert_eq!(super::busy_from_stats(r#"{"conferences":1,"participants":2}"#), Some(true));
+        // Two people talking directly still count.
+        assert_eq!(super::busy_from_stats(r#"{"conferences":0,"participants":0,"p2p_conferences":1}"#), Some(true));
+        // Nothing to tell by: the caller treats it as a call.
+        assert_eq!(super::busy_from_stats("{}"), None);
+        assert_eq!(super::busy_from_stats("not json"), None);
+        assert!(super::STATS_SCRIPT.contains("8888/stats"));
+        assert!(super::STATS_SCRIPT.contains("8080/colibri/stats"));
+    }
 
     #[test]
     fn the_meeting_address_is_the_bought_name() {
