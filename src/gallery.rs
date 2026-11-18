@@ -12,8 +12,10 @@ use sha2::{Digest, Sha256};
 static PREVIEW_GATE: Mutex<()> = Mutex::new(());
 
 const PICTURE_LIMIT: usize = 400;
+const CATEGORY_LIMIT: usize = 8000;
 const WALK_DEPTH: u32 = 6;
 const LIBRARY: &[&str] = &["Photos", "Pictures"];
+const LOOSE: &str = "loose";
 
 #[derive(Serialize)]
 pub struct Picture {
@@ -22,7 +24,14 @@ pub struct Picture {
 }
 
 #[derive(Serialize)]
+pub struct Category {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Serialize)]
 pub struct Album {
+    pub categories: Vec<Category>,
     pub pictures: Vec<Picture>,
     pub message: String,
 }
@@ -34,13 +43,37 @@ pub struct Opened {
 }
 
 pub fn album() -> Album {
-    let pictures = library(&media_dir());
-    let message = if pictures.is_empty() {
+    let categories = categories_in(&media_dir());
+    let message = if categories.is_empty() {
         "Pictures live in Media. None are there yet.".into()
     } else {
-        "Pictures already in Media. They stay on the disk. Small copies stay on the disk with them.".into()
+        "Choose a category. The pictures stay on the disk.".into()
     };
-    Album { pictures, message }
+    Album {
+        categories,
+        pictures: Vec::new(),
+        message,
+    }
+}
+
+pub fn open_category(category: &str) -> Album {
+    match pictures_for(&media_dir(), category) {
+        Ok(pictures) if pictures.is_empty() => Album {
+            categories: Vec::new(),
+            pictures,
+            message: "No pictures in that category yet.".into(),
+        },
+        Ok(pictures) => Album {
+            categories: Vec::new(),
+            pictures,
+            message: "Pictures already in Media. They stay on the disk. Small copies stay on the disk with them.".into(),
+        },
+        Err(message) => Album {
+            categories: Vec::new(),
+            pictures: Vec::new(),
+            message,
+        },
+    }
 }
 
 pub fn open_small(rel: &str) -> Result<Opened, String> {
@@ -98,6 +131,149 @@ pub fn library(media: &Path) -> Vec<Picture> {
     pictures
 }
 
+pub fn categories_in(media: &Path) -> Vec<Category> {
+    let mut categories = Vec::new();
+    let mut loose = false;
+    for folder in LIBRARY {
+        let root = media.join(folder);
+        if !root.is_dir() {
+            continue;
+        }
+        let Ok(read) = fs::read_dir(&root) else {
+            continue;
+        };
+        for item in read.flatten() {
+            let path = item.path();
+            let Ok(meta) = fs::symlink_metadata(&path) else {
+                continue;
+            };
+            if meta.file_type().is_symlink() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if name.starts_with('.') || !part_ok(name) {
+                continue;
+            }
+            if meta.is_dir() {
+                if has_picture(&path, 1) {
+                    categories.push(Category {
+                        name: name.to_string(),
+                        path: format!("{folder}/{name}"),
+                    });
+                }
+            } else if meta.is_file() && content_type(&path).is_some() {
+                loose = true;
+            }
+        }
+    }
+    let names: Vec<String> = categories.iter().map(|category| category.name.clone()).collect();
+    for category in &mut categories {
+        let copies = names.iter().filter(|name| *name == &category.name).count();
+        if copies > 1 {
+            let parent = category.path.split('/').next().unwrap_or("");
+            category.name = format!("{} in {parent}", category.name);
+        }
+    }
+    categories.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
+    if loose {
+        categories.push(Category {
+            name: "Pictures not in a folder".into(),
+            path: LOOSE.into(),
+        });
+    }
+    categories
+}
+
+pub fn pictures_for(media: &Path, category: &str) -> Result<Vec<Picture>, String> {
+    if category == LOOSE {
+        return Ok(loose_pictures(media));
+    }
+    let rel = category.trim().trim_matches(['/', '\\']);
+    let parts: Vec<&str> = rel.split(['/', '\\']).filter(|part| !part.is_empty()).collect();
+    if parts.len() != 2 || !LIBRARY.contains(&parts[0]) || !part_ok(parts[1]) {
+        return Err("That category is not in Media.".into());
+    }
+    let dir = media.join(parts[0]).join(parts[1]);
+    if !dir.is_dir() {
+        return Err("That category is not in Media.".into());
+    }
+    let mut pictures = list_capped(&dir, CATEGORY_LIMIT);
+    for picture in &mut pictures {
+        picture.path = format!("{rel}/{}", picture.path);
+    }
+    Ok(pictures)
+}
+
+fn loose_pictures(media: &Path) -> Vec<Picture> {
+    let mut pictures = Vec::new();
+    for folder in LIBRARY {
+        let root = media.join(folder);
+        let Ok(read) = fs::read_dir(&root) else {
+            continue;
+        };
+        for item in read.flatten() {
+            if pictures.len() >= CATEGORY_LIMIT {
+                break;
+            }
+            let path = item.path();
+            let Ok(meta) = fs::symlink_metadata(&path) else {
+                continue;
+            };
+            if meta.file_type().is_symlink() || !meta.is_file() || content_type(&path).is_none() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !part_ok(name) {
+                continue;
+            }
+            pictures.push(Picture {
+                name: name.to_string(),
+                path: format!("{folder}/{name}"),
+            });
+        }
+    }
+    pictures.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
+    pictures
+}
+
+fn has_picture(dir: &Path, depth: u32) -> bool {
+    if depth > WALK_DEPTH {
+        return false;
+    }
+    let Ok(read) = fs::read_dir(dir) else {
+        return false;
+    };
+    for item in read.flatten() {
+        let path = item.path();
+        let Ok(meta) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if meta.file_type().is_symlink() {
+            continue;
+        }
+        if meta.is_dir() && has_picture(&path, depth + 1) {
+            return true;
+        }
+        if meta.is_file() && content_type(&path).is_some() {
+            return true;
+        }
+    }
+    false
+}
+
+fn part_ok(part: &str) -> bool {
+    !part.is_empty()
+        && part != "."
+        && part != ".."
+        && !part.contains(':')
+        && !part.contains('/')
+        && !part.contains('\\')
+}
+
 fn in_library(rel: &str) -> bool {
     let rel = rel.trim().trim_matches(['/', '\\']);
     let mut parts = rel.split(['/', '\\']).filter(|part| !part.is_empty());
@@ -108,9 +284,13 @@ fn in_library(rel: &str) -> bool {
 }
 
 pub fn list_in(root: &Path) -> Vec<Picture> {
+    list_capped(root, PICTURE_LIMIT)
+}
+
+fn list_capped(root: &Path, limit: usize) -> Vec<Picture> {
     let mut pictures = Vec::new();
     if root.is_dir() {
-        collect(root, root, 0, &mut pictures);
+        collect(root, root, 0, limit, &mut pictures);
         pictures.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
     }
     pictures
@@ -212,15 +392,15 @@ fn media_dir() -> PathBuf {
     }
 }
 
-fn collect(root: &Path, dir: &Path, depth: u32, out: &mut Vec<Picture>) {
-    if depth > WALK_DEPTH || out.len() >= PICTURE_LIMIT {
+fn collect(root: &Path, dir: &Path, depth: u32, limit: usize, out: &mut Vec<Picture>) {
+    if depth > WALK_DEPTH || out.len() >= limit {
         return;
     }
     let Ok(read) = fs::read_dir(dir) else {
         return;
     };
     for item in read.flatten() {
-        if out.len() >= PICTURE_LIMIT {
+        if out.len() >= limit {
             return;
         }
         let path = item.path();
@@ -231,7 +411,7 @@ fn collect(root: &Path, dir: &Path, depth: u32, out: &mut Vec<Picture>) {
             continue;
         }
         if meta.is_dir() {
-            collect(root, &path, depth + 1, out);
+            collect(root, &path, depth + 1, limit, out);
             continue;
         }
         if !meta.is_file() || content_type(&path).is_none() {
@@ -270,7 +450,7 @@ fn content_type(path: &Path) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{file_in, in_library, library, list_in, open_small_in};
+    use super::{categories_in, file_in, in_library, library, list_in, open_small_in, pictures_for};
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -330,5 +510,29 @@ mod tests {
         let again = open_small_in(&media, "Pictures/a.png").unwrap();
         assert_eq!(again.kind, "image/jpeg");
         let _ = fs::remove_dir_all(&disk);
+    }
+
+    #[test]
+    fn categories_are_the_folders_already_there() {
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let media = std::env::temp_dir().join(format!("keel-categories-{stamp}"));
+        fs::create_dir_all(media.join("Pictures").join("Holiday")).unwrap();
+        fs::create_dir_all(media.join("Pictures").join("Empty")).unwrap();
+        fs::create_dir_all(media.join("Photos")).unwrap();
+        fs::create_dir_all(media.join("Audiobooks")).unwrap();
+        fs::write(media.join("Pictures").join("Holiday").join("a.jpg"), b"jpeg").unwrap();
+        fs::write(media.join("Pictures").join("loose.jpg"), b"jpeg").unwrap();
+        fs::write(media.join("Pictures").join("Empty").join("note.txt"), b"text").unwrap();
+        fs::write(media.join("Audiobooks").join("cover.jpg"), b"jpeg").unwrap();
+        let categories = categories_in(&media);
+        let names: Vec<&str> = categories.iter().map(|category| category.name.as_str()).collect();
+        assert_eq!(names, vec!["Holiday", "Pictures not in a folder"]);
+        let holiday = pictures_for(&media, "Pictures/Holiday").unwrap();
+        assert_eq!(holiday[0].path, "Pictures/Holiday/a.jpg");
+        let loose = pictures_for(&media, "loose").unwrap();
+        assert_eq!(loose[0].path, "Pictures/loose.jpg");
+        assert!(pictures_for(&media, "../secret").is_err());
+        assert!(pictures_for(&media, "Audiobooks/cover").is_err());
+        let _ = fs::remove_dir_all(&media);
     }
 }

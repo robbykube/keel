@@ -31,9 +31,14 @@ The repair image was rebuilt **2026-10-15** at 17:35: `dist/baremetal/release/ke
 
 Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and can install the program on a Linux machine that has `/usr/lib/keel/rollback-update`. A failed start or a power cut before `/api/health` restores the previous program and settings. The private key is the GitHub secret `KEEL_RELEASE_SIGNING_KEY` only. The repository is private. Settings **Connect GitHub** shows a device-flow code; approve on a phone or this PC. The token is saved to `KEEL_DATA/github.token` (the page never shows it again). A pasted token and `KEEL_GITHUB_TOKEN` still work. The GitHub app id is public and may be saved on the box; it must not include a client secret. `install-keel` does not write that token, and it must not be baked into the ISO. Whole-disk A/B (RAUC) is still not built.
 
+## Next
+
+Install 0.1.52 from Settings on the Keel computer, then open Photos. Categories are the folders already in Pictures. Pictures not in a folder are their own category. More pictures appear as you scroll, a few at a time. Do not claim the page shows categories until that install is checked.
+
 ## Recent
 
-- **v0.1.51 (2026-11-17):** Photos was sending every full-size picture at once, so the Pi stuck after the first ones appeared. It now shows a few at a time and keeps small copies on the files disk. The Pi installs `keel-linux-arm64-v0.1.51.tar.gz`.
+- **v0.1.52 (2026-11-18):** Photos opens on the folders already in Pictures. Choosing one shows that folder, and more pictures appear as you scroll. Pictures that sit outside a folder are their own category. The files stay where they are. Small copies are still made a few at a time. The Pi installs `keel-linux-arm64-v0.1.52.tar.gz`.
+- **v0.1.51 (2026-11-17):** Photos was sending every full-size picture at once, so the Pi stuck after the first ones appeared. It now shows a few at a time and keeps small copies on the files disk. The Pi installs `keel-linux-arm64-v0.1.51.tar.gz`. The user said it looks good on 2026-11-18.
 - **v0.1.50 (2026-11-17):** Photos was looking in the empty Photos folder. The pictures are in the Pictures folder beside it. Open shows that folder too. The Pi installs `keel-linux-arm64-v0.1.50.tar.gz`.
 - **v0.1.49 (2026-11-17):** The front door start showed systemd’s hint because the old program could still be the one started. Keel loads the small program first, and says when the computer is out of room. The Pi is on this version.
 - **v0.1.48 (2026-11-17):** The front door write stopped because the old door was still the running program. Keel stops that old door first, and reloads only when the small program is the one running. The Pi installed it and showed systemd’s hint instead of starting the new program.

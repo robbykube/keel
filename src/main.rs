@@ -1253,13 +1253,26 @@ async fn photos_status() -> Json<crate::photos::Status> {
     Json(crate::photos::view())
 }
 
-async fn picture_album() -> Json<crate::gallery::Album> {
-    Json(tokio::task::spawn_blocking(crate::gallery::album)
-        .await
-        .unwrap_or_else(|_| crate::gallery::Album {
-            pictures: Vec::new(),
-            message: "Keel could not open the pictures.".into(),
-        }))
+async fn picture_album(Query(query): Query<AlbumQuery>) -> Json<crate::gallery::Album> {
+    Json(tokio::task::spawn_blocking(move || {
+        if query.category.is_empty() {
+            crate::gallery::album()
+        } else {
+            crate::gallery::open_category(&query.category)
+        }
+    })
+    .await
+    .unwrap_or_else(|_| crate::gallery::Album {
+        categories: Vec::new(),
+        pictures: Vec::new(),
+        message: "Keel could not open the pictures.".into(),
+    }))
+}
+
+#[derive(Deserialize, Default)]
+struct AlbumQuery {
+    #[serde(default)]
+    category: String,
 }
 
 #[derive(Deserialize)]

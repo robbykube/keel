@@ -781,6 +781,13 @@ a.button:hover { background: var(--accent-dim); }
 .app-row .install-message.install-error { color: var(--red); }
 .app-row .install-bar { width: 100%; margin-top: var(--space-3); }
 .app-row > button, .app-row > a.button { margin-top: var(--space-1); }
+.category-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.category-list .button { margin: 0; }
 .photo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
