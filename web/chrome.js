@@ -26,6 +26,12 @@ const NAV_ICONS = {
   Guide: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5A3.5 3.5 0 0 1 19 8v11.5H8.5A3.5 3.5 0 0 0 5 23z"/><path d="M5 4.5v15A3.5 3.5 0 0 1 8.5 16H19M8 8h7M8 11.5h7"/></svg>',
   Notes: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12a1.5 1.5 0 0 1 1.5 1.5v14a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V5A1.5 1.5 0 0 1 6 3.5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
   Devices: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="18" cy="17" r="2"/><path d="M8 12h8M16.2 8.2 8 12l8.2 3.8"/></svg>',
+  Disks: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6.5" rx="7" ry="2.5"/><path d="M5 6.5v11c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-11M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>',
+  Install: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M4.5 16.5v2a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-2"/></svg>',
+  Repair: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.2a4.8 4.8 0 0 0-3.9 6.4l-6 6a1.9 1.9 0 0 0 2.7 2.7l6-6a4.8 4.8 0 0 0 6.4-3.9l-2.9 1.4-2.3-1.1-1.1-2.3z"/></svg>',
+  Logs: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.5h10.5M9 12h10.5M9 17.5h7"/><circle cx="5.2" cy="6.5" r="1.1"/><circle cx="5.2" cy="12" r="1.1"/><circle cx="5.2" cy="17.5" r="1.1"/></svg>',
+  Settings: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h8.5M17.5 7h2M4.5 12h3M11.5 12h8M4.5 17h7M15.5 17h4"/><circle cx="15.2" cy="7" r="2.2"/><circle cx="9.5" cy="12" r="2.2"/><circle cx="13.5" cy="17" r="2.2"/></svg>',
+  "Sign in": '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 4.5h4a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5h-4M4.5 12h10M11 8.5l3.5 3.5-3.5 3.5"/></svg>',
 };
 
 const BRAND_ICON = '<svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="13" rx="2.5"/><path d="M7 9.5h10M7 13h5"/></svg>';
