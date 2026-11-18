@@ -7,7 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -159,16 +159,184 @@ fn save(media: &Path, entries: &Entries) {
     }
 }
 
-/// The moment a camera wrote into a JPEG picture, in seconds, counted as if
-/// the camera's clock were UTC. Other kinds of file answer None.
+/// The moment a picture was taken or a video recorded, in seconds. A camera's
+/// own clock has no time zone and counts as if it were UTC. Kinds of file
+/// without a date answer None.
 pub fn taken_in(path: &Path) -> Option<i64> {
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
-    if ext != "jpg" && ext != "jpeg" {
+    match ext.as_str() {
+        "jpg" | "jpeg" => {
+            let mut head = Vec::new();
+            fs::File::open(path).ok()?.take(HEAD).read_to_end(&mut head).ok()?;
+            taken_in_jpeg(&head)
+        }
+        "heic" | "heif" => taken_in_heif(&mut fs::File::open(path).ok()?),
+        "mp4" | "m4v" | "mov" => recorded_in_movie(&mut fs::File::open(path).ok()?),
+        _ => None,
+    }
+}
+
+/// iPhone pictures and most videos are made of nested boxes: a size, a
+/// four-letter name, then the content.
+struct Found {
+    content: u64,
+    end: u64,
+}
+
+fn find_box<F: Read + Seek>(file: &mut F, mut at: u64, end: u64, name: &[u8; 4]) -> Option<Found> {
+    for _ in 0..4096 {
+        if at + 8 > end {
+            return None;
+        }
+        file.seek(SeekFrom::Start(at)).ok()?;
+        let mut head = [0u8; 16];
+        file.read_exact(&mut head[..8]).ok()?;
+        let size = u32::from_be_bytes([head[0], head[1], head[2], head[3]]) as u64;
+        let (content, size) = match size {
+            0 => (at + 8, end - at),
+            1 => {
+                file.read_exact(&mut head[8..16]).ok()?;
+                let big = u64::from_be_bytes(head[8..16].try_into().ok()?);
+                (at + 16, big)
+            }
+            _ => (at + 8, size),
+        };
+        if size < content - at || at.checked_add(size)? > end {
+            return None;
+        }
+        if &head[4..8] == name {
+            return Some(Found { content, end: at + size });
+        }
+        at += size;
+    }
+    None
+}
+
+fn file_end<F: Seek>(file: &mut F) -> Option<u64> {
+    file.seek(SeekFrom::End(0)).ok()
+}
+
+/// A video's recording time, from its movie header. That clock is UTC.
+fn recorded_in_movie<F: Read + Seek>(file: &mut F) -> Option<i64> {
+    let end = file_end(file)?;
+    let movie = find_box(file, 0, end, b"moov")?;
+    let header = find_box(file, movie.content, movie.end, b"mvhd")?;
+    file.seek(SeekFrom::Start(header.content)).ok()?;
+    let mut b = [0u8; 12];
+    file.read_exact(&mut b).ok()?;
+    let since_1904 = if b[0] == 1 {
+        u64::from_be_bytes(b[4..12].try_into().ok()?)
+    } else {
+        u32::from_be_bytes(b[4..8].try_into().ok()?) as u64
+    };
+    let seconds = since_1904 as i64 - 2_082_844_800;
+    // Many cameras leave it empty, which reads as 1904 or 1970.
+    let (low, high) = (days_from_civil(1971, 1, 1) * 86_400, days_from_civil(2200, 1, 1) * 86_400);
+    (low..high).contains(&seconds).then_some(seconds)
+}
+
+/// The camera date in an iPhone picture: the item named Exif, found through
+/// the list of items and the list of where each item is in the file.
+fn taken_in_heif<F: Read + Seek>(file: &mut F) -> Option<i64> {
+    let end = file_end(file)?;
+    let meta = find_box(file, 0, end, b"meta")?;
+    let len = meta.end.checked_sub(meta.content)?;
+    if len > 4 * 1024 * 1024 {
         return None;
     }
-    let mut head = Vec::new();
-    fs::File::open(path).ok()?.take(HEAD).read_to_end(&mut head).ok()?;
-    taken_in_jpeg(&head)
+    file.seek(SeekFrom::Start(meta.content)).ok()?;
+    let mut bytes = vec![0u8; len as usize];
+    file.read_exact(&mut bytes).ok()?;
+    let children = boxes_in(bytes.get(4..)?);
+    let exif_item = children.iter().find(|(name, _)| name == b"iinf").and_then(|(_, iinf)| exif_item_id(iinf))?;
+    let (offset, length) = children
+        .iter()
+        .find(|(name, _)| name == b"iloc")
+        .and_then(|(_, iloc)| item_place(iloc, exif_item))?;
+    if length < 10 || length > 1024 * 1024 {
+        return None;
+    }
+    file.seek(SeekFrom::Start(offset)).ok()?;
+    let mut exif = vec![0u8; length as usize];
+    file.read_exact(&mut exif).ok()?;
+    let skip = u32::from_be_bytes(exif.get(0..4)?.try_into().ok()?) as usize;
+    let mut tiff = exif.get(4 + skip..)?;
+    if tiff.starts_with(b"Exif\0\0") {
+        tiff = &tiff[6..];
+    }
+    taken_in_tiff(tiff)
+}
+
+fn boxes_in(mut bytes: &[u8]) -> Vec<([u8; 4], &[u8])> {
+    let mut out = Vec::new();
+    while bytes.len() >= 8 && out.len() < 256 {
+        let size = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
+        let name = [bytes[4], bytes[5], bytes[6], bytes[7]];
+        let size = if size == 0 { bytes.len() } else { size };
+        if size < 8 || size > bytes.len() {
+            break;
+        }
+        out.push((name, &bytes[8..size]));
+        bytes = &bytes[size..];
+    }
+    out
+}
+
+fn exif_item_id(iinf: &[u8]) -> Option<u32> {
+    let version = *iinf.first()?;
+    let start = if version == 0 { 6 } else { 8 };
+    for (name, infe) in boxes_in(iinf.get(start..)?) {
+        if &name != b"infe" || infe.len() < 12 {
+            continue;
+        }
+        let (id, kind_at) = match infe[0] {
+            2 => (u16::from_be_bytes([infe[4], infe[5]]) as u32, 8),
+            3 => (u32::from_be_bytes(infe[4..8].try_into().ok()?), 10),
+            _ => continue,
+        };
+        if infe.get(kind_at..kind_at + 4) == Some(b"Exif") {
+            return Some(id);
+        }
+    }
+    None
+}
+
+/// Where an item is in the file: its first piece's offset and length.
+fn item_place(iloc: &[u8], wanted: u32) -> Option<(u64, u64)> {
+    let version = *iloc.first()?;
+    let sizes = *iloc.get(4)?;
+    let more = *iloc.get(5)?;
+    let (offset_size, length_size) = ((sizes >> 4) as usize, (sizes & 0x0f) as usize);
+    let base_size = (more >> 4) as usize;
+    let index_size = if version == 1 || version == 2 { (more & 0x0f) as usize } else { 0 };
+    let mut at = 6;
+    let uint = |at: &mut usize, size: usize| -> Option<u64> {
+        let b = iloc.get(*at..*at + size)?;
+        *at += size;
+        Some(b.iter().fold(0u64, |n, byte| (n << 8) | *byte as u64))
+    };
+    let count = if version < 2 { uint(&mut at, 2)? } else { uint(&mut at, 4)? };
+    for _ in 0..count.min(4096) {
+        let id = if version < 2 { uint(&mut at, 2)? } else { uint(&mut at, 4)? } as u32;
+        let method = if version == 1 || version == 2 { uint(&mut at, 2)? & 0x0f } else { 0 };
+        let _reference = uint(&mut at, 2)?;
+        let base = uint(&mut at, base_size)?;
+        let extents = uint(&mut at, 2)?;
+        let mut first = None;
+        for _ in 0..extents.min(1024) {
+            if index_size > 0 {
+                uint(&mut at, index_size)?;
+            }
+            let offset = uint(&mut at, offset_size)?;
+            let length = uint(&mut at, length_size)?;
+            first.get_or_insert((base + offset, length));
+        }
+        if id == wanted {
+            // Only items stored straight in the file are read.
+            return if method == 0 { first } else { None };
+        }
+    }
+    None
 }
 
 fn taken_in_jpeg(bytes: &[u8]) -> Option<i64> {
@@ -285,6 +453,16 @@ pub(crate) mod tests {
 
     /// A JPEG start with a camera date, as a phone writes it.
     pub(crate) fn jpeg_with_date(little: bool, moment: &str) -> Vec<u8> {
+        let mut app1 = b"Exif\0\0".to_vec();
+        app1.extend(tiff_with_date(little, moment));
+        let mut jpeg = vec![0xFF, 0xD8, 0xFF, 0xE1];
+        jpeg.extend(((app1.len() + 2) as u16).to_be_bytes());
+        jpeg.extend(app1);
+        jpeg.extend([0xFF, 0xD9]);
+        jpeg
+    }
+
+    fn tiff_with_date(little: bool, moment: &str) -> Vec<u8> {
         let p16 = |v: u16| if little { v.to_le_bytes().to_vec() } else { v.to_be_bytes().to_vec() };
         let p32 = |v: u32| if little { v.to_le_bytes().to_vec() } else { v.to_be_bytes().to_vec() };
         let mut tiff = Vec::new();
@@ -307,13 +485,67 @@ pub(crate) mod tests {
         tiff.extend(p32(0));
         tiff.extend(moment.as_bytes());
         tiff.push(0);
-        let mut app1 = b"Exif\0\0".to_vec();
-        app1.extend(tiff);
-        let mut jpeg = vec![0xFF, 0xD8, 0xFF, 0xE1];
-        jpeg.extend(((app1.len() + 2) as u16).to_be_bytes());
-        jpeg.extend(app1);
-        jpeg.extend([0xFF, 0xD9]);
-        jpeg
+        tiff
+    }
+
+    fn boxed(name: &[u8; 4], content: &[u8]) -> Vec<u8> {
+        let mut out = ((content.len() + 8) as u32).to_be_bytes().to_vec();
+        out.extend(name);
+        out.extend(content);
+        out
+    }
+
+    /// An iPhone-style picture: its Exif item listed in meta, kept in mdat.
+    pub(crate) fn heic_with_date(moment: &str) -> Vec<u8> {
+        let ftyp = boxed(b"ftyp", b"heic\0\0\0\0mif1heic");
+        let mut infe = vec![2, 0, 0, 0, 0, 7, 0, 0];
+        infe.extend(b"Exif\0");
+        let mut iinf = vec![0, 0, 0, 0, 0, 1];
+        iinf.extend(boxed(b"infe", &infe));
+        let iloc_for = |offset: u32, length: u32| {
+            let mut iloc = vec![0, 0, 0, 0, 0x44, 0x00, 0, 1, 0, 7, 0, 0, 0, 1];
+            iloc.extend(offset.to_be_bytes());
+            iloc.extend(length.to_be_bytes());
+            iloc
+        };
+        let mut exif = vec![0, 0, 0, 6];
+        exif.extend(b"Exif\0\0");
+        exif.extend(tiff_with_date(false, moment));
+        let meta_for = |iloc: Vec<u8>| {
+            let mut meta = vec![0, 0, 0, 0];
+            meta.extend(boxed(b"iinf", &iinf));
+            meta.extend(boxed(b"iloc", &iloc));
+            boxed(b"meta", &meta)
+        };
+        let meta_len = meta_for(iloc_for(0, 0)).len();
+        let offset = (ftyp.len() + meta_len + 8) as u32;
+        let mut file = ftyp.clone();
+        file.extend(meta_for(iloc_for(offset, exif.len() as u32)));
+        file.extend(boxed(b"mdat", &exif));
+        file
+    }
+
+    /// A video whose movie header comes after the pictures, as phones write it.
+    fn movie_recorded(seconds_since_1904: u32) -> Vec<u8> {
+        let mut file = boxed(b"ftyp", b"isom\0\0\0\0isom");
+        file.extend(boxed(b"mdat", &[7u8; 64]));
+        let mut mvhd = vec![0, 0, 0, 0];
+        mvhd.extend(seconds_since_1904.to_be_bytes());
+        mvhd.extend(seconds_since_1904.to_be_bytes());
+        mvhd.extend([0u8; 88]);
+        file.extend(boxed(b"moov", &boxed(b"mvhd", &mvhd)));
+        file
+    }
+
+    #[test]
+    fn iphone_pictures_and_videos_say_when() {
+        let want = days_from_civil(2023, 8, 9) * 86_400 + 10 * 3600 + 11 * 60 + 12;
+        let heic = heic_with_date("2023:08:09 10:11:12");
+        assert_eq!(taken_in_heif(&mut std::io::Cursor::new(heic)), Some(want));
+        assert_eq!(taken_in_heif(&mut std::io::Cursor::new(b"not a picture".to_vec())), None);
+        let at = (want + 2_082_844_800) as u32;
+        assert_eq!(recorded_in_movie(&mut std::io::Cursor::new(movie_recorded(at))), Some(want));
+        assert_eq!(recorded_in_movie(&mut std::io::Cursor::new(movie_recorded(0))), None);
     }
 
     #[test]

@@ -32,12 +32,11 @@ const TIDY_EVERY: usize = 500;
 /// left over, so it keeps them.
 const TIDY_WALK_LIMIT: usize = 250_000;
 const DAY: Duration = Duration::from_secs(24 * 60 * 60);
-/// How long to wait before asking again for the iPhone picture reader.
-const HEIC_RETRY: Duration = Duration::from_secs(60 * 60);
+/// How long to wait before trying again to add a helper program.
+const HELPER_RETRY: Duration = Duration::from_secs(60 * 60);
 
 static WRITTEN: AtomicUsize = AtomicUsize::new(0);
 static TIDYING: AtomicBool = AtomicBool::new(false);
-static HEIC_ASKED: Mutex<Option<Instant>> = Mutex::new(None);
 static CONVERTED: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -161,10 +160,8 @@ fn plan_copy_in(media: &Path, rel: &str, size: Size) -> Result<CopyPlan, String>
         return Err("That picture is not in Media.".into());
     }
     let source = file_in(media, rel)?;
-    match kind_of(&source) {
-        Some(Kind::Picture) => {}
-        Some(Kind::Video) => return Err("That is a video. It plays as it is.".into()),
-        None => return Err("That file is not a picture.".into()),
+    if kind_of(&source).is_none() {
+        return Err("That file is not a picture.".into());
     }
     let small = preview_file(media, rel, Size::Small);
     let screen = preview_file(media, rel, Size::Screen);
@@ -859,8 +856,10 @@ fn write_previews(source: &Path, small: &Path, screen: &Path) -> Result<bool, St
 /// Reads the picture and turns it the way the camera says it was held.
 fn read_upright(source: &Path) -> Result<image::DynamicImage, String> {
     use image::ImageDecoder;
-    if needs_reader(source) {
-        return read_iphone(source);
+    match kind_of(source) {
+        Some(Kind::Video) => return read_video(source),
+        _ if needs_reader(source) => return read_iphone(source),
+        _ => {}
     }
     let failed = || "Keel could not make a small copy of that picture.".to_string();
     let reader = image::ImageReader::open(source)
@@ -874,78 +873,149 @@ fn read_upright(source: &Path) -> Result<image::DynamicImage, String> {
     Ok(picture)
 }
 
-/// iPhone pictures (HEIC) are read by a small program on this computer. Keel
-/// adds it the first time one is opened. The program turns the picture
-/// upright as it reads it.
-fn read_iphone(source: &Path) -> Result<image::DynamicImage, String> {
-    let Some(reader) = iphone_reader() else {
-        ask_for_iphone_reader();
-        return Err("Keel is adding what it needs to show iPhone pictures. Try again in a few minutes.".into());
-    };
-    let out = std::env::temp_dir().join(format!(
-        "keel-iphone-{}-{}.jpg",
-        std::process::id(),
-        CONVERTED.fetch_add(1, Ordering::Relaxed)
-    ));
-    let status = std::process::Command::new(&reader)
-        .arg("-q")
-        .arg("92")
-        .arg(source)
-        .arg(&out)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
-    let picture = match status {
-        Ok(status) if status.success() => image::open(&out).ok(),
-        _ => None,
-    };
-    let _ = fs::remove_file(&out);
-    picture.ok_or_else(|| "Keel could not read that iPhone picture.".to_string())
+/// A program on this computer that Keel uses to read a kind of file it cannot
+/// read itself, and the packages that bring it.
+struct Helper {
+    names: &'static [&'static str],
+    packages: &'static str,
+    waiting: &'static str,
+    failed: &'static str,
+    asked: &'static Mutex<Option<Instant>>,
 }
 
-fn iphone_reader() -> Option<PathBuf> {
-    let dirs = std::env::var_os("PATH")
-        .map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
-        .unwrap_or_default();
-    for name in ["heif-dec", "heif-convert"] {
-        for dir in dirs.iter().map(PathBuf::as_path).chain([Path::new("/usr/bin")]) {
-            let candidate = dir.join(name);
-            if candidate.is_file() {
-                return Some(candidate);
+static IPHONE_ASKED: Mutex<Option<Instant>> = Mutex::new(None);
+static VIDEO_ASKED: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// iPhone pictures (HEIC). The reader turns the picture upright as it reads it.
+const IPHONE_READER: Helper = Helper {
+    names: &["heif-dec", "heif-convert"],
+    packages: "libheif-examples libheif-plugin-libde265|libheif-examples",
+    waiting: "Keel is adding what it needs to show iPhone pictures. Try again in a few minutes.",
+    failed: "Keel could not read that iPhone picture.",
+    asked: &IPHONE_ASKED,
+};
+
+/// Videos: one frame becomes the video's picture. ffmpeg turns it upright.
+const VIDEO_READER: Helper = Helper {
+    names: &["ffmpeg"],
+    packages: "ffmpeg",
+    waiting: "Keel is adding what it needs to show videos. Try again in a few minutes.",
+    failed: "Keel could not take a picture from that video.",
+    asked: &VIDEO_ASKED,
+};
+
+/// A helper that hangs on a broken file is stopped after this long.
+const HELPER_LIMIT: Duration = Duration::from_secs(90);
+
+fn read_iphone(source: &Path) -> Result<image::DynamicImage, String> {
+    let reader = IPHONE_READER.find()?;
+    IPHONE_READER.picture(|out| {
+        let mut command = std::process::Command::new(&reader);
+        command.arg("-q").arg("92").arg(source).arg(out);
+        command
+    })
+}
+
+fn read_video(source: &Path) -> Result<image::DynamicImage, String> {
+    let ffmpeg = VIDEO_READER.find()?;
+    let frame_at = |second: &str| {
+        let ffmpeg = ffmpeg.clone();
+        let second = second.to_string();
+        move |out: &Path| {
+            let mut command = std::process::Command::new(&ffmpeg);
+            command
+                .args(["-nostdin", "-loglevel", "error", "-y", "-ss", &second, "-i"])
+                .arg(source)
+                .args(["-frames:v", "1", "-vf", "scale='min(1920,iw)':-2", "-q:v", "3"])
+                .arg(out);
+            command
+        }
+    };
+    // A second in, past a fade from black; a very short video from its start.
+    VIDEO_READER
+        .picture(frame_at("1"))
+        .or_else(|_| VIDEO_READER.picture(frame_at("0")))
+}
+
+impl Helper {
+    fn find(&self) -> Result<PathBuf, String> {
+        let dirs = std::env::var_os("PATH")
+            .map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
+            .unwrap_or_default();
+        for name in self.names {
+            for dir in dirs.iter().map(PathBuf::as_path).chain([Path::new("/usr/bin")]) {
+                let candidate = dir.join(name);
+                if candidate.is_file() {
+                    return Ok(candidate);
+                }
             }
         }
+        self.ask();
+        Err(self.waiting.into())
     }
-    None
-}
 
-/// Installs the iPhone picture reader in the background, at most once an hour.
-fn ask_for_iphone_reader() {
-    if !cfg!(target_os = "linux") || cfg!(test) {
-        return;
+    /// Runs the helper to write a JPEG, then reads it.
+    fn picture(&self, command: impl FnOnce(&Path) -> std::process::Command) -> Result<image::DynamicImage, String> {
+        let out = std::env::temp_dir().join(format!(
+            "keel-read-{}-{}.jpg",
+            std::process::id(),
+            CONVERTED.fetch_add(1, Ordering::Relaxed)
+        ));
+        let mut command = command(&out);
+        command
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        let finished = command.spawn().ok().and_then(|mut child| {
+            let started = Instant::now();
+            loop {
+                match child.try_wait() {
+                    Ok(Some(status)) => return Some(status.success()),
+                    Ok(None) if started.elapsed() < HELPER_LIMIT => std::thread::sleep(Duration::from_millis(50)),
+                    _ => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return None;
+                    }
+                }
+            }
+        });
+        let picture = if finished == Some(true) { image::open(&out).ok() } else { None };
+        let _ = fs::remove_file(&out);
+        picture.ok_or_else(|| self.failed.to_string())
     }
-    {
-        let mut asked = HEIC_ASKED.lock().unwrap_or_else(|poison| poison.into_inner());
-        if asked.is_some_and(|when| when.elapsed() < HEIC_RETRY) {
+
+    /// Installs the helper in the background, at most once an hour.
+    fn ask(&self) {
+        if !cfg!(target_os = "linux") || cfg!(test) {
             return;
         }
-        *asked = Some(Instant::now());
-    }
-    std::thread::spawn(|| {
-        let script = r#"set -uo pipefail
-export DEBIAN_FRONTEND=noninteractive
-get() { apt-get install -y -o Acquire::ForceIPv4=true "$@" >/dev/null 2>&1; }
-get libheif-examples libheif-plugin-libde265 && exit 0
-apt-get update -o Acquire::ForceIPv4=true >/dev/null 2>&1 || true
-get libheif-examples libheif-plugin-libde265 && exit 0
-get libheif-examples && exit 0
-echo "Keel could not add the iPhone picture reader. Check the network." >&2
-exit 1
-"#;
-        if let Err(message) = crate::storage::host("exec /bin/bash -s", &[], Some(script)) {
-            eprintln!("keel: {message}");
+        {
+            let mut asked = self.asked.lock().unwrap_or_else(|poison| poison.into_inner());
+            if asked.is_some_and(|when| when.elapsed() < HELPER_RETRY) {
+                return;
+            }
+            *asked = Some(Instant::now());
         }
-    });
+        // Each choice is a set of packages to try in turn.
+        let tries: Vec<String> = self.packages.split('|').map(str::to_string).collect();
+        std::thread::spawn(move || {
+            let mut script = String::from(
+                "set -uo pipefail\nexport DEBIAN_FRONTEND=noninteractive\nget() { apt-get install -y --no-install-recommends -o Acquire::ForceIPv4=true \"$@\" >/dev/null 2>&1; }\n",
+            );
+            for packages in &tries {
+                script.push_str(&format!("get {packages} && exit 0\n"));
+            }
+            script.push_str("apt-get update -o Acquire::ForceIPv4=true >/dev/null 2>&1 || true\n");
+            for packages in &tries {
+                script.push_str(&format!("get {packages} && exit 0\n"));
+            }
+            script.push_str("echo \"Keel could not add a program it needs. Check the network.\" >&2\nexit 1\n");
+            if let Err(message) = crate::storage::host("exec /bin/bash -s", &[], Some(&script)) {
+                eprintln!("keel: {message}");
+            }
+        });
+    }
 }
 
 fn save_jpeg(picture: &image::DynamicImage, dest: &Path, quality: u8) -> Result<(), String> {
@@ -1234,9 +1304,14 @@ mod tests {
         let loose = categories.iter().find(|c| c.path == "loose").unwrap();
         assert_eq!(loose.cover, "Pictures/phone.heic");
         assert!(!loose.cover_v.is_empty());
-        assert!(plan_copy_in(&media, "Pictures/Clips/party.MOV", Size::Small).is_err());
+        // A video's copies are a frame from it, when the video tool is there.
+        assert!(plan_copy_in(&media, "Pictures/Clips/party.MOV", Size::Small).is_ok());
+        if super::VIDEO_READER.find().is_err() {
+            let message = open_sized_in(&media, "Pictures/Clips/party.MOV", Size::Small).err().unwrap();
+            assert!(message.contains("videos"), "{message}");
+        }
         // Without the iPhone picture reader, a HEIC picture says so instead of failing quietly.
-        if super::iphone_reader().is_none() {
+        if super::IPHONE_READER.find().is_err() {
             let message = open_sized_in(&media, "Pictures/phone.heic", Size::Small).err().unwrap();
             assert!(message.contains("iPhone"), "{message}");
         }

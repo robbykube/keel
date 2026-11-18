@@ -69,11 +69,13 @@ function pictureUrl(picture, extra = "") {
 function tileFor(picture, index) {
   const name = escapeHtml(picture.name);
   const full = escapeHtml(pictureUrl(picture));
+  const small = escapeHtml(pictureUrl(picture, "&small=1"));
   if (picture.video) {
+    // A frame from the video, once Keel has the video tool; until then the name.
     return `<a href="${full}" class="photo-video" aria-label="Video: ${name}" data-index="${index}">`
+      + `<img alt="" src="${small}" loading="lazy">`
       + `<span class="video-mark" aria-hidden="true"></span><span class="video-name">${name}</span></a>`;
   }
-  const small = escapeHtml(pictureUrl(picture, "&small=1"));
   const screen = escapeHtml(pictureUrl(picture, "&size=screen"));
   return `<a href="${full}" aria-label="${name}" data-index="${index}">`
     + `<img alt="" src="${small}" loading="lazy"></a>`;
@@ -233,7 +235,10 @@ async function showCategories() {
 let viewToken = 0;
 
 // Try a crop. Nothing is saved: the frame only shows what a shape would keep.
-const crop = { ratio: 0, x: 0.5, y: 0.5, drag: null };
+// The frame is kept as its middle (cx, cy, as parts of the picture) and its
+// size (a part of the largest frame of that shape that fits).
+const crop = { ratio: 0, round: false, cx: 0.5, cy: 0.5, scale: 1, drag: null };
+const SMALLEST = 0.15;
 
 function imageBox() {
   const stage = $("viewer-stage");
@@ -256,7 +261,13 @@ function frameBox(box) {
     fh = box.height;
     fw = fh * crop.ratio;
   }
-  return { width: fw, height: fh, left: (box.width - fw) * crop.x, top: (box.height - fh) * crop.y };
+  fw *= crop.scale;
+  fh *= crop.scale;
+  // Keep the whole frame on the picture.
+  const half = { x: fw / 2 / box.width, y: fh / 2 / box.height };
+  crop.cx = Math.min(1 - half.x, Math.max(half.x, crop.cx));
+  crop.cy = Math.min(1 - half.y, Math.max(half.y, crop.cy));
+  return { width: fw, height: fh, left: crop.cx * box.width - fw / 2, top: crop.cy * box.height - fh / 2 };
 }
 
 function drawCrop() {
@@ -272,6 +283,8 @@ function drawCrop() {
   Object.assign(area.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
   const f = frameBox(box);
   Object.assign(frame.style, { left: `${f.left}px`, top: `${f.top}px`, width: `${f.width}px`, height: `${f.height}px` });
+  frame.classList.toggle("is-round", crop.round);
+  $("crop-size").value = String(Math.round(crop.scale * 100));
 }
 
 function chooseShape(button) {
@@ -279,19 +292,39 @@ function chooseShape(button) {
     other.setAttribute("aria-pressed", String(other === button));
   }
   crop.ratio = Number(button.dataset.ratio) || 0;
-  crop.x = 0.5;
-  crop.y = 0.5;
+  crop.round = button.dataset.round === "1";
+  crop.cx = 0.5;
+  crop.cy = 0.5;
+  crop.scale = 1;
   drawCrop();
 }
 
 function moveCrop(dx, dy) {
   const box = imageBox();
   if (!box || !crop.ratio) return;
-  const f = frameBox(box);
-  const roomX = box.width - f.width;
-  const roomY = box.height - f.height;
-  if (roomX > 0.5) crop.x = Math.min(1, Math.max(0, crop.x + dx / roomX));
-  if (roomY > 0.5) crop.y = Math.min(1, Math.max(0, crop.y + dy / roomY));
+  crop.cx += dx / box.width;
+  crop.cy += dy / box.height;
+  drawCrop();
+}
+
+// A new size, keeping the frame's middle where it is.
+function sizeCrop(scale) {
+  crop.scale = Math.min(1, Math.max(SMALLEST, scale));
+  drawCrop();
+}
+
+// Dragging the corner: the opposite corner stays where it is.
+function stretchCrop(dx) {
+  const box = imageBox();
+  if (!box || !crop.ratio) return;
+  const before = frameBox(box);
+  const full = before.width / crop.scale;
+  const scale = Math.min(1, Math.max(SMALLEST, (before.width + dx) / full));
+  const width = full * scale;
+  const height = (before.height / before.width) * width;
+  crop.scale = scale;
+  crop.cx = (before.left + width / 2) / box.width;
+  crop.cy = (before.top + height / 2) / box.height;
   drawCrop();
 }
 
@@ -332,7 +365,7 @@ function showAt(index) {
   if ($("viewer").hidden) pauseGrid();
   current = index;
   ahead = null;
-  if (picture.video) openVideo(pictureUrl(picture), picture.name);
+  if (picture.video) openVideo(pictureUrl(picture), picture.name, pictureUrl(picture, "&size=screen"));
   else openPicture(pictureUrl(picture, "&small=1"), pictureUrl(picture, "&size=screen"), picture.name);
   $("viewer-prev").disabled = index <= 0;
   $("viewer-next").disabled = index >= album.length - 1;
@@ -352,7 +385,7 @@ function getReady(index) {
   ahead.src = pictureUrl(picture, "&size=screen");
 }
 
-function openVideo(url, name) {
+function openVideo(url, name, poster) {
   viewToken += 1;
   stopLoading();
   const video = $("viewer-video");
@@ -363,6 +396,8 @@ function openVideo(url, name) {
   $("crop-note").hidden = true;
   video.hidden = false;
   video.setAttribute("aria-label", name);
+  if (poster) video.poster = poster;
+  else video.removeAttribute("poster");
   video.src = url;
   $("viewer").hidden = false;
   $("viewer-back").focus();
@@ -372,6 +407,7 @@ function stopVideo() {
   const video = $("viewer-video");
   video.pause();
   video.removeAttribute("src");
+  video.removeAttribute("poster");
   video.load();
   video.hidden = true;
 }
@@ -384,8 +420,8 @@ function openPicture(small, screen, name) {
   image.hidden = false;
   $("crop-shapes").hidden = false;
   image.alt = name;
-  crop.x = 0.5;
-  crop.y = 0.5;
+  crop.cx = 0.5;
+  crop.cy = 0.5;
   $("crop-area").hidden = true;
   image.src = small;
   viewer.hidden = false;
@@ -434,6 +470,14 @@ $("grid").addEventListener("click", (event) => {
   event.preventDefault();
   showAt(Number(link.dataset.index));
 });
+// A copy Keel could not make (no video tool yet, a damaged file) leaves a
+// plain tile instead of a broken picture.
+$("grid").addEventListener("error", (event) => {
+  const img = event.target;
+  if (img.tagName !== "IMG" || !img.getAttribute("src")) return;
+  if (img.closest(".photo-video")) img.remove();
+  else img.classList.add("is-missing");
+}, true);
 $("back").addEventListener("click", showCategories);
 $("viewer-back").addEventListener("click", closePicture);
 $("viewer-image").addEventListener("load", drawCrop);
@@ -443,7 +487,8 @@ $("crop-shapes").addEventListener("click", (event) => {
   if (button) chooseShape(button);
 });
 $("crop-frame").addEventListener("pointerdown", (event) => {
-  crop.drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
+  const stretch = event.target === $("crop-handle");
+  crop.drag = { id: event.pointerId, x: event.clientX, y: event.clientY, stretch };
   event.currentTarget.setPointerCapture(event.pointerId);
   event.preventDefault();
 });
@@ -453,14 +498,30 @@ $("crop-frame").addEventListener("pointermove", (event) => {
   const dy = event.clientY - crop.drag.y;
   crop.drag.x = event.clientX;
   crop.drag.y = event.clientY;
-  moveCrop(dx, dy);
+  if (crop.drag.stretch) stretchCrop(Math.abs(dx) >= Math.abs(dy) ? dx : dy * crop.ratio);
+  else moveCrop(dx, dy);
 });
+$("crop-frame").addEventListener("wheel", (event) => {
+  event.preventDefault();
+  sizeCrop(crop.scale * (event.deltaY < 0 ? 1.06 : 1 / 1.06));
+}, { passive: false });
+$("crop-size").addEventListener("input", (event) => sizeCrop(Number(event.target.value) / 100));
 for (const end of ["pointerup", "pointercancel"]) {
   $("crop-frame").addEventListener(end, () => { crop.drag = null; });
 }
 $("crop-frame").addEventListener("keydown", (event) => {
   const step = event.shiftKey ? 40 : 10;
   const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+  if (event.key === "+" || event.key === "=") {
+    event.preventDefault();
+    sizeCrop(crop.scale * 1.06);
+    return;
+  }
+  if (event.key === "-") {
+    event.preventDefault();
+    sizeCrop(crop.scale / 1.06);
+    return;
+  }
   const move = moves[event.key];
   if (!move) return;
   event.preventDefault();

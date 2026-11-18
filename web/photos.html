@@ -38,6 +38,7 @@
         <div class="crop-shapes" id="crop-shapes" role="group" aria-label="Try a crop">
           <button type="button" data-ratio="" aria-pressed="true">Whole</button>
           <button type="button" data-ratio="1" title="1:1">Square</button>
+          <button type="button" data-ratio="1" data-round="1" title="1:1, round">Circle</button>
           <button type="button" data-ratio="0.8" title="4:5">Tall</button>
           <button type="button" data-ratio="1.5" title="3:2">Print</button>
           <button type="button" data-ratio="1.7778" title="16:9">Wide</button>
@@ -48,10 +49,15 @@
         <img id="viewer-image" alt="" draggable="false">
         <video id="viewer-video" controls playsinline preload="metadata" hidden></video>
         <div class="crop-area" id="crop-area" hidden>
-          <div class="crop-frame" id="crop-frame" tabindex="0" aria-label="Crop frame. Drag it, or use the arrow keys."></div>
+          <div class="crop-frame" id="crop-frame" tabindex="0" aria-label="Crop frame. Drag it, or use the arrow keys. Plus and minus change its size.">
+            <span class="crop-handle" id="crop-handle" aria-hidden="true"></span>
+          </div>
         </div>
       </div>
-      <p class="crop-note" id="crop-note" hidden>Drag the frame to choose what stays. The picture on the disk is not changed.</p>
+      <div class="crop-note crop-tools" id="crop-note" hidden>
+        <label class="crop-size">Size <input type="range" id="crop-size" min="15" max="100" step="1" value="100"></label>
+        <p>Drag the frame to choose what stays, or its corner to change its size. The picture on the disk is not changed.</p>
+      </div>
     </div>
   </main>
   <script src="/photos.js"></script>
