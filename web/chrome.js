@@ -249,7 +249,12 @@ const powerMenu = (session) => {
   return wrap;
 };
 
-const installKeelChrome = (showInstall = false, session = { signed_in: false, can_sign_out: false }, showApps = false) => {
+// Pages that need a signed-in person. Signed out, their links go to Sign in
+// first, which comes back to the page.
+const NEEDS_SIGN_IN = new Set(["/pools.html", "/devices.html", "/installer.html", "/repair.html", "/logs.html", "/settings.html"]);
+
+const installKeelChrome = (state = {}) => {
+  const session = { signed_in: Boolean(state.signed_in), can_sign_out: Boolean(state.can_sign_out), who: state.who || "" };
   const nav = document.querySelector("nav");
   const aside = document.querySelector("aside");
   if (!nav || !aside) return;
@@ -257,20 +262,14 @@ const installKeelChrome = (showInstall = false, session = { signed_in: false, ca
   const brand = aside.querySelector(".brand");
   if (brand && !brand.querySelector(".brand-mark")) brand.insertAdjacentHTML("afterbegin", BRAND_ICON);
 
-  const everyday = PRIMARY.filter(([href]) => href !== "/catalog.html" || showApps || isActive(href));
-  const computer = computerNav(showInstall);
-  const showComputer = session.signed_in || computer.some(([href]) => isActive(href));
-  const children = everyday.map(([href, label]) => navLink(href, label));
-  if (showComputer) children.push(computerGroup(computer));
-  nav.replaceChildren(...children);
+  // The same links every time. Only Install depends on the computer: it
+  // means something only on the install USB.
+  const computer = computerNav(Boolean(state.can_install));
+  nav.replaceChildren(...PRIMARY.map(([href, label]) => navLink(href, label)), computerGroup(computer));
   nav.setAttribute("aria-label", "Everyday");
 
-  aside.querySelectorAll(".sidebar-support, .sidebar-utility, .power, .theme-toggle, .more").forEach((node) => node.remove());
-  const supportItems = SUPPORT.filter(([href]) => {
-    if (href === "/login.html") return !session.signed_in || isActive(href);
-    if (href === "/settings.html" || href === "/logs.html") return session.signed_in || isActive(href);
-    return true;
-  });
+  aside.querySelectorAll(".sidebar-support, .sidebar-utility, .power, .theme-toggle, .more, .signed-as").forEach((node) => node.remove());
+  const supportItems = SUPPORT.filter(([href]) => href !== "/login.html" || !session.signed_in);
   const support = sectionLinks("sidebar-support", "Guide and settings", supportItems);
   const utility = sectionLinks("sidebar-utility", "Notes", NOTES);
   const foot = aside.querySelector(".aside-foot");
@@ -280,29 +279,54 @@ const installKeelChrome = (showInstall = false, session = { signed_in: false, ca
   } else {
     aside.append(support, utility);
   }
-  const moreGroups = [];
-  if (showComputer) moreGroups.push({ title: "This computer", items: computer });
-  moreGroups.push({ title: "", items: supportItems });
-  moreGroups.push({ title: "", items: NOTES });
-  aside.appendChild(moreMenu(moreGroups, session.who || ""));
-  const whoLine = signedAs(session.who || "");
+  aside.appendChild(moreMenu([
+    { title: "This computer", items: computer },
+    { title: "", items: supportItems },
+    { title: "", items: NOTES },
+  ], session.who));
+  const whoLine = signedAs(session.who);
   if (whoLine) aside.appendChild(whoLine);
   aside.appendChild(powerMenu(session));
+  if (!session.signed_in) {
+    aside.querySelectorAll("a[href]").forEach((link) => {
+      const href = link.getAttribute("href");
+      if (NEEDS_SIGN_IN.has(href)) link.setAttribute("href", `/login.html?next=${encodeURIComponent(href)}`);
+    });
+  }
   const themeSlot = document.getElementById("theme-slot");
   if (themeSlot && !themeSlot.querySelector(".theme-toggle")) themeSlot.appendChild(themeControl());
 };
 
+// What Keel said last time, so the sidebar is drawn once, right, instead
+// of a guess that changes when the answers come.
+const CHROME_KEY = "keel-chrome";
+const rememberedChrome = () => {
+  try {
+    return JSON.parse(window.localStorage.getItem(CHROME_KEY) || "null") || {};
+  } catch {
+    return {};
+  }
+};
+
 const bootChrome = () => {
-  installKeelChrome(false);
+  const before = rememberedChrome();
+  installKeelChrome(before);
   const json = (path) =>
-    fetch(path, { credentials: "same-origin" }).then((response) => response.json()).catch(() => ({}));
-  Promise.all([json("/api/health"), json("/api/auth/session"), json("/api/apps")]).then(([health, session, apps]) => {
-    const installed = Array.isArray(apps) && apps.some((app) => app.installed);
-    installKeelChrome(Boolean(health.can_install), {
+    fetch(path, { credentials: "same-origin" }).then((response) => response.json()).catch(() => null);
+  Promise.all([json("/api/health"), json("/api/auth/session")]).then(([health, session]) => {
+    // Without an answer, keep what is drawn.
+    if (!health || !session) return;
+    const now = {
+      can_install: Boolean(health.can_install),
       signed_in: Boolean(session.signed_in),
       can_sign_out: Boolean(session.can_sign_out),
       who: session.who || "",
-    }, installed);
+    };
+    try {
+      window.localStorage.setItem(CHROME_KEY, JSON.stringify(now));
+    } catch { /* drawn again next time instead */ }
+    const same = ["can_install", "signed_in", "can_sign_out", "who"].every((key) => Boolean(before[key]) === Boolean(now[key]) && (key !== "who" || (before.who || "") === now.who));
+    if (!same) installKeelChrome(now);
   });
 };
 
