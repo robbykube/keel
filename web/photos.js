@@ -91,6 +91,7 @@ async function openCategory(path, name) {
 }
 
 async function showCategories() {
+  closePicture();
   const note = $("note");
   const categories = $("categories");
   const grid = $("grid");
@@ -123,5 +124,41 @@ async function showCategories() {
   }
 }
 
+let viewToken = 0;
+
+function openPicture(url, name) {
+  const token = ++viewToken;
+  const viewer = $("viewer");
+  const image = $("viewer-image");
+  image.alt = name;
+  image.src = `${url}&small=1`;
+  viewer.hidden = false;
+  $("viewer-back").focus();
+  const full = new Image();
+  full.onload = () => {
+    if (token !== viewToken || viewer.hidden) return;
+    image.src = url;
+  };
+  full.src = url;
+}
+
+function closePicture() {
+  viewToken += 1;
+  const viewer = $("viewer");
+  const image = $("viewer-image");
+  viewer.hidden = true;
+  image.removeAttribute("src");
+}
+
+$("grid").addEventListener("click", (event) => {
+  const link = event.target.closest("a");
+  if (!link || !$("grid").contains(link)) return;
+  event.preventDefault();
+  openPicture(link.getAttribute("href"), link.querySelector("img")?.alt || "Picture");
+});
 $("back").addEventListener("click", showCategories);
+$("viewer-back").addEventListener("click", closePicture);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !$("viewer").hidden) closePicture();
+});
 showCategories();

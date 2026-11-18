@@ -23,9 +23,13 @@
       <header><h1>Photos</h1></header>
       <p class="lede" id="note">Choose a category. The pictures stay on the disk.</p>
       <div class="category-list" id="categories"></div>
-      <p><button type="button" class="button" id="back" hidden>All categories</button></p>
+      <p class="photo-back" id="back" hidden><button type="button" class="button">Back</button></p>
       <div class="photo-grid" id="grid"></div>
       <div id="more" hidden></div>
+    </div>
+    <div class="photo-viewer" id="viewer" hidden>
+      <p class="photo-back"><button type="button" class="button" id="viewer-back">Back</button></p>
+      <img id="viewer-image" alt="">
     </div>
   </main>
   <script src="/photos.js"></script>

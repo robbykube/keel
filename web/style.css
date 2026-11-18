@@ -788,6 +788,37 @@ a.button:hover { background: var(--accent-dim); }
   gap: var(--space-2);
 }
 .category-list .button { margin: 0; }
+.photo-back {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) 0;
+  background: var(--bg);
+}
+.photo-back[hidden] { display: none; }
+.photo-viewer {
+  position: fixed;
+  z-index: 40;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  background: var(--bg);
+}
+.photo-viewer[hidden] { display: none; }
+.photo-viewer .photo-back { position: static; }
+.photo-viewer img {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  object-fit: contain;
+  background: var(--panel-2);
+}
 .photo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -1190,6 +1221,7 @@ html[data-theme="light"] .home-card:hover { box-shadow: 0 20px 38px rgba(93, 78,
   .power-toggle { width: auto; min-height: 38px; padding: 8px; }
   .power-toggle span { display: none; }
   main { overflow: auto; }
+  .photo-viewer { left: 0; padding: 16px; }
   .scroll,
   .table-wrap,
   .table-wrap.scroll,
