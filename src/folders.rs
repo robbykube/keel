@@ -158,6 +158,23 @@ pub struct Download {
     pub len: u64,
 }
 
+/// A file's place on the disk, for showing a picture's preview. The same
+/// checks as a download.
+pub fn file_path(shares: &[Share], share: &str, path: &str) -> Result<PathBuf, String> {
+    let root = find_root(shares, share)?;
+    let rel = normalize(path)?;
+    refuse_computer(&root, &rel)?;
+    if rel.is_empty() {
+        return Err("Choose a picture.".into());
+    }
+    let full = resolve_existing(&root.path, &rel)?;
+    let meta = fs::symlink_metadata(&full).map_err(|_| "That file is not there. Reload the page.".to_string())?;
+    if meta.file_type().is_symlink() || !meta.is_file() {
+        return Err("Keel can only show a picture that is a file.".into());
+    }
+    Ok(full)
+}
+
 pub fn open_download(shares: &[Share], share: &str, path: &str) -> Result<Download, String> {
     let root = find_root(shares, share)?;
     let rel = normalize(path)?;

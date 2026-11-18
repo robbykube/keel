@@ -93,6 +93,19 @@
         </p>
       </div>
     </div>
+    <div class="photo-viewer" id="file-viewer" hidden>
+      <div class="viewer-bar">
+        <div class="viewer-steps">
+          <button type="button" class="button" id="file-back">Back</button>
+          <button type="button" id="file-prev">Previous</button>
+          <span class="viewer-count" id="file-count" aria-live="polite"></span>
+          <button type="button" id="file-next">Next</button>
+        </div>
+        <a class="button" id="file-download">Download</a>
+      </div>
+      <div class="viewer-stage"><img id="file-image" alt="" draggable="false" fetchpriority="high"></div>
+      <p class="crop-note" id="file-name"></p>
+    </div>
   </main>
   <script src="/platform.js"></script>
   <script src="/terms.js"></script>

@@ -78,6 +78,130 @@ pub fn fill_now(media: &Path, missing: Vec<Wanted>) {
     store(media, pending);
 }
 
+/// Each picture's average colour, shown on its tile while the picture loads.
+/// Kept in `.keel/colors.tsv`: path, file modified, file size, colour.
+type Colours = HashMap<String, (i64, u64, u32)>;
+
+struct ColourBook {
+    entries: Colours,
+    dirty: bool,
+}
+
+static COLOURS: Mutex<Option<HashMap<PathBuf, ColourBook>>> = Mutex::new(None);
+static COLOURS_SAVING: AtomicBool = AtomicBool::new(false);
+
+fn colour_file(media: &Path) -> PathBuf {
+    media.parent().unwrap_or(media).join(".keel").join("colors.tsv")
+}
+
+fn colour_book<'a>(guard: &'a mut Option<HashMap<PathBuf, ColourBook>>, media: &Path) -> &'a mut ColourBook {
+    guard
+        .get_or_insert_with(HashMap::new)
+        .entry(media.to_path_buf())
+        .or_insert_with(|| {
+            let mut entries = Colours::new();
+            if let Ok(text) = fs::read_to_string(colour_file(media)) {
+                for line in text.lines() {
+                    let parts: Vec<&str> = line.split('\t').collect();
+                    if let [rel, modified, len, colour] = parts[..] {
+                        if let (Ok(modified), Ok(len), Ok(colour)) =
+                            (modified.parse(), len.parse(), u32::from_str_radix(colour, 16))
+                        {
+                            entries.insert(rel.to_string(), (modified, len, colour));
+                        }
+                    }
+                }
+            }
+            ColourBook { entries, dirty: false }
+        })
+}
+
+/// The colour of each picture, in order, when it is known for this version of
+/// the file.
+pub fn colours_for(media: &Path, wanted: &[(&str, i64, u64)]) -> Vec<Option<u32>> {
+    let mut guard = COLOURS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let book = colour_book(&mut guard, media);
+    wanted
+        .iter()
+        .map(|(rel, modified, len)| match book.entries.get(*rel) {
+            Some(&(m, l, colour)) if m == *modified && l == *len => Some(colour),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Remembers a picture's colour. It is written to the disk a few seconds
+/// later, together with any others found meanwhile.
+pub fn set_colour(media: &Path, rel: &str, modified: i64, len: u64, colour: u32) {
+    {
+        let mut guard = COLOURS.lock().unwrap_or_else(|poison| poison.into_inner());
+        let book = colour_book(&mut guard, media);
+        book.entries.insert(rel.to_string(), (modified, len, colour & 0xff_ffff));
+        book.dirty = true;
+    }
+    if COLOURS_SAVING.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        COLOURS_SAVING.store(false, Ordering::Release);
+        save_colours();
+    });
+}
+
+fn save_colours() {
+    let mut guard = COLOURS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let Some(books) = guard.as_mut() else {
+        return;
+    };
+    for (media, book) in books.iter_mut() {
+        if !book.dirty {
+            continue;
+        }
+        let mut text = String::with_capacity(book.entries.len() * 64);
+        for (rel, (modified, len, colour)) in &book.entries {
+            if !rel.contains(['\t', '\n', '\r']) {
+                text.push_str(&format!("{rel}\t{modified}\t{len}\t{colour:06x}\n"));
+            }
+        }
+        let path = colour_file(media);
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let tmp = path.with_extension("part");
+        if fs::write(&tmp, text).is_ok() && fs::rename(&tmp, &path).is_ok() {
+            book.dirty = false;
+        }
+    }
+}
+
+/// Forgets the colours of pictures that are no longer in the library.
+pub fn prune_colours(media: &Path, keep: &HashSet<String>) {
+    {
+        let mut guard = COLOURS.lock().unwrap_or_else(|poison| poison.into_inner());
+        let book = colour_book(&mut guard, media);
+        let before = book.entries.len();
+        book.entries.retain(|rel, _| keep.contains(rel));
+        if book.entries.len() == before {
+            return;
+        }
+        book.dirty = true;
+    }
+    save_colours();
+}
+
+/// The average colour of a picture, as 0xRRGGBB.
+pub fn average_colour(picture: &image::RgbImage) -> u32 {
+    let (mut r, mut g, mut b) = (0u64, 0u64, 0u64);
+    for pixel in picture.pixels() {
+        r += pixel[0] as u64;
+        g += pixel[1] as u64;
+        b += pixel[2] as u64;
+    }
+    let count = (picture.width() as u64 * picture.height() as u64).max(1);
+    (((r / count) as u32) << 16) | (((g / count) as u32) << 8) | (b / count) as u32
+}
+
 /// Waits for reading in the background to finish.
 #[cfg(test)]
 pub fn wait_idle() {
@@ -413,6 +537,34 @@ fn taken_in_tiff(tiff: &[u8]) -> Option<i64> {
     find(first, 0x0132).and_then(text_at)
 }
 
+/// How the camera was held (Exif orientation 1 to 8), from the TIFF part of
+/// a picture's Exif.
+pub fn orientation_in_tiff(tiff: &[u8]) -> Option<u8> {
+    let little = match tiff.get(0..2)? {
+        b"II" => true,
+        b"MM" => false,
+        _ => return None,
+    };
+    let u16_at = |at: usize| -> Option<u16> {
+        let b = tiff.get(at..at + 2)?;
+        Some(if little { u16::from_le_bytes([b[0], b[1]]) } else { u16::from_be_bytes([b[0], b[1]]) })
+    };
+    let first = {
+        let b = tiff.get(4..8)?;
+        let b = [b[0], b[1], b[2], b[3]];
+        (if little { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) }) as usize
+    };
+    let count = u16_at(first)? as usize;
+    for n in 0..count.min(512) {
+        let entry = first + 2 + n * 12;
+        if u16_at(entry)? == 0x0112 && u16_at(entry + 2)? == 3 {
+            let value = u16_at(entry + 8)?;
+            return (1..=8).contains(&value).then_some(value as u8);
+        }
+    }
+    None
+}
+
 /// "2024:07:21 18:03:55" as seconds.
 fn parse_moment(raw: &[u8]) -> Option<i64> {
     let text = std::str::from_utf8(raw).ok()?.trim_end_matches('\0').trim();
@@ -558,6 +710,27 @@ pub(crate) mod tests {
         assert_eq!(taken_in_jpeg(b"not a picture"), None);
         assert_eq!(days_from_civil(1970, 1, 1), 0);
         assert_eq!(days_from_civil(2000, 3, 1), 11_017);
+    }
+
+    #[test]
+    fn colours_are_kept_until_the_file_changes() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let disk = std::env::temp_dir().join(format!("keel-colours-{stamp}"));
+        let media = disk.join("Media");
+        fs::create_dir_all(&media).unwrap();
+        let picture = image::RgbImage::from_fn(4, 2, |x, _| if x < 2 { image::Rgb([200, 0, 0]) } else { image::Rgb([0, 0, 100]) });
+        let colour = average_colour(&picture);
+        assert_eq!(colour, 0x640032);
+        set_colour(&media, "Pictures/a.jpg", 5, 6, colour);
+        assert_eq!(colours_for(&media, &[("Pictures/a.jpg", 5, 6), ("Pictures/a.jpg", 9, 6), ("Pictures/b.jpg", 5, 6)]), vec![Some(colour), None, None]);
+        save_colours();
+        assert!(fs::read_to_string(disk.join(".keel").join("colors.tsv")).unwrap().contains("Pictures/a.jpg\t5\t6\t640032"));
+        prune_colours(&media, &HashSet::new());
+        assert_eq!(colours_for(&media, &[("Pictures/a.jpg", 5, 6)]), vec![None]);
+        let _ = fs::remove_dir_all(&disk);
     }
 
     #[test]

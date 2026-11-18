@@ -245,6 +245,10 @@ async fn main() {
             get(folders_file).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route(
+            "/api/folders/picture",
+            get(folders_picture).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
             "/api/folders/mkdir",
             post(folders_mkdir).layer(axum::middleware::from_fn(auth::require_admin)),
         )
@@ -1318,11 +1322,14 @@ async fn picture_file(
     let refused = |message: String| (StatusCode::BAD_REQUEST, message);
     let size = if query.small == "1" || query.size == "small" {
         Some(Size::Small)
+    } else if query.size == "grid" {
+        Some(Size::Grid)
     } else if query.size == "screen" {
         Some(Size::Screen)
     } else {
         None
     };
+    let asked = Instant::now();
     let Some(size) = size else {
         // The picture or video itself. Videos need to start part way through.
         let path = query.path.clone();
@@ -1340,8 +1347,51 @@ async fn picture_file(
         .await
         .unwrap_or_else(|_| Err("Keel could not open that picture.".into()))
         .map_err(refused)?;
-    // If the page stops waiting, this request is dropped and so is its place
-    // in the line for copies.
+    answer_copy(plan, &query.v, asked).await
+}
+
+#[derive(Deserialize)]
+struct FolderPictureQuery {
+    share: String,
+    path: String,
+    #[serde(default)]
+    size: String,
+    #[serde(default)]
+    v: String,
+}
+
+/// A preview of a picture anywhere in Files.
+async fn folders_picture(
+    State(state): State<AppState>,
+    Query(query): Query<FolderPictureQuery>,
+) -> Result<Response, (StatusCode, String)> {
+    use crate::gallery::Size;
+    let asked = Instant::now();
+    let size = match query.size.as_str() {
+        "screen" => Size::Screen,
+        "small" => Size::Small,
+        _ => Size::Grid,
+    };
+    let shares = state.store.lock().await.shares.clone();
+    let (share, path) = (query.share.clone(), query.path.clone());
+    let plan = tokio::task::spawn_blocking(move || {
+        let full = crate::folders::file_path(&shares, &share, &path)?;
+        crate::gallery::plan_copy_file(full, &format!("{share}/{path}"), size)
+    })
+    .await
+    .unwrap_or_else(|_| Err("Keel could not open that picture.".into()))
+    .map_err(|message| (StatusCode::BAD_REQUEST, message))?;
+    answer_copy(plan, &query.v, asked).await
+}
+
+/// Makes the copy if it is not there yet, then sends it. If the page stops
+/// waiting, this request is dropped and so is its place in the line.
+async fn answer_copy(
+    plan: crate::gallery::CopyPlan,
+    v: &str,
+    asked: Instant,
+) -> Result<Response, (StatusCode, String)> {
+    let refused = |message: String| (StatusCode::BAD_REQUEST, message);
     let written = if plan.ready {
         false
     } else {
@@ -1354,17 +1404,20 @@ async fn picture_file(
         .await
         .unwrap_or_else(|_| Err("Keel could not open that picture.".into()))
         .map_err(refused)?;
-    let keep = if query.v.is_empty() {
+    let keep = if v.is_empty() {
         "no-cache"
     } else {
         "private, max-age=31536000, immutable"
     };
     let file = tokio::fs::File::from_std(opened.file);
     let body = Body::from_stream(tokio_util::io::ReaderStream::new(file));
+    // How long this copy took, waiting included, for anyone measuring.
+    let took = format!("copy;dur={:.1};desc=\"{}\"", asked.elapsed().as_secs_f64() * 1000.0, if written { "made" } else { "kept" });
     Response::builder()
         .header(CONTENT_TYPE, opened.kind)
         .header(CONTENT_LENGTH, opened.len.to_string())
         .header(axum::http::header::CACHE_CONTROL, keep)
+        .header("server-timing", took)
         .body(body)
         .map_err(|_| {
             (

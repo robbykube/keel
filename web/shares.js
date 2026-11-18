@@ -99,18 +99,30 @@ function renderPending() {
   }
 }
 
-// Pictures in the Photos library show the small copy Photos already keeps.
+// Every picture in Files shows a small copy. Pictures in the Photos library
+// use the copies Photos already keeps; others get their own, kept by Keel.
 const PICTURE = /\.(jpe?g|png|gif|webp|heic|heif)$/i;
 
-function thumbFor(entry) {
-  if (share !== "Media" || entry.kind !== "file" || !PICTURE.test(entry.name)) return "";
+function pictureLinks(entry) {
+  if (entry.kind !== "file" || !PICTURE.test(entry.name)) return null;
   const rel = joinPath(path, entry.name);
-  const top = rel.split("/")[0];
-  if (top !== "Photos" && top !== "Pictures") return "";
   const v = `${Number(entry.modified_ms || 0).toString(16)}${Number(entry.size || 0).toString(16)}`;
-  const src = `/api/photos/picture?${new URLSearchParams({ path: rel, small: "1", v })}`;
-  return `<img class="file-thumb" alt="" loading="lazy" src="${escapeHtml(src)}">`;
+  const top = rel.split("/")[0];
+  const inPhotos = share === "Media" && (top === "Photos" || top === "Pictures");
+  const link = (size) => inPhotos
+    ? `/api/photos/picture?${new URLSearchParams({ path: rel, size, v })}`
+    : `/api/folders/picture?${new URLSearchParams({ share, path: rel, size, v })}`;
+  return {
+    name: entry.name,
+    grid: link("grid"),
+    small: link("small"),
+    screen: link("screen"),
+    download: `/api/folders/file?${new URLSearchParams({ share, path: rel })}`,
+  };
 }
+
+// The pictures in the open folder, for the viewer's Previous and Next.
+let folderPictures = [];
 
 // A long folder would keep every picture scrolled past in memory. Pictures
 // well away from view let go of their image and get it back when near.
@@ -151,10 +163,17 @@ function renderListing() {
     renderPending();
     return;
   }
+  folderPictures = [];
   const rows = listing.entries.map((entry) => {
-    const name = entry.kind === "folder"
-      ? `<button type="button" class="texty" data-open="${escapeHtml(entry.name)}">${escapeHtml(entry.name)}</button>`
-      : `${thumbFor(entry)}${escapeHtml(entry.name)}`;
+    const picture = pictureLinks(entry);
+    let name = escapeHtml(entry.name);
+    if (entry.kind === "folder") {
+      name = `<button type="button" class="texty" data-open="${escapeHtml(entry.name)}">${escapeHtml(entry.name)}</button>`;
+    } else if (picture) {
+      const index = folderPictures.push(picture) - 1;
+      name = `<button type="button" class="texty file-picture" data-view="${index}" aria-label="Look at ${escapeHtml(entry.name)}">`
+        + `<img class="file-thumb" alt="" loading="lazy" decoding="async" src="${escapeHtml(picture.grid)}">${escapeHtml(entry.name)}</button>`;
+    }
     const canMove = !readOnly && entry.kind !== "link";
     const canCopy = entry.kind !== "link";
     const download = entry.kind === "file"
@@ -290,7 +309,63 @@ $("crumb").addEventListener("click", (event) => {
   });
 });
 
+// Looking at a picture: its screen copy, with Previous and Next for the other
+// pictures in the folder. The small copy shows first, while the screen copy comes.
+let viewing = -1;
+let viewToken = 0;
+
+function showPicture(index) {
+  const picture = folderPictures[index];
+  if (!picture) return;
+  viewing = index;
+  const token = ++viewToken;
+  const image = $("file-image");
+  image.alt = picture.name;
+  image.src = picture.small;
+  const screen = new Image();
+  screen.onload = () => {
+    if (token !== viewToken || $("file-viewer").hidden) return;
+    image.src = picture.screen;
+    // Get the next one ready while this one is looked at.
+    const next = folderPictures[index + 1];
+    if (next) new Image().src = next.screen;
+  };
+  screen.src = picture.screen;
+  $("file-name").textContent = picture.name;
+  $("file-download").href = picture.download;
+  $("file-download").setAttribute("download", picture.name);
+  $("file-count").textContent = `${index + 1} of ${folderPictures.length}`;
+  $("file-prev").disabled = index <= 0;
+  $("file-next").disabled = index >= folderPictures.length - 1;
+  if ($("file-viewer").hidden) {
+    $("file-viewer").hidden = false;
+    $("file-back").focus();
+  }
+}
+
+function closePicture() {
+  viewToken += 1;
+  $("file-viewer").hidden = true;
+  $("file-image").removeAttribute("src");
+  $("rows").querySelector(`button[data-view="${viewing}"]`)?.focus();
+}
+
+$("file-back").addEventListener("click", closePicture);
+$("file-prev").addEventListener("click", () => showPicture(viewing - 1));
+$("file-next").addEventListener("click", () => showPicture(viewing + 1));
+document.addEventListener("keydown", (event) => {
+  if ($("file-viewer").hidden) return;
+  if (event.key === "Escape") closePicture();
+  if (event.key === "ArrowLeft") showPicture(viewing - 1);
+  if (event.key === "ArrowRight") showPicture(viewing + 1);
+});
+
 $("rows").addEventListener("click", (event) => {
+  const view = event.target.closest("button[data-view]");
+  if (view) {
+    showPicture(Number(view.dataset.view));
+    return;
+  }
   const open = event.target.closest("button[data-open]");
   if (open) {
     openFolder(share, joinPath(path, open.dataset.open)).catch((err) => {

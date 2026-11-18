@@ -13,6 +13,9 @@ if [ -f /var/lib/keel/door-setup.log ]; then
   show "Front door setup"
   tail -n 40 /var/lib/keel/door-setup.log || true
 fi
+show "Photos copies"
+# Each copy Photos made, and how long it took. Reading is most of it.
+journalctl -u keel --no-pager -n 4000 2>/dev/null | grep "picture copy" | tail -n 30 || true
 show "Names"
 podman logs --tail 80 keel-names 2>&1 | tail -n 80 || true
 show "Photos"

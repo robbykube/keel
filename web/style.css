@@ -515,6 +515,7 @@ button.texty {
 }
 .folder-tools input { min-width: 14rem; }
 .row-actions { white-space: nowrap; }
+.file-picture { display: inline-flex; align-items: center; text-align: left; }
 .file-thumb {
   width: 40px;
   height: 40px;
@@ -927,6 +928,7 @@ body.screen-keyboard-open .scroll { padding-bottom: 300px; }
 }
 .viewer-steps { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .viewer-steps button { margin: 0; }
+.viewer-steps button[hidden] { display: none; }
 .viewer-count { min-width: 5.5em; color: var(--muted); font-size: 13px; text-align: center; }
 .crop-shapes { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .crop-shapes button { margin: 0; }
@@ -937,7 +939,7 @@ body.screen-keyboard-open .scroll { padding-bottom: 300px; }
 }
 .viewer-stage {
   position: relative;
-  touch-action: pan-y;
+  touch-action: none;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -945,6 +947,7 @@ body.screen-keyboard-open .scroll { padding-bottom: 300px; }
 }
 .viewer-stage img {
   display: block;
+  transform-origin: 0 0;
   user-select: none;
   -webkit-user-drag: none;
   width: 100%;
@@ -961,6 +964,8 @@ body.screen-keyboard-open .scroll { padding-bottom: 300px; }
 .viewer-stage img[hidden],
 .viewer-stage video[hidden],
 .crop-shapes[hidden] { display: none; }
+.viewer-stage.is-zoomed { cursor: grab; }
+.viewer-stage.is-zoomed:active { cursor: grabbing; }
 .crop-area { position: absolute; overflow: hidden; }
 .crop-area[hidden] { display: none; }
 .crop-frame {
@@ -999,6 +1004,7 @@ body.screen-keyboard-open .scroll { padding-bottom: 300px; }
   gap: var(--space-3);
 }
 .photo-grid a { display: block; }
+.photo-grid > a { background: var(--panel-2); }
 .photo-waiting { display: block; height: 140px; background: var(--panel-2); }
 .category-waiting { display: block; aspect-ratio: 4 / 3; border-radius: var(--radius); background: var(--panel-2); }
 .is-waiting { animation: keel-waiting 1.4s ease-in-out infinite; }
@@ -1027,6 +1033,9 @@ body.screen-keyboard-open .scroll { padding-bottom: 300px; }
   height: 100%;
 }
 .photo-grid img.is-missing { visibility: hidden; }
+.photo-grid > a:not(.photo-video) > img { opacity: 0; transition: opacity 0.25s ease-out; }
+.photo-grid > a > img.is-in { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .photo-grid > a > img { transition: none; } }
 .photo-video img ~ .video-name { color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
 .video-mark {
   position: absolute;

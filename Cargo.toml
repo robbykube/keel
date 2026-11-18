@@ -1,6 +1,6 @@
 [package]
 name = "keel"
-version = "0.1.57"
+version = "0.1.58"
 edition = "2021"
 description = "Fast, opinionated NAS with a Proxmox-style web GUI"
 
@@ -20,6 +20,7 @@ ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"
 getrandom = "0.2"
 sha2 = "0.10"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
+jpeg-decoder = { version = "0.3", default-features = false }
 tar = "0.4"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 

@@ -14,7 +14,9 @@ use sha2::{Digest, Sha256};
 
 use crate::picture_dates::{self, Wanted};
 
-/// The longest side of the copy shown in a grid or on a tile.
+/// The longest side of the copy in the grid of pictures.
+const GRID_SIDE: u32 = 240;
+/// The longest side of the copy on a folder tile and while a picture opens.
 const SMALL_SIDE: u32 = 480;
 /// The longest side of the copy shown when a picture is open. Big enough for
 /// a full screen, small enough that a Pi does not hold whole camera pictures.
@@ -41,8 +43,36 @@ static CONVERTED: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Size {
+    Grid,
     Small,
     Screen,
+}
+
+/// The copies of one picture, kept beside each other.
+#[derive(Clone)]
+struct Copies {
+    grid: PathBuf,
+    small: PathBuf,
+    screen: PathBuf,
+}
+
+impl Copies {
+    fn of(&self, size: Size) -> &Path {
+        match size {
+            Size::Grid => &self.grid,
+            Size::Small => &self.small,
+            Size::Screen => &self.screen,
+        }
+    }
+
+    /// The grid and small copies are made together, from the picture read at
+    /// a small size; the screen copy is made when a picture is opened.
+    fn ready(&self, size: Size, source: &Path) -> bool {
+        match size {
+            Size::Grid | Size::Small => fresh(&self.grid, source) && fresh(&self.small, source),
+            Size::Screen => fresh(&self.screen, source),
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -69,6 +99,9 @@ pub struct Picture {
     pub taken: i64,
     /// Changes when the file changes, so a browser may keep its copies.
     pub v: String,
+    /// The picture's average colour, shown on its tile while it loads.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
     #[serde(skip)]
     modified: i64,
     #[serde(skip)]
@@ -143,9 +176,11 @@ pub fn open_category(category: &str) -> Album {
 /// What it takes to answer for a copy of one picture.
 pub struct CopyPlan {
     source: PathBuf,
-    small: PathBuf,
-    screen: PathBuf,
+    copies: Copies,
     legacy: PathBuf,
+    /// Where the picture's colour is kept: the library and the picture's place
+    /// in it, with the file's modified time and size. None outside Photos.
+    colour: Option<(PathBuf, String, i64, u64)>,
     size: Size,
     /// The copies are there and newer than the picture.
     pub ready: bool,
@@ -163,21 +198,27 @@ fn plan_copy_in(media: &Path, rel: &str, size: Size) -> Result<CopyPlan, String>
     if kind_of(&source).is_none() {
         return Err("That file is not a picture.".into());
     }
-    let small = preview_file(media, rel, Size::Small);
-    let screen = preview_file(media, rel, Size::Screen);
-    let ready = fresh(&small, &source) && fresh(&screen, &source);
+    let copies = Copies {
+        grid: preview_file(media, rel, Size::Grid),
+        small: preview_file(media, rel, Size::Small),
+        screen: preview_file(media, rel, Size::Screen),
+    };
+    let ready = copies.ready(size, &source);
+    let colour = fs::metadata(&source)
+        .ok()
+        .map(|meta| (media.to_path_buf(), rel.trim_matches(['/', '\\']).to_string(), seconds(&meta), meta.len()));
     Ok(CopyPlan {
         source,
-        small,
-        screen,
+        copies,
+        colour,
         legacy: legacy_preview_file(media, rel),
         size,
         ready,
     })
 }
 
-/// Asks for the copies. They are made one at a time, newest request first, at
-/// low priority; a request nobody waits for any more is dropped. The answer
+/// Asks for the copies. They are made a few at a time, newest request first,
+/// at low priority; a request nobody waits for any more is dropped. The answer
 /// says whether copies were written.
 pub fn queue_copies(plan: &CopyPlan) -> tokio::sync::oneshot::Receiver<Result<bool, String>> {
     let (reply, answer) = tokio::sync::oneshot::channel();
@@ -185,8 +226,8 @@ pub fn queue_copies(plan: &CopyPlan) -> tokio::sync::oneshot::Receiver<Result<bo
     let mut jobs = queue.jobs.lock().unwrap_or_else(|poison| poison.into_inner());
     jobs.push(Job {
         source: plan.source.clone(),
-        small: plan.small.clone(),
-        screen: plan.screen.clone(),
+        copies: plan.copies.clone(),
+        size: plan.size,
         open: plan.size == Size::Screen,
         reply,
     });
@@ -202,9 +243,56 @@ pub fn finish_copy(plan: &CopyPlan, written: bool) -> Result<Opened, String> {
             std::thread::spawn(tidy_previews);
         }
     }
-    let served = if plan.size == Size::Small { &plan.small } else { &plan.screen };
+    let served = plan.copies.of(plan.size);
     mark_opened(served);
+    if plan.size != Size::Screen {
+        remember_colour(plan);
+    }
     open_file(served, "image/jpeg")
+}
+
+/// Notes the picture's colour from its grid copy, once per version of the
+/// file. Copies made before colours were kept get theirs this way too.
+fn remember_colour(plan: &CopyPlan) {
+    let Some((media, rel, modified, len)) = &plan.colour else {
+        return;
+    };
+    if picture_dates::colours_for(media, &[(rel.as_str(), *modified, *len)])[0].is_some() {
+        return;
+    }
+    if let Ok(grid) = image::open(&plan.copies.grid) {
+        let colour = picture_dates::average_colour(&grid.to_rgb8());
+        picture_dates::set_colour(media, rel, *modified, *len, colour);
+    }
+}
+
+/// A copy of a picture anywhere in Files, outside the Photos library. These
+/// are kept in Keel's own folder, not beside the picture, and take a small
+/// share of that disk.
+pub fn plan_copy_file(source: PathBuf, place: &str, size: Size) -> Result<CopyPlan, String> {
+    if kind_of(&source).is_none() {
+        return Err("That file is not a picture.".into());
+    }
+    let dir = files_previews_dir();
+    let name = preview_name(&format!("files:{place}"));
+    let copies = Copies {
+        grid: dir.join(format!("{name}-grid.jpg")),
+        small: dir.join(format!("{name}-small.jpg")),
+        screen: dir.join(format!("{name}-screen.jpg")),
+    };
+    let ready = copies.ready(size, &source);
+    Ok(CopyPlan {
+        legacy: dir.join(format!("{name}-none.jpg")),
+        source,
+        copies,
+        colour: None,
+        size,
+        ready,
+    })
+}
+
+fn files_previews_dir() -> PathBuf {
+    PathBuf::from(std::env::var("KEEL_DATA").unwrap_or_else(|_| "data".into())).join("previews")
 }
 
 /// A copy of the picture kept on the files disk, made once. The small copy and
@@ -236,8 +324,8 @@ pub fn original(rel: &str) -> Result<PathBuf, String> {
 
 struct Job {
     source: PathBuf,
-    small: PathBuf,
-    screen: PathBuf,
+    copies: Copies,
+    size: Size,
     /// For a picture someone has open, which goes before the grid.
     open: bool,
     reply: tokio::sync::oneshot::Sender<Result<bool, String>>,
@@ -251,10 +339,16 @@ struct Queue {
 fn queue() -> &'static Queue {
     static QUEUE: OnceLock<Queue> = OnceLock::new();
     QUEUE.get_or_init(|| {
-        std::thread::Builder::new()
-            .name("keel-copies".into())
-            .spawn(copy_worker)
-            .expect("Keel could not start making picture copies");
+        // Two at a time on a computer with four cores or more, so the screen
+        // and the file sharing keep the rest.
+        let cores = std::thread::available_parallelism().map_or(1, |cores| cores.get());
+        let workers = if cores >= 4 { 2 } else { 1 };
+        for _ in 0..workers {
+            std::thread::Builder::new()
+                .name("keel-copies".into())
+                .spawn(copy_worker)
+                .expect("Keel could not start making picture copies");
+        }
         Queue {
             jobs: Mutex::new(Vec::new()),
             wake: Condvar::new(),
@@ -286,7 +380,7 @@ fn copy_worker() {
                 jobs = queue.wake.wait(jobs).unwrap_or_else(|poison| poison.into_inner());
             }
         };
-        let result = std::panic::catch_unwind(|| write_previews(&job.source, &job.small, &job.screen))
+        let result = std::panic::catch_unwind(|| write_previews(&job.source, &job.copies, job.size))
             .unwrap_or_else(|_| Err("Keel could not make a small copy of that picture.".into()));
         let _ = job.reply.send(result);
     }
@@ -333,7 +427,17 @@ pub fn tidy_previews() {
     }
     let media = media_dir();
     let (limit, target) = preview_limits(&media);
-    let tidied = tidy_in(&media, limit, target);
+    let mut tidied = tidy_in(&media, limit, target);
+    // Copies of pictures elsewhere in Files are on Keel's own disk; they get a
+    // quarter of the share the Photos copies get.
+    let files = files_previews_dir();
+    let (limit, target) = match disk_space(files.parent().unwrap_or(&files)) {
+        Some((total, free)) => limits_for(total, free),
+        None => (PREVIEW_MIN, PREVIEW_MIN / 10 * 8),
+    };
+    let more = tidy_dir(&files, None, limit / 4, target / 4);
+    tidied.removed += more.removed;
+    tidied.bytes += more.bytes;
     if tidied.removed > 0 {
         eprintln!(
             "keel: removed {} picture copies ({} MB)",
@@ -382,13 +486,19 @@ fn disk_space(_path: &Path) -> Option<(u64, u64)> {
 }
 
 pub fn tidy_in(media: &Path, limit: u64, target: u64) -> Tidied {
-    let mut tidied = Tidied::default();
     let known = known_media(media);
     if let Some((_, rels)) = &known {
         picture_dates::prune(media, rels);
+        picture_dates::prune_colours(media, rels);
     }
-    let dir = previews_dir(media);
-    let Ok(read) = fs::read_dir(&dir) else {
+    tidy_dir(&previews_dir(media), known.as_ref().map(|(hashes, _)| hashes), limit, target)
+}
+
+/// Cleans one folder of copies. With `known`, copies of pictures not in it
+/// are left over and go; without it, only the oldest go, past the limit.
+fn tidy_dir(dir: &Path, known: Option<&HashSet<String>>, limit: u64, target: u64) -> Tidied {
+    let mut tidied = Tidied::default();
+    let Ok(read) = fs::read_dir(dir) else {
         return tidied;
     };
     let now = SystemTime::now();
@@ -412,9 +522,10 @@ pub fn tidy_in(media: &Path, limit: u64, target: u64) -> Tidied {
         } else if let Some(stem) = name.strip_suffix(".jpg") {
             let picture = stem
                 .strip_suffix("-small")
+                .or_else(|| stem.strip_suffix("-grid"))
                 .or_else(|| stem.strip_suffix("-screen"))
                 .unwrap_or(stem);
-            known.as_ref().map_or(false, |(hashes, _)| !hashes.contains(picture))
+            known.map_or(false, |hashes| !hashes.contains(picture))
         } else {
             false
         };
@@ -630,6 +741,11 @@ fn pictures_sorted(media: &Path, category: &str) -> Result<(Vec<Picture>, bool),
             picture.taken = taken;
         }
     }
+    let asked: Vec<(&str, i64, u64)> = pictures.iter().map(|p| (p.path.as_str(), p.modified, p.len)).collect();
+    let colours = picture_dates::colours_for(media, &asked);
+    for (picture, colour) in pictures.iter_mut().zip(colours) {
+        picture.color = colour.map(|colour| format!("#{colour:06x}"));
+    }
     pictures.sort_by(|a, b| {
         b.taken
             .cmp(&a.taken)
@@ -679,6 +795,7 @@ fn entry(name: &str, path: String, kind: Kind, meta: &fs::Metadata) -> Picture {
         video: kind == Kind::Video,
         taken: modified,
         v: version(modified, meta.len()),
+        color: None,
         modified,
         len: meta.len(),
     }
@@ -806,6 +923,7 @@ fn previews_dir(media: &Path) -> PathBuf {
 
 fn preview_file(media: &Path, rel: &str, size: Size) -> PathBuf {
     let kind = match size {
+        Size::Grid => "grid",
         Size::Small => "small",
         Size::Screen => "screen",
     };
@@ -833,24 +951,108 @@ fn fresh(cache: &Path, source: &Path) -> bool {
     }
 }
 
-/// Makes the copies when they are missing or older than the picture.
-/// True when it wrote them.
-/// Only the copy worker calls this, so copies are made one at a time.
-fn write_previews(source: &Path, small: &Path, screen: &Path) -> Result<bool, String> {
-    if fresh(small, source) && fresh(screen, source) {
+/// Makes the copies a request needs when they are missing or older than the
+/// picture. True when it wrote any. A JPEG is read only as large as the copy
+/// needs, which is most of the work saved. Each copy made is written to the
+/// log with how long it took.
+fn write_previews(source: &Path, copies: &Copies, size: Size) -> Result<bool, String> {
+    if copies.ready(size, source) {
         return Ok(false);
     }
-    let full = read_upright(source)?;
-    let big = if full.width() > SCREEN_SIDE || full.height() > SCREEN_SIDE {
-        full.thumbnail(SCREEN_SIDE, SCREEN_SIDE)
-    } else {
-        full
+    let started = Instant::now();
+    let thumbs = size != Size::Screen;
+    // A grid copy is all that is missing: make it from the small copy.
+    if thumbs && fresh(&copies.small, source) && !fresh(&copies.grid, source) {
+        if let Ok(small) = image::open(&copies.small) {
+            save_jpeg(&small.thumbnail(GRID_SIDE, GRID_SIDE), &copies.grid, 80)?;
+            log_copy(source, "grid", started, started.elapsed(), (small.width(), small.height()));
+            return Ok(true);
+        }
+    }
+    let want = if thumbs { SMALL_SIDE } else { SCREEN_SIDE };
+    let (picture, whole) = read_for(source, want)?;
+    let read = started.elapsed();
+    let read_size = (picture.width(), picture.height());
+    let picture = image::DynamicImage::ImageRgb8(picture.to_rgb8());
+    let fits = |side: u32| {
+        if picture.width() > side || picture.height() > side {
+            picture.thumbnail(side, side)
+        } else {
+            picture.clone()
+        }
     };
-    let big = image::DynamicImage::ImageRgb8(big.to_rgb8());
-    let little = big.thumbnail(SMALL_SIDE, SMALL_SIDE);
-    save_jpeg(&big, screen, 85)?;
-    save_jpeg(&little, small, 80)?;
+    // Whatever this read can make well is kept, so it need not be read again.
+    let can_screen = !thumbs || whole;
+    if can_screen && !fresh(&copies.screen, source) {
+        save_jpeg(&fits(SCREEN_SIDE), &copies.screen, 85)?;
+    }
+    if !fresh(&copies.small, source) || !fresh(&copies.grid, source) {
+        let small = fits(SMALL_SIDE);
+        save_jpeg(&small.thumbnail(GRID_SIDE, GRID_SIDE), &copies.grid, 80)?;
+        save_jpeg(&small, &copies.small, 80)?;
+    }
+    log_copy(source, if thumbs { "small" } else { "screen" }, started, read, read_size);
     Ok(true)
+}
+
+fn log_copy(source: &Path, made: &str, started: Instant, read: Duration, read_size: (u32, u32)) {
+    let name = source.file_name().and_then(|name| name.to_str()).unwrap_or("picture");
+    let total = started.elapsed();
+    eprintln!(
+        "keel: picture copy {made} {name}: {:.2} s, reading {:.2} s at {}x{}, saving {:.2} s",
+        total.as_secs_f64(),
+        read.as_secs_f64(),
+        read_size.0,
+        read_size.1,
+        total.saturating_sub(read).as_secs_f64(),
+    );
+}
+
+/// The picture, upright, and whether it was read whole rather than at a
+/// smaller size.
+fn read_for(source: &Path, want: u32) -> Result<(image::DynamicImage, bool), String> {
+    if matches!(extension(source).as_deref(), Some("jpg" | "jpeg")) {
+        if let Some(picture) = read_jpeg_at(source, want) {
+            return Ok(picture);
+        }
+    }
+    read_upright(source).map(|picture| (picture, true))
+}
+
+/// Reads a JPEG at 1/2, 1/4 or 1/8 of its size, the smallest that is still
+/// at least `want` on its long side. None when this reader cannot, and the
+/// whole picture is read instead.
+fn read_jpeg_at(source: &Path, want: u32) -> Option<(image::DynamicImage, bool)> {
+    let file = fs::File::open(source).ok()?;
+    let mut decoder = jpeg_decoder::Decoder::new(std::io::BufReader::new(file));
+    decoder.read_info().ok()?;
+    let info = decoder.info()?;
+    let (width, height) = (info.width, info.height);
+    let longest = width.max(height) as u32;
+    let (mut w, mut h) = (width, height);
+    if longest > want {
+        let part = want as f64 / longest as f64;
+        let ask = |side: u16| ((side as f64 * part).ceil() as u16).max(1);
+        (w, h) = decoder.scale(ask(width), ask(height)).ok()?;
+    }
+    let pixels = decoder.decode().ok()?;
+    let format = decoder.info()?.pixel_format;
+    let mut picture = match format {
+        jpeg_decoder::PixelFormat::RGB24 => {
+            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(w as u32, h as u32, pixels)?)
+        }
+        jpeg_decoder::PixelFormat::L8 => {
+            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w as u32, h as u32, pixels)?)
+        }
+        _ => return None,
+    };
+    let turn = decoder
+        .exif_data()
+        .and_then(picture_dates::orientation_in_tiff)
+        .and_then(image::metadata::Orientation::from_exif)
+        .unwrap_or(image::metadata::Orientation::NoTransforms);
+    picture.apply_orientation(turn);
+    Some((picture, (w, h) == (width, height)))
 }
 
 /// Reads the picture and turns it the way the camera says it was held.
@@ -1177,8 +1379,9 @@ mod tests {
         let opened = open_sized_in(&media, "Pictures/a.png", Size::Small).unwrap();
         assert_eq!(opened.kind, "image/jpeg");
         assert!(opened.len > 0);
+        // A picture read whole keeps all three copies from that one read.
         let saved = fs::read_dir(disk.join(".keel").join("previews")).unwrap().count();
-        assert_eq!(saved, 2);
+        assert_eq!(saved, 3);
         assert!(!media.join(".keel").exists());
         let again = open_sized_in(&media, "Pictures/a.png", Size::Screen).unwrap();
         assert_eq!(again.kind, "image/jpeg");
@@ -1220,7 +1423,7 @@ mod tests {
             open_sized_in(&media, &format!("Pictures/Trip/{name}.jpg"), Size::Small).unwrap();
         }
         let previews = disk.join(".keel").join("previews");
-        assert_eq!(fs::read_dir(&previews).unwrap().count(), 6);
+        assert_eq!(fs::read_dir(&previews).unwrap().count(), 9);
         // A picture moved away leaves its copies behind.
         fs::remove_file(media.join("Pictures").join("Trip").join("c.jpg")).unwrap();
         let half = previews.join("leftover.part");
@@ -1228,20 +1431,22 @@ mod tests {
         let old = SystemTime::now() - Duration::from_secs(3 * 24 * 60 * 60);
         fs::File::options().write(true).open(&half).unwrap().set_modified(old).unwrap();
         let tidied = tidy_in(&media, u64::MAX, u64::MAX);
-        assert_eq!(tidied.removed, 3);
-        assert_eq!(fs::read_dir(&previews).unwrap().count(), 4);
+        assert_eq!(tidied.removed, 4);
+        assert_eq!(fs::read_dir(&previews).unwrap().count(), 6);
         // Over the limit, the least recently opened go first.
         let a_small = super::preview_file(&media, "Pictures/Trip/a.jpg", Size::Small);
         let a_screen = super::preview_file(&media, "Pictures/Trip/a.jpg", Size::Screen);
-        for path in [&a_small, &a_screen] {
+        let a_grid = super::preview_file(&media, "Pictures/Trip/a.jpg", Size::Grid);
+        for path in [&a_small, &a_screen, &a_grid] {
             fs::File::options().write(true).open(path).unwrap().set_modified(old).unwrap();
         }
         let b_small = super::preview_file(&media, "Pictures/Trip/b.jpg", Size::Small);
         let b_screen = super::preview_file(&media, "Pictures/Trip/b.jpg", Size::Screen);
-        let b_total = fs::metadata(&b_small).unwrap().len() + fs::metadata(&b_screen).unwrap().len();
+        let b_grid = super::preview_file(&media, "Pictures/Trip/b.jpg", Size::Grid);
+        let b_total = [&b_small, &b_screen, &b_grid].iter().map(|path| fs::metadata(path).unwrap().len()).sum();
         let tidied = tidy_in(&media, b_total, b_total);
-        assert_eq!(tidied.removed, 2);
-        assert!(!a_small.exists() && !a_screen.exists());
+        assert_eq!(tidied.removed, 3);
+        assert!(!a_small.exists() && !a_screen.exists() && !a_grid.exists());
         assert!(b_small.exists() && b_screen.exists());
         // With the library missing, nothing counts as left over.
         fs::remove_dir_all(&media).unwrap();
@@ -1325,8 +1530,12 @@ mod tests {
             (
                 Job {
                     source: name.into(),
-                    small: name.into(),
-                    screen: name.into(),
+                    copies: super::Copies {
+                        grid: name.into(),
+                        small: name.into(),
+                        screen: name.into(),
+                    },
+                    size: if open { Size::Screen } else { Size::Grid },
                     open,
                     reply,
                 },
@@ -1344,6 +1553,41 @@ mod tests {
         assert_eq!(next(&mut jobs), std::path::PathBuf::from("new"));
         assert_eq!(next(&mut jobs), std::path::PathBuf::from("old"));
         assert!(take_next(&mut jobs).is_none());
+    }
+
+    #[test]
+    fn a_big_jpeg_is_read_only_as_large_as_the_copy_needs() {
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let disk = std::env::temp_dir().join(format!("keel-scaled-{stamp}"));
+        let media = disk.join("Media");
+        fs::create_dir_all(media.join("Pictures")).unwrap();
+        image::RgbImage::from_pixel(4000, 3000, image::Rgb([30, 60, 90]))
+            .save(media.join("Pictures").join("big.jpg"))
+            .unwrap();
+        let (picture, whole) = super::read_jpeg_at(&media.join("Pictures").join("big.jpg"), 480).unwrap();
+        assert_eq!((picture.width(), picture.height(), whole), (500, 375, false));
+        // The grid needs only the small read; the screen copy waits for an open picture.
+        open_sized_in(&media, "Pictures/big.jpg", Size::Grid).unwrap();
+        let copy = |size| super::preview_file(&media, "Pictures/big.jpg", size);
+        assert!(copy(Size::Grid).exists() && copy(Size::Small).exists() && !copy(Size::Screen).exists());
+        let grid = image::open(copy(Size::Grid)).unwrap();
+        assert_eq!((grid.width(), grid.height()), (240, 180));
+        open_sized_in(&media, "Pictures/big.jpg", Size::Screen).unwrap();
+        let screen = image::open(copy(Size::Screen)).unwrap();
+        assert_eq!((screen.width(), screen.height()), (1920, 1440));
+        // A grid copy missing beside an existing small copy is made from it.
+        fs::remove_file(copy(Size::Grid)).unwrap();
+        open_sized_in(&media, "Pictures/big.jpg", Size::Grid).unwrap();
+        assert!(copy(Size::Grid).exists());
+        let _ = fs::remove_dir_all(&disk);
+    }
+
+    #[test]
+    fn the_camera_turn_is_read_from_a_jpeg() {
+        let mut tiff = b"MM\0\x2a\0\0\0\x08\0\x01".to_vec();
+        tiff.extend([0x01, 0x12, 0x00, 0x03, 0, 0, 0, 1, 0x00, 0x06, 0, 0]);
+        assert_eq!(crate::picture_dates::orientation_in_tiff(&tiff), Some(6));
+        assert_eq!(crate::picture_dates::orientation_in_tiff(b"nope"), None);
     }
 
     #[test]
