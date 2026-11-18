@@ -68,6 +68,9 @@ pub fn start() -> Result<Status, String> {
         return Err("Photos install on the Keel computer.".into());
     }
     crate::names::prepared()?;
+    if !view().ready {
+        crate::memory::room_for("Photos", crate::memory::NEEDS_PHOTOS)?;
+    }
     let owned = crate::owned::load().ok_or("Type the name you own, then press Open.")?;
     let address = crate::owned::photos_address(&owned)?;
     if OPENING

@@ -73,6 +73,9 @@ pub fn start() -> Result<Status, String> {
         return Err("Mail installs on the Keel computer.".into());
     }
     crate::names::prepared()?;
+    if !view().ready {
+        crate::memory::room_for("Mail", crate::memory::NEEDS_MAIL)?;
+    }
     let owned = crate::owned::load().ok_or("Type the name you own, then press Open.")?;
     let address = crate::owned::app_address(&owned, "mail")?;
     if OPENING

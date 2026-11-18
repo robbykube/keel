@@ -76,6 +76,9 @@ pub fn start(close: bool) -> Result<Status, String> {
     }
     if !close {
         crate::names::prepared()?;
+        if !view().ready {
+            crate::memory::room_for("Passwords", crate::memory::NEEDS_PASSWORDS)?;
+        }
     }
     let owned = crate::owned::load().ok_or("Type the name you own, then press Open.")?;
     let address = password_address(&owned)?;

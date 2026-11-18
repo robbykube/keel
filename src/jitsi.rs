@@ -79,6 +79,9 @@ pub fn start() -> Result<Status, String> {
         return Err("Video installs on the Keel computer.".into());
     }
     crate::names::prepared()?;
+    if !view().ready {
+        crate::memory::room_for("Video", crate::memory::NEEDS_VIDEO)?;
+    }
     let owned = crate::owned::load().ok_or("Type the name you own, then press Open.")?;
     let address = meeting_address(&owned)?;
     if OPENING

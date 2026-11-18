@@ -14,6 +14,56 @@ pub fn guard() -> Result<(), String> {
     crate::storage::host("exec /bin/bash -s", &[], Some(script()))
 }
 
+/// About how much memory each app takes once it runs, in MB.
+pub const NEEDS_PASSWORDS: u64 = 80;
+pub const NEEDS_PAPERS: u64 = 250;
+pub const NEEDS_MAIL: u64 = 700;
+pub const NEEDS_VIDEO: u64 = 900;
+pub const NEEDS_PHOTOS: u64 = 1500;
+
+/// Whether `app` fits in the memory free now, said plainly when it does
+/// not, before anything is downloaded or started. Compressed memory counts
+/// at half, since it holds about twice what it takes.
+pub fn room_for(app: &str, needs_mb: u64) -> Result<(), String> {
+    if !cfg!(target_os = "linux") {
+        return Ok(());
+    }
+    let info = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
+    room_in(&info, app, needs_mb)
+}
+
+fn room_in(meminfo: &str, app: &str, needs_mb: u64) -> Result<(), String> {
+    let kb = |key: &str| -> u64 {
+        meminfo
+            .lines()
+            .find(|line| line.starts_with(key))
+            .and_then(|line| line.split_whitespace().nth(1))
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(0)
+    };
+    let total = kb("MemTotal:") / 1024;
+    if total == 0 {
+        return Ok(());
+    }
+    let free = kb("MemAvailable:") / 1024 + kb("SwapFree:") / 1024 / 2;
+    let whole = total + kb("SwapTotal:") / 1024 / 2;
+    let gb = |mb: u64| format!("{:.1} GB", mb as f64 / 1024.0);
+    if needs_mb > whole {
+        return Err(format!(
+            "{app} needs about {} of memory, and this computer has {} in all. {app} needs a computer with more memory.",
+            gb(needs_mb),
+            gb(total)
+        ));
+    }
+    if needs_mb > free {
+        return Err(format!(
+            "{app} needs about {needs_mb} MB of free memory, and this computer has {free} MB free ({} in all). Close another app on Apps first, then press Open again.",
+            gb(total)
+        ));
+    }
+    Ok(())
+}
+
 const ALIVE: &str = "/var/lib/keel/alive";
 pub const LAST_STOP: &str = "/var/lib/keel/last-stop";
 
@@ -84,6 +134,20 @@ fn script() -> &'static str {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn an_app_that_does_not_fit_is_said_before_it_starts() {
+        let pi = "MemTotal:  914336 kB\nMemAvailable: 300000 kB\nSwapTotal: 457164 kB\nSwapFree: 400000 kB\n";
+        // 292 MB free + 195 MB of compressed memory at half.
+        assert!(super::room_in(pi, "Passwords", super::NEEDS_PASSWORDS).is_ok());
+        let mail = super::room_in(pi, "Mail", super::NEEDS_MAIL).unwrap_err();
+        assert!(mail.contains("Close another app"), "{mail}");
+        assert!(mail.contains("0.9 GB in all"), "{mail}");
+        let photos = super::room_in(pi, "Photos", super::NEEDS_PHOTOS).unwrap_err();
+        assert!(photos.contains("needs a computer with more memory"), "{photos}");
+        let big = "MemTotal: 8000000 kB\nMemAvailable: 6000000 kB\nSwapTotal: 0 kB\nSwapFree: 0 kB\n";
+        assert!(super::room_in(big, "Photos", super::NEEDS_PHOTOS).is_ok());
+    }
+
+    #[test]
     fn a_stop_without_shutting_down_is_noticed() {
         let froze = "Nov 17 kernel: usb 1-1.3: reset high-speed USB device\nkeel: picture copy 0.2 s\n";
         let clean = "Stopped target Basic System.\nsystemd-journald[201]: Journal stopped\n";
@@ -111,7 +175,8 @@ mod tests {
         let script = super::script();
         assert!(script.contains("RuntimeWatchdogSec=15s"));
         assert!(script.contains("machine.slice.d/90-keel.conf"));
-        assert!(script.contains("MemoryMax=65%"));
+        assert!(script.contains("MemoryMax=80%"));
+        assert!(!script.contains("MemoryHigh=55%"), "a soft limit slows apps past their wait");
         assert!(script.contains("keel-memory-watch.service"));
         assert!(script.contains("jam_for=6"));
         // Names and the front door are never chosen to stop.

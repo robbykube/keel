@@ -68,6 +68,9 @@ pub fn start() -> Result<Status, String> {
         return Err("Papers install on the Keel computer.".into());
     }
     crate::names::prepared()?;
+    if !view().ready {
+        crate::memory::room_for("Papers", crate::memory::NEEDS_PAPERS)?;
+    }
     let owned = crate::owned::load().ok_or("Type the name you own, then press Open.")?;
     let address = crate::owned::app_address(&owned, "papers")?;
     if OPENING

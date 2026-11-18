@@ -105,12 +105,12 @@ if [ "$changed" = 1 ]; then
 fi
 [ "$journal_before" = 1 ] && changed=1
 
-# Apps (every container) share one part of memory, so Photos or Video
-# slows down or stops on its own instead of locking up the whole computer.
+# Apps (every container) share a ceiling, so the largest one is stopped
+# instead of the whole computer locking up. No soft limit: it slowed apps
+# until their pages did not answer while starting (0.1.64 to 0.1.74).
 put /etc/systemd/system/machine.slice.d/90-keel.conf 0644 <<'EOF'
 [Slice]
-MemoryHigh=55%
-MemoryMax=65%
+MemoryMax=80%
 EOF
 
 # When memory stays jammed for three minutes, stop the largest app. Restart
@@ -281,7 +281,7 @@ systemctl enable keel-zram.service >/dev/null 2>&1 || true
 systemctl start keel-zram.service >/dev/null 2>&1 || true
 systemctl enable keel-memory-watch.service >/dev/null 2>&1 || true
 systemctl restart keel-memory-watch.service >/dev/null 2>&1 || true
-systemctl set-property --runtime machine.slice MemoryHigh=55% MemoryMax=65% >/dev/null 2>&1 || true
+systemctl set-property --runtime machine.slice MemoryHigh=infinity MemoryMax=80% >/dev/null 2>&1 || true
 
 # Apply to what is already running, without restarting it.
 if systemctl cat keel-kiosk.service >/dev/null 2>&1; then
