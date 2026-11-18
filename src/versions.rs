@@ -31,6 +31,15 @@ const APPS: &[App] = &[App {
     full_mb: crate::memory::NEEDS_VIDEO,
     light_is: "Calls in the browser, recording included. One small program.",
     full_is: "Jitsi Meet, with its phone apps. Four programs, two of them Java.",
+}, App {
+    id: "mail",
+    title: "Mail",
+    light: "SnappyMail",
+    full: "Thunderbird",
+    light_mb: crate::memory::NEEDS_MAIL_LIGHT,
+    full_mb: crate::memory::NEEDS_MAIL,
+    light_is: "A web mail page for Gmail, Yahoo, iCloud and AOL. The mail stays at your provider.",
+    full_is: "Thunderbird in the browser, Outlook and Hotmail included. Mail you move into it stays here.",
 }];
 
 /// Where Keel keeps Galène, from the Keel package.
@@ -85,6 +94,8 @@ fn suggest(total_mb: u64) -> &'static str {
 fn light_ready(app: &str) -> bool {
     match app {
         "video" => Path::new(GALENE).is_file() || std::env::var_os("KEEL_GALENE").is_some(),
+        // A downloaded program, like the full one: ready on any computer.
+        "mail" => true,
         _ => false,
     }
 }
@@ -143,11 +154,18 @@ pub fn choose(app: &str, version: &str) -> Result<String, String> {
         return Err(format!("{} comes with the next Keel update.", known.light));
     }
     let before = light(app);
-    if app == "video" && before != (version == "light") {
-        if before {
-            let _ = crate::galene::close();
-        } else {
-            let _ = crate::jitsi::close();
+    if before != (version == "light") {
+        match app {
+            "video" if before => drop(crate::galene::close()),
+            "video" => drop(crate::jitsi::close()),
+            // Both are keel-mail: stop it, and the card waits for Open.
+            "mail" => {
+                if cfg!(target_os = "linux") {
+                    let _ = crate::storage::host("exec /bin/bash -s", &[], Some("podman rm -f keel-mail >/dev/null 2>&1 || true\n"));
+                }
+                let _ = std::fs::remove_file("/run/keel/mail.json");
+            }
+            _ => {}
         }
     }
     let mut all = saved();

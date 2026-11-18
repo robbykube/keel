@@ -18,6 +18,7 @@ pub fn guard() -> Result<(), String> {
 pub const NEEDS_PASSWORDS: u64 = 80;
 pub const NEEDS_PAPERS: u64 = 250;
 pub const NEEDS_MAIL: u64 = 700;
+pub const NEEDS_MAIL_LIGHT: u64 = 120;
 pub const NEEDS_VIDEO: u64 = 900;
 pub const NEEDS_PHOTOS: u64 = 1500;
 

@@ -73,8 +73,9 @@ pub fn start() -> Result<Status, String> {
         return Err("Mail installs on the Keel computer.".into());
     }
     crate::names::prepared()?;
+    let light = crate::versions::light("mail");
     if !view().ready {
-        crate::memory::room_for("Mail", crate::memory::NEEDS_MAIL)?;
+        crate::memory::room_for("Mail", if light { crate::memory::NEEDS_MAIL_LIGHT } else { crate::memory::NEEDS_MAIL })?;
     }
     let owned = crate::owned::load().ok_or("Type the name you own, then press Open.")?;
     let address = crate::owned::app_address(&owned, "mail")?;
@@ -85,7 +86,8 @@ pub fn start() -> Result<Status, String> {
         return Ok(view());
     }
     write_progress("running", 8, "Opening Mail. This can take a while.", "", false, "");
-    let script = setup_script(&address.trim_start_matches("https://"));
+    let host = address.trim_start_matches("https://").to_string();
+    let script = if light { light_setup_script(&host) } else { setup_script(&host) };
     std::thread::spawn(move || {
         write_progress("running", 36, "Opening Mail.", "", false, "");
         let result = crate::storage::host_text("exec /bin/bash -s", &[], Some(&script));
@@ -97,7 +99,7 @@ pub fn start() -> Result<Status, String> {
                         Ok(waiting) => write_progress(
                             "done",
                             100,
-                            &ready_message(&address, &password, waiting),
+                            &if light { light_message(&address, &password, waiting) } else { ready_message(&address, &password, waiting) },
                             &address,
                             true,
                             &password,
@@ -147,8 +149,22 @@ fn message_for(address: &str, password: &str, waiting: bool, house: Option<&str>
     )
 }
 
+/// Light Mail: SnappyMail. People sign in with their own email address; the
+/// password shown is for its admin page, where another provider is added.
+fn light_message(address: &str, admin: &str, waiting: bool) -> String {
+    let lock = crate::names::lock_note(waiting);
+    let admin_line = if admin == "none" {
+        String::new()
+    } else {
+        format!(" For another provider, open {address}/?admin, sign in as admin with the password {admin}, and add it under Domains.")
+    };
+    format!(
+        "Mail is at {address}. Sign in with your email address and its password. Gmail, Yahoo, iCloud and AOL work straight away; they want an app password, made on the account's security page. Outlook and Hotmail need the full Mail in Settings, because Microsoft accepts only its own sign-in.{admin_line}{lock}"
+    )
+}
+
 fn idle() -> Status {
-    let installed = Path::new(INSTALLED).is_file();
+    let installed = Path::new(INSTALLED).is_file() || Path::new("/var/lib/snappymail/installed").is_file();
     Status {
         ready: false,
         address: String::new(),
@@ -191,9 +207,31 @@ pub fn setup_script(host: &str) -> String {
     include_str!("mail-setup.sh").replace("__KEEL_HOST__", host)
 }
 
+pub fn light_setup_script(host: &str) -> String {
+    include_str!("mail-light-setup.sh").replace("__KEEL_HOST__", host)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{page_password, setup_script};
+
+    #[test]
+    fn light_mail_is_snappymail_with_the_providers_written() {
+        let script = super::light_setup_script("mail.klaingar.com");
+        assert!(script.contains("host='mail.klaingar.com'"));
+        assert!(script.contains("image=docker.io/djmaze/snappymail:v2.38.2"));
+        assert!(script.contains("-p 127.0.0.1:3000:8888"));
+        assert!(script.contains("--memory 256m"));
+        assert!(script.contains("provider imap.gmail.com 993 1 smtp.gmail.com 465 1 gmail.com googlemail.com"));
+        assert!(!script.contains("outlook.office365.com"), "Outlook takes only Microsoft's own sign-in");
+        assert!(super::light_message("https://m", "x", false).contains("Outlook and Hotmail need the full Mail"));
+        assert!(script.contains("printf 'ready|%s\\n' \"$adminpass\""));
+        assert!(!script.contains("__KEEL_"));
+        let said = super::light_message("https://mail.klaingar.com", "abc123", false);
+        assert!(said.contains("Sign in with your email address"));
+        assert!(said.contains("https://mail.klaingar.com/?admin"));
+        assert!(!super::light_message("https://mail.klaingar.com", "none", false).contains("?admin"));
+    }
 
     #[test]
     fn the_result_line_is_the_page_password() {
