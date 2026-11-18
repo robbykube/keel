@@ -25,6 +25,13 @@ fi
 df -Pk /run / 2>/dev/null | awk 'NR==1 || $6=="/run" || $6=="/" { print }'
 # What takes the temporary space, largest last.
 du -xsk /run/* 2>/dev/null | sort -n | tail -n 5 || true
+show "Video"
+podman ps -a --filter name=keel-jitsi --format '{{.Names}} {{.Status}}' 2>/dev/null || true
+if [ -f /var/lib/jitsi/web.log ]; then
+  tail -n 30 /var/lib/jitsi/web.log || true
+elif podman container exists keel-jitsi-web 2>/dev/null; then
+  podman logs --tail 30 keel-jitsi-web 2>&1 | tail -n 30 || true
+fi
 # How long this start took, and what took longest.
 show "Start"
 systemd-analyze 2>/dev/null | head -n 2 || true

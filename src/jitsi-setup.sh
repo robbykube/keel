@@ -134,7 +134,7 @@ podman network exists keel-jitsi >/dev/null 2>&1 || podman network create keel-j
 podman rm -f keel-jitsi-web keel-jitsi-jvb keel-jitsi-jicofo keel-jitsi-prosody >"$log" 2>&1 || true
 podman run -d --name keel-jitsi-prosody --hostname prosody \
   --network keel-jitsi --network-alias xmpp.meet.jitsi --network-alias prosody \
-  --env-file "$cfg/meet.env" --read-only \
+  --env-file "$cfg/meet.env" \
   --tmpfs /run:rw,exec,nosuid,size=32m --tmpfs /tmp:rw,noexec,nosuid,size=16m \
   -v "$cfg/prosody/config:/config" \
   -v "$cfg/prosody/prosody-plugins-custom:/prosody-plugins-custom" \
@@ -143,14 +143,14 @@ podman run -d --name keel-jitsi-prosody --hostname prosody \
   ghcr.io/jitsi/prosody:__KEEL_TAG__ >"$log" 2>&1 || fail "Keel could not start Video. Try Open again."
 podman run -d --name keel-jitsi-jicofo --hostname jicofo \
   --network keel-jitsi --network-alias jicofo \
-  --env-file "$cfg/meet.env" --read-only \
+  --env-file "$cfg/meet.env" \
   --tmpfs /run:rw,exec,nosuid,size=32m --tmpfs /tmp:rw,noexec,nosuid,size=16m \
   -v "$cfg/jicofo:/config" \
   -v "$cfg/jicofo/custom-ca:/usr/local/share/ca-certificates:ro" \
   ghcr.io/jitsi/jicofo:__KEEL_TAG__ >"$log" 2>&1 || fail "Keel could not start Video. Try Open again."
 podman run -d --name keel-jitsi-jvb --hostname jvb \
   --network keel-jitsi --network-alias jvb \
-  --env-file "$cfg/meet.env" --read-only \
+  --env-file "$cfg/meet.env" \
   -p 10000:10000/udp \
   --tmpfs /run:rw,exec,nosuid,size=32m --tmpfs /tmp:rw,noexec,nosuid,size=16m \
   -v "$cfg/jvb:/config" \
@@ -158,7 +158,7 @@ podman run -d --name keel-jitsi-jvb --hostname jvb \
   ghcr.io/jitsi/jvb:__KEEL_TAG__ >"$log" 2>&1 || fail "Keel could not start Video. Try Open again."
 podman run -d --name keel-jitsi-web --hostname web \
   --network keel-jitsi --network-alias web \
-  --env-file "$cfg/meet.env" --read-only \
+  --env-file "$cfg/meet.env" \
   -p 127.0.0.1:8080:80 \
   --tmpfs /run:rw,exec,nosuid,size=32m --tmpfs /tmp:rw,noexec,nosuid,size=16m \
   -v "$cfg/web:/config" \
@@ -178,7 +178,15 @@ while [ "$i" -lt 40 ]; do
   i=$((i + 1))
   sleep 2
 done
-[ "$up" = "1" ] || fail "Video started, but the meeting page did not answer. Try Open again."
+if [ "$up" != "1" ]; then
+  # Say which program stopped, and keep its last words for Logs.
+  podman logs --tail 80 keel-jitsi-web > "$cfg/web.log" 2>&1 || true
+  state=$(podman inspect -f '{{.State.Status}}' keel-jitsi-web 2>/dev/null || echo missing)
+  case "$state" in
+    running) fail "Video started, but the meeting page did not answer yet. Logs shows its last words under Video. Try Open again." ;;
+    *) fail "The meeting page stopped while starting. Logs shows why under Video. Try Open again." ;;
+  esac
+fi
 join_door
 printf '%s\n' "$want" > "$cfg/stamp"
 touch "$cfg/installed"

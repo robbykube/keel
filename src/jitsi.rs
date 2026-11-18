@@ -336,6 +336,9 @@ mod tests {
         assert!(script.contains("DISABLE_HTTPS=1"));
         assert!(script.contains("JVB_ADVERTISE_IPS=$house"));
         assert!(script.contains("-p 127.0.0.1:8080:80"));
+        // The meeting programs need a writable system folder, as upstream runs them.
+        assert!(!script.contains("--read-only"));
+        assert!(script.contains("podman logs --tail 80 keel-jitsi-web"));
         assert!(script.contains("-p 10000:10000/udp"));
         assert!(!script.contains("8443"));
         assert!(!script.contains("tailscale cert"));
