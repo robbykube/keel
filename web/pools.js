@@ -32,7 +32,7 @@ async function load() {
       (p) =>
         `<tr><td><code>${p.name}</code></td><td>${where(p.kind)}</td><td>${p.source || "—"}</td></tr>`
     )
-    .join("") || `<tr><td colspan="3">No disks chosen yet. Add them above.</td></tr>`;
+    .join("") || `<tr><td colspan="3">No files from another computer yet.</td></tr>`;
   await renderRecents();
 }
 

@@ -1,5 +1,10 @@
 const $ = (id) => document.getElementById(id);
 
+// The same line icons as the sidebar, so a card and its link look alike.
+function homeIcon(name) {
+  return (typeof NAV_ICONS !== "undefined" && NAV_ICONS[name]) || "";
+}
+
 function bytes(n) {
   if (!n) return "—";
   const u = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
@@ -87,7 +92,7 @@ function filesCard(share) {
        <a class="button push" href="/shares.html">Open Files</a>`;
   return `<article class="card home-card">
     <div class="home-card-head">
-      <h2 class="home-title"><span class="home-icon" aria-hidden="true">⌁</span><span>Files</span></h2>
+      <h2 class="home-title"><span class="home-icon" aria-hidden="true">${homeIcon("Files")}</span><span>Files</span></h2>
       <span class="pill ${ready ? "ok" : ""}">${ready ? "Ready" : "Not set up"}</span>
     </div>
     <p>Open the family folder from any computer in the house.</p>
@@ -104,7 +109,7 @@ function awayCard(overlay, owner) {
   const pill = ready ? "Ready" : state === "unavailable" ? "Not on this computer" : "Not set up";
   return `<article class="card home-card">
     <div class="home-card-head">
-      <h2 class="home-title"><span class="home-icon" aria-hidden="true">◎</span><span>Away</span></h2>
+      <h2 class="home-title"><span class="home-icon" aria-hidden="true">${homeIcon("Away")}</span><span>Away</span></h2>
       <span class="pill ${ready ? "ok" : ""}">${escapeHtml(pill)}</span>
     </div>
     <p>Open the same files when you are not at home. Only the phones and laptops you trust can reach them.</p>
@@ -147,7 +152,7 @@ function disksCard(storage, failing) {
     : `<p>No disks yet.</p>`;
   return `<article class="card home-card">
     <div class="home-card-head">
-      <h2 class="home-title"><span class="home-icon" aria-hidden="true">▣</span><span>Disks</span></h2>
+      <h2 class="home-title"><span class="home-icon" aria-hidden="true">${homeIcon("Disks")}</span><span>Disks</span></h2>
       <span class="pill ${failing ? "bad" : ""}">${failing ? "Needs a look" : (disks.length === 1 ? "1 disk" : `${disks.length} disks`)}</span>
     </div>
     ${headline}

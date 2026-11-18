@@ -74,6 +74,9 @@
       <div class="work-col">
         <div class="pane">
           <h2>On another computer</h2>
+          <p class="meta">Files kept on another computer, such as a Proxmox or TrueNAS box, can show here too. Nothing there is changed.</p>
+          <details class="why another" id="another">
+          <summary>Use a disk on another computer</summary>
           <form class="form look" id="lookform">
             <label class="wide">Look around (type a name or number — not a search of every machine)
               <input name="host" id="host" placeholder="name or number of that computer" />
@@ -117,9 +120,10 @@
           <label class="wide">Address of that folder
             <input name="source" placeholder="ask the other machine; paste what it gives you" />
           </label>
-          <button type="submit">Add pool</button>
+          <button type="submit">Add these files</button>
         </form>
         <p class="meta" id="status"></p>
+          </details>
         <div class="table-wrap scroll">
           <table>
             <thead>

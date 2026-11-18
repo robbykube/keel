@@ -25,6 +25,8 @@ function showConnect(status) {
   $("github-connect-button").hidden = connected || pending;
   $("github-disconnect-button").hidden = !connected || pending;
   $("github-device").hidden = !pending;
+  // Until GitHub is connected, the box that connects it stays open.
+  if (!connected || pending) $("github-why").open = true;
   if (pending) {
     $("github-user-code").textContent = status.user_code;
     const link = $("github-device-link");

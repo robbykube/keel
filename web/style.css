@@ -1332,6 +1332,7 @@ button:focus-visible, a.button:focus-visible, input:focus-visible, select:focus-
 .home-card-head { align-items: center; }
 .home-title { display: inline-flex; align-items: center; gap: 12px; font-size: 19px; font-weight: 620; letter-spacing: -.015em; }
 .home-icon { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; color: var(--accent); background: var(--accent-dim); font-size: 20px; line-height: 1; }
+.home-icon .nav-icon { width: 20px; height: 20px; }
 .pill { padding: 6px 10px; background: var(--panel-2); border: 1px solid transparent; font-size: 12px; letter-spacing: .02em; }
 .pill.ok { color: var(--success); background: var(--success-dim); }
 .pill.ok::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 6px 1px 0; border-radius: 50%; background: currentColor; }
@@ -1340,6 +1341,21 @@ button:focus-visible, a.button:focus-visible, input:focus-visible, select:focus-
 .opp h3 .pill { margin-right: var(--space-2); vertical-align: 2px; }
 /* Home: the app choices, then their buttons in one row underneath. */
 #apps-choice-form { align-items: start; }
+/* Disks: the other-computer forms open in full, not in a short scroll box. */
+#another[open] { max-height: none; overflow: visible; }
+#another .form { margin-top: var(--space-3); }
+/* Settings: each part on its own card. */
+.settings-card {
+  margin-bottom: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.settings-card > h2 { margin-top: 0; }
+.settings-card h3 { margin: var(--space-4) 0 var(--space-2); font-size: var(--text-lg); font-weight: 600; color: var(--text); }
+.settings-card .why { margin: var(--space-3) 0 0; }
+.settings-card .why[open] { max-height: none; overflow: visible; }
 #apps-choice-form > * { grid-column: 1 / -1; }
 #apps-choice-form .actions button { grid-column: auto; }
 .home-card p:not(.display):not(.card-note) { line-height: 1.5; }
@@ -1545,4 +1561,23 @@ html[data-theme="light"] .home-card:hover { box-shadow: 0 20px 38px rgba(93, 78,
 @media (max-height: 520px) {
   h1 { font-size: 26px; }
   .photo-viewer { gap: var(--space-2); padding: var(--space-2) var(--space-3); }
+}
+
+/* The Pi's 7-inch panel is 800 x 480. The logo, the tabs, More and Power share
+   one row, so the page keeps most of the height. */
+@media (max-width: 960px) and (max-height: 520px) {
+  aside {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "brand nav more power";
+    gap: 8px;
+    padding: 6px 10px;
+  }
+  nav > a {
+    flex-direction: row;
+    gap: 6px;
+    min-height: 44px;
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  nav > a.active { box-shadow: inset 0 -2px 0 var(--accent); }
 }

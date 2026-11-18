@@ -276,7 +276,7 @@ pub fn view(mut disks: Vec<Disk>) -> StorageView {
             disk.holds = jobs.join(". ");
             disk.can_use = false;
         } else if disk.role.is_none() && !disk.folders.is_empty() {
-            disk.holds = format!("Folders: {}.", disk.folders.join(", "));
+            disk.holds = folder_summary(&disk.folders);
         }
     }
     let roles = ROLES
@@ -1178,6 +1178,15 @@ fi
 exit 0
 "#;
 
+/// What a disk holds, in a line: a few of its folders and how many more.
+fn folder_summary(folders: &[String]) -> String {
+    const SHOWN: usize = 4;
+    if folders.len() <= SHOWN + 1 {
+        return format!("Folders: {}.", folders.join(", "));
+    }
+    format!("Folders: {}, and {} more.", folders[..SHOWN].join(", "), folders.len() - SHOWN)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1224,6 +1233,9 @@ mod tests {
         let empty = describe(Disk { name: "sdc".into(), path: "/dev/sdc".into(), kind: "disk".into(), empty: true, ..Disk::default() });
         assert!(empty.can_use);
         assert_eq!(empty.holds, "Empty");
+        let names: Vec<String> = ["Documents", "Media", "Work", "Backups", "Old", "Scans"].iter().map(|n| n.to_string()).collect();
+        assert_eq!(super::folder_summary(&names), "Folders: Documents, Media, Work, Backups, and 2 more.");
+        assert_eq!(super::folder_summary(&names[..3]), "Folders: Documents, Media, Work.");
         let old = describe(Disk { name: "sdd".into(), path: "/dev/sdd".into(), kind: "disk".into(), fstype: "ntfs".into(), ..Disk::default() });
         assert!(old.can_use);
         let waiting = describe(Disk { name: "sde".into(), path: "/dev/sde".into(), kind: "disk".into(), label: "keel-files".into(), ..Disk::default() });
