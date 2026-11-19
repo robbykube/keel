@@ -1647,3 +1647,20 @@ body.open-app iframe {
   letter-spacing: 0.12em;
   margin: 8px 0;
 }
+
+/* The sidebar on a computer screen. Its links never squeeze into each other:
+   the list keeps its full height, and a short window scrolls the sidebar.
+   Guide, Logs and Settings sit at the bottom when there is room. */
+@media (min-width: 961px) {
+  aside { overflow-y: auto; scrollbar-width: thin; }
+  nav { flex: 0 0 auto; }
+  .sidebar-support { margin-top: auto; }
+}
+/* A laptop-height window: tighter rows, so everything usually still fits. */
+@media (min-width: 961px) and (max-height: 860px) {
+  aside { gap: 10px; padding-top: 16px; padding-bottom: 12px; }
+  nav, .sidebar-support, .sidebar-utility, .nav-group { gap: 2px; }
+  nav a, .sidebar-support a, .sidebar-utility a, .power-toggle { min-height: 34px; padding: 6px 12px; }
+  .nav-group, .sidebar-support, .sidebar-utility { padding-top: 6px; }
+  .aside-foot { padding-top: 8px; }
+}

@@ -51,6 +51,7 @@ Video: the call size and Close are in v0.1.61. A call holds as many people as th
 
 ## Recent
 
+- **v0.1.85 (2026-11-19):** The sidebar on a computer screen (wider than 960 px) no longer lets links run into the next section. With Bluetooth added, nav (flex 1 1 auto, min-height 0) shrank below its links in a window under about 900 px tall, and its links painted over Guide, Logs and Settings. Now nav keeps its height (flex 0 0 auto), the aside scrolls when the window is shorter (overflow-y auto), and Guide sits at the bottom (margin-top auto). Under 860 px tall the rows are 34 px instead of 42. The Pi panel (800 x 480) is unchanged. Checked in Chromium at 1366 x 768, 1280 x 620 and 800 x 480.
 - **v0.1.84 (2026-11-19):** Bluetooth page under This computer. Look finds keyboards and headphones, Pair connects one, and a code is confirmed with Yes, typed on the keyboard, or typed on this screen. Disconnect and Forget are on the same page.
 - **v0.1.83 (2026-11-19):** The extras that were left off (printing, Bluetooth, printer discovery, modems, cron, sensors, Wi-Fi) still do not start with the computer. Keel starts each one, without waiting, once it is up. A Pi without Bluetooth fetches bluez and bluez-firmware after Keel is up, then starts it. No pairing page yet.
 - **v0.1.82 (2026-11-19):** On the Keel screen, a link that leaves Keel opens under a bar with Back and Full screen. The bar is part of the full-screen page, and the page underneath cannot cover it. Back returns to the Keel page the link was on. A phone still follows the link itself.
