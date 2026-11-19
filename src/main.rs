@@ -409,6 +409,10 @@ async fn main() {
         )
         .route("/api/devices", get(devices_view).layer(axum::middleware::from_fn(auth::require_admin)))
         .route(
+            "/api/devices/mark",
+            post(devices_mark).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
             "/api/devices/look",
             post(devices_look).layer(axum::middleware::from_fn(auth::require_admin)),
         )
@@ -866,6 +870,7 @@ async fn watch_disks(state: AppState) {
         }
         let _ = tokio::task::spawn_blocking(crate::jitsi::close_if_quiet).await;
         let _ = tokio::task::spawn_blocking(crate::recordings::tidy).await;
+        let _ = tokio::task::spawn_blocking(crate::devices::look_if_due).await;
         if crate::copies::computer_due() {
             let _ = tokio::task::spawn_blocking(crate::copies::copy_computer).await;
         }
@@ -1007,10 +1012,28 @@ async fn issues_list(State(state): State<AppState>) -> Json<IssuesReport> {
         store.pools.len() + crate::storage::prepared_roles().len(),
         store.shares.len(),
     );
-    let extra = crate::storage::issues();
+    let mut extra = crate::storage::issues();
+    extra.extend(crate::devices::issues());
     report.red |= extra.iter().any(|issue| issue.severity == "red");
     report.items.splice(0..0, extra);
     Json(report)
+}
+
+#[derive(Deserialize)]
+struct DeviceMark {
+    key: String,
+    label: Option<String>,
+    known: Option<bool>,
+    watched: Option<bool>,
+}
+
+async fn devices_mark(Json(ask): Json<DeviceMark>) -> (StatusCode, Json<serde_json::Value>) {
+    let done = tokio::task::spawn_blocking(move || crate::devices::mark(&ask.key, ask.label.as_deref(), ask.known, ask.watched)).await;
+    match done {
+        Ok(Ok(report)) => (StatusCode::OK, Json(serde_json::to_value(report).unwrap_or_default())),
+        Ok(Err(message)) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "message": message }))),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "message": "Keel could not keep that." }))),
+    }
 }
 
 async fn devices_view() -> Json<crate::devices::Report> {

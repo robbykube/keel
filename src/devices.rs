@@ -1,6 +1,6 @@
 //! Who answered on the house network. One look, this computer's own address, nothing blocked.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
@@ -17,6 +17,28 @@ pub struct Device {
     pub name: String,
     pub here: bool,
     pub new: bool,
+    /// What Keel keeps it by: the hardware address, or the address.
+    #[serde(default)]
+    pub key: String,
+    /// "router", "this", "private" (a phone or tablet with a made-up
+    /// hardware address), "raspberry", or "".
+    #[serde(default)]
+    pub kind: String,
+    /// A name the person gave it.
+    #[serde(default)]
+    pub label: String,
+    /// Repair says when a watched device stops answering.
+    #[serde(default)]
+    pub watched: bool,
+    /// Whether it answered in the last look.
+    #[serde(default = "yes")]
+    pub answering: bool,
+    #[serde(default)]
+    pub last_seen_ms: u64,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -32,6 +54,19 @@ struct Saved {
     house: String,
     devices: Vec<Device>,
     message: String,
+    #[serde(default)]
+    gateway: String,
+    /// New devices nobody has marked as known yet.
+    #[serde(default)]
+    unknown: BTreeSet<String>,
+    #[serde(default)]
+    labels: BTreeMap<String, String>,
+    #[serde(default)]
+    watched: BTreeSet<String>,
+    #[serde(default)]
+    last_seen: BTreeMap<String, u64>,
+    #[serde(default)]
+    looked_ms: u64,
 }
 
 struct Found {
@@ -57,12 +92,129 @@ pub fn saved() -> Report {
 }
 
 pub fn look() -> Result<Report, String> {
+    let _one = LOOKING.lock().unwrap_or_else(|e| e.into_inner());
     let text = capture()?;
-    let (house, found) = parse_look(&text)?;
+    let (house, gateway, mut found) = parse_look(&text)?;
+    // Devices with no name yet: Apple devices and many Linux ones answer
+    // a multicast question about their own address.
+    let nameless: Vec<Ipv4Addr> = found.iter().filter(|f| f.name.is_empty()).filter_map(|f| f.address.parse().ok()).collect();
+    let answered = multicast_names(&nameless);
+    for item in &mut found {
+        if item.name.is_empty() {
+            if let Some(name) = answered.get(&item.address) {
+                item.name = clean_name(name, &item.address);
+            }
+        }
+    }
     let saved = load();
-    let (report, next) = merge(&saved, &house, found);
+    let (report, next) = merge(&saved, &house, &gateway, found, now_ms());
     store(&next)?;
     Ok(report)
+}
+
+static LOOKING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Called about once a minute: a look every ten minutes, so new devices
+/// and watched ones that stop answering show in Repair without a press.
+pub fn look_if_due() {
+    if cfg!(windows) {
+        return;
+    }
+    if now_ms().saturating_sub(load().looked_ms) >= 10 * 60 * 1000 {
+        let _ = look();
+    }
+}
+
+/// A label, known, or watched, for one device. Empty label clears it.
+pub fn mark(key: &str, label: Option<&str>, known: Option<bool>, watched: Option<bool>) -> Result<Report, String> {
+    let mut saved = load();
+    if !saved.seen.iter().any(|k| k == key) {
+        return Err("Keel does not know that device. Press Look now.".into());
+    }
+    if let Some(label) = label {
+        let label: String = label.trim().chars().filter(|c| !c.is_control()).take(40).collect();
+        if label.is_empty() {
+            saved.labels.remove(key);
+        } else {
+            saved.labels.insert(key.to_string(), label);
+        }
+    }
+    if known == Some(true) {
+        saved.unknown.remove(key);
+    }
+    if let Some(watch) = watched {
+        if watch {
+            saved.watched.insert(key.to_string());
+        } else {
+            saved.watched.remove(key);
+        }
+    }
+    for device in &mut saved.devices {
+        if device.key == key {
+            device.label = saved.labels.get(key).cloned().unwrap_or_default();
+            device.new = saved.unknown.contains(key);
+            device.watched = saved.watched.contains(key);
+        }
+    }
+    store(&saved)?;
+    Ok(saved_report(&saved))
+}
+
+fn saved_report(saved: &Saved) -> Report {
+    Report { house: saved.house.clone(), devices: saved.devices.clone(), message: saved.message.clone() }
+}
+
+/// For Repair: new devices nobody has marked as known, and watched devices
+/// that have not answered for ten minutes.
+pub fn issues() -> Vec<crate::model::Issue> {
+    let saved = load();
+    let now = now_ms();
+    let mut items = Vec::new();
+    let fresh: Vec<&Device> = saved.devices.iter().filter(|d| d.new && !d.here).collect();
+    if !fresh.is_empty() {
+        items.push(crate::model::Issue {
+            id: "device-new",
+            severity: "yellow",
+            title: if fresh.len() == 1 { "A new device joined the network" } else { "New devices joined the network" },
+            why: "Devices shows each one. Mark it as known if you know it; if you do not, change the Wi-Fi password.",
+            evidence: fresh.iter().map(|d| describe(d)).collect::<Vec<_>>().join(", "),
+            repair: None,
+        });
+    }
+    let gone: Vec<&Device> = saved
+        .devices
+        .iter()
+        .filter(|d| d.watched && !d.answering && now.saturating_sub(d.last_seen_ms) >= 10 * 60 * 1000)
+        .collect();
+    if !gone.is_empty() {
+        items.push(crate::model::Issue {
+            id: "device-gone",
+            severity: "red",
+            title: if gone.len() == 1 { "A watched device stopped answering" } else { "Watched devices stopped answering" },
+            why: "Check that it has power and its cable is in. A router or access point that is off leaves part of the house without network.",
+            evidence: gone.iter().map(|d| describe(d)).collect::<Vec<_>>().join(", "),
+            repair: None,
+        });
+    }
+    items
+}
+
+fn describe(device: &Device) -> String {
+    let name = if !device.label.is_empty() {
+        device.label.clone()
+    } else if !device.name.is_empty() {
+        device.name.clone()
+    } else {
+        device.address.clone()
+    };
+    if name == device.address { name } else { format!("{name} ({})", device.address) }
 }
 
 fn capture() -> Result<String, String> {
@@ -97,12 +249,14 @@ fn store_path() -> PathBuf {
     PathBuf::from(std::env::var("KEEL_DATA").unwrap_or_else(|_| "data".into())).join("devices.json")
 }
 
-fn merge(saved: &Saved, house: &str, found: Vec<Found>) -> (Report, Saved) {
+fn merge(saved: &Saved, house: &str, gateway: &str, found: Vec<Found>, now: u64) -> (Report, Saved) {
     let known: BTreeSet<&str> = saved.seen.iter().map(String::as_str).collect();
     let had = !known.is_empty();
     let mut devices = Vec::new();
     let mut seen = known.iter().map(|key| (*key).to_string()).collect::<BTreeSet<_>>();
     let mut seen_self = false;
+    let mut unknown = saved.unknown.clone();
+    let mut last_seen = saved.last_seen.clone();
     for item in found {
         if !same_house(house, &item.address) {
             continue;
@@ -113,28 +267,55 @@ fn merge(saved: &Saved, house: &str, found: Vec<Found>) -> (Report, Saved) {
         }
         let key = key_of(&item.mac, &item.address);
         let fresh = had && !known.contains(key.as_str());
-        seen.insert(key);
+        if fresh && !here {
+            unknown.insert(key.clone());
+        }
+        seen.insert(key.clone());
+        last_seen.insert(key.clone(), now);
+        let kind = kind_of(&item.address, &item.mac, here, gateway);
         devices.push(Device {
             name: if here {
                 "This computer".into()
             } else {
                 item.name
             },
+            new: unknown.contains(&key) && !here,
+            label: saved.labels.get(&key).cloned().unwrap_or_default(),
+            watched: saved.watched.contains(&key),
+            answering: true,
+            last_seen_ms: now,
+            kind: kind.into(),
+            key,
             address: item.address,
             mac: item.mac,
             here,
-            new: fresh && !here,
         });
+    }
+    // A watched device that did not answer stays on the list, so Repair
+    // can say so.
+    for old in &saved.devices {
+        if old.watched && !old.key.is_empty() && !devices.iter().any(|d| d.key == old.key) {
+            let mut kept = old.clone();
+            kept.answering = false;
+            kept.last_seen_ms = last_seen.get(&old.key).copied().unwrap_or(old.last_seen_ms);
+            devices.push(kept);
+        }
     }
     if !seen_self && is_house_ipv4(house) {
         let key = house.to_string();
-        seen.insert(key);
+        seen.insert(key.clone());
         devices.push(Device {
             address: house.to_string(),
             mac: String::new(),
             name: "This computer".into(),
             here: true,
             new: false,
+            key,
+            kind: "this".into(),
+            label: String::new(),
+            watched: false,
+            answering: true,
+            last_seen_ms: now,
         });
     }
     devices.sort_by(|a, b| ip_key(&a.address).cmp(&ip_key(&b.address)));
@@ -144,11 +325,18 @@ fn merge(saved: &Saved, house: &str, found: Vec<Found>) -> (Report, Saved) {
         devices: devices.clone(),
         message: message.clone(),
     };
+    unknown.retain(|key| seen.contains(key));
     let next = Saved {
         seen: seen.into_iter().collect(),
         house: house.to_string(),
         devices,
         message,
+        gateway: gateway.to_string(),
+        unknown,
+        labels: saved.labels.clone(),
+        watched: saved.watched.clone(),
+        last_seen,
+        looked_ms: now,
     };
     (report, next)
 }
@@ -170,6 +358,120 @@ fn message_for(count: usize, fresh: usize, had: bool) -> String {
     format!("{count} {noun} answered. {fresh} are new.")
 }
 
+/// What kind of device, from what Keel can tell without asking it.
+fn kind_of(address: &str, mac: &str, here: bool, gateway: &str) -> &'static str {
+    if here {
+        return "this";
+    }
+    if !gateway.is_empty() && address == gateway {
+        return "router";
+    }
+    // The second hex digit 2, 6, a or e: a made-up address, as phones and
+    // tablets use on each Wi-Fi network.
+    if let Some(second) = mac.chars().nth(1) {
+        if matches!(second, '2' | '6' | 'a' | 'e') {
+            return "private";
+        }
+    }
+    const PI: [&str; 5] = ["b8:27:eb", "dc:a6:32", "e4:5f:01", "d8:3a:dd", "2c:cf:67"];
+    if PI.iter().any(|oui| mac.starts_with(oui)) {
+        return "raspberry";
+    }
+    ""
+}
+
+/// Asks the local multicast group (224.0.0.251:5353) who each address is,
+/// with the "answer me directly" bit, and waits a moment for replies.
+fn multicast_names(addresses: &[Ipv4Addr]) -> BTreeMap<String, String> {
+    let mut names = BTreeMap::new();
+    if addresses.is_empty() || cfg!(windows) {
+        return names;
+    }
+    let Ok(socket) = std::net::UdpSocket::bind("0.0.0.0:0") else {
+        return names;
+    };
+    let _ = socket.set_read_timeout(Some(std::time::Duration::from_millis(250)));
+    for (n, address) in addresses.iter().enumerate() {
+        let [a, b, c, d] = address.octets();
+        let query = ptr_query(n as u16, &format!("{d}.{c}.{b}.{a}.in-addr.arpa"));
+        let _ = socket.send_to(&query, "224.0.0.251:5353");
+    }
+    let until = std::time::Instant::now() + std::time::Duration::from_millis(1500);
+    let mut buf = [0u8; 1500];
+    while std::time::Instant::now() < until {
+        let Ok((len, _)) = socket.recv_from(&mut buf) else {
+            continue;
+        };
+        if let Some((address, name)) = ptr_answer(&buf[..len]) {
+            names.insert(address, name.trim_end_matches(".local").to_string());
+        }
+    }
+    names
+}
+
+fn ptr_query(id: u16, name: &str) -> Vec<u8> {
+    let mut q = Vec::with_capacity(64);
+    q.extend_from_slice(&id.to_be_bytes());
+    q.extend_from_slice(&[0, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
+    for label in name.split('.') {
+        q.push(label.len() as u8);
+        q.extend_from_slice(label.as_bytes());
+    }
+    q.push(0);
+    q.extend_from_slice(&[0, 12]); // PTR
+    q.extend_from_slice(&[0x80, 1]); // IN, answer directly
+    q
+}
+
+/// The first PTR answer for an in-addr.arpa name: ("192.168.0.5", "iPhone").
+fn ptr_answer(msg: &[u8]) -> Option<(String, String)> {
+    if msg.len() < 12 || msg[2] & 0x80 == 0 {
+        return None;
+    }
+    let questions = u16::from_be_bytes([msg[4], msg[5]]) as usize;
+    let answers = u16::from_be_bytes([msg[6], msg[7]]) as usize;
+    let mut at = 12;
+    for _ in 0..questions {
+        let (_, next) = read_name(msg, at)?;
+        at = next + 4;
+    }
+    for _ in 0..answers {
+        let (owner, next) = read_name(msg, at)?;
+        let kind = u16::from_be_bytes([*msg.get(next)?, *msg.get(next + 1)?]);
+        let len = u16::from_be_bytes([*msg.get(next + 8)?, *msg.get(next + 9)?]) as usize;
+        let data = next + 10;
+        if kind == 12 && owner.ends_with(".in-addr.arpa") {
+            let (target, _) = read_name(msg, data)?;
+            let parts: Vec<&str> = owner.trim_end_matches(".in-addr.arpa").split('.').collect();
+            if parts.len() == 4 {
+                return Some((format!("{}.{}.{}.{}", parts[3], parts[2], parts[1], parts[0]), target));
+            }
+        }
+        at = data + len;
+    }
+    None
+}
+
+fn read_name(msg: &[u8], mut at: usize) -> Option<(String, usize)> {
+    let mut labels = Vec::new();
+    let mut end = None;
+    for _ in 0..64 {
+        let len = *msg.get(at)? as usize;
+        if len == 0 {
+            return Some((labels.join("."), end.unwrap_or(at + 1)));
+        }
+        if len & 0xc0 == 0xc0 {
+            let pointer = ((len & 0x3f) << 8) | *msg.get(at + 1)? as usize;
+            end.get_or_insert(at + 2);
+            at = pointer;
+            continue;
+        }
+        labels.push(String::from_utf8_lossy(msg.get(at + 1..at + 1 + len)?).to_string());
+        at += 1 + len;
+    }
+    None
+}
+
 fn key_of(mac: &str, address: &str) -> String {
     if mac.is_empty() {
         address.to_string()
@@ -178,9 +480,10 @@ fn key_of(mac: &str, address: &str) -> String {
     }
 }
 
-/// Lines from the look: `house|address` and `address|mac|name`.
-fn parse_look(text: &str) -> Result<(String, Vec<Found>), String> {
+/// Lines from the look: `house|address`, `gateway|address` and `address|mac|name`.
+fn parse_look(text: &str) -> Result<(String, String, Vec<Found>), String> {
     let mut house = None;
+    let mut gateway = String::new();
     let mut found = Vec::new();
     for line in text.lines() {
         let line = line.trim();
@@ -191,6 +494,12 @@ fn parse_look(text: &str) -> Result<(String, Vec<Found>), String> {
         let first = parts.next().unwrap_or("");
         let second = parts.next().unwrap_or("");
         let third = parts.next().unwrap_or("");
+        if first == "gateway" {
+            if is_house_ipv4(second) {
+                gateway = second.to_string();
+            }
+            continue;
+        }
         if first == "house" {
             if is_house_ipv4(second) {
                 house = Some(second.to_string());
@@ -211,7 +520,7 @@ fn parse_look(text: &str) -> Result<(String, Vec<Found>), String> {
         });
     }
     let house = house.ok_or_else(|| "Keel could not see the house network.".to_string())?;
-    Ok((house, found))
+    Ok((house, gateway, found))
 }
 
 fn is_house_ipv4(text: &str) -> bool {
@@ -412,8 +721,9 @@ house|192.168.0.20
 192.168.0.9|ff:ff:ff:ff:ff:ff|
 8.8.8.8|aa:bb:cc:dd:ee:01|public
 ";
-        let (house, found) = parse_look(text).unwrap();
+        let (house, gateway, found) = parse_look(text).unwrap();
         assert_eq!(house, "192.168.0.20");
+        assert_eq!(gateway, "");
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].mac, "aa:bb:cc:dd:ee:ff");
         assert_eq!(found[0].name, "router");
@@ -426,7 +736,7 @@ house|192.168.0.20
             mac: "aa:bb:cc:dd:ee:ff".into(),
             name: "router".into(),
         }];
-        let (report, saved) = merge(&Saved::default(), "192.168.0.20", found);
+        let (report, saved) = merge(&Saved::default(), "192.168.0.20", "192.168.0.1", found, 1_000);
         assert!(!report.devices.iter().any(|device| device.new));
         assert!(report.message.contains("first list"));
         assert!(saved.seen.iter().any(|key| key == "aa:bb:cc:dd:ee:ff"));
@@ -450,12 +760,53 @@ house|192.168.0.20
                 name: String::new(),
             },
         ];
-        let (report, _) = merge(&saved, "192.168.0.20", found);
+        let (report, _) = merge(&saved, "192.168.0.20", "192.168.0.1", found, 1_000);
         let known = report.devices.iter().find(|d| d.address == "192.168.0.8").unwrap();
         let fresh = report.devices.iter().find(|d| d.address == "192.168.0.40").unwrap();
         assert!(!known.new);
         assert!(fresh.new);
         assert_eq!(report.message, "3 devices answered. 1 is new.");
+    }
+
+    #[test]
+    fn a_new_device_stays_new_until_marked_and_a_watched_one_is_missed() {
+        let mut saved = Saved { seen: vec!["aa:bb:cc:dd:ee:ff".into()], ..Saved::default() };
+        let router = || Found { address: "192.168.0.1".into(), mac: "aa:bb:cc:dd:ee:ff".into(), name: String::new() };
+        let phone = || Found { address: "192.168.0.50".into(), mac: "3a:11:22:33:44:55".into(), name: "iPhone".into() };
+        let (report, next) = merge(&saved, "192.168.0.20", "192.168.0.1", vec![router(), phone()], 1_000);
+        let found = |r: &Report, a: &str| r.devices.iter().find(|d| d.address == a).cloned().unwrap();
+        assert_eq!(found(&report, "192.168.0.1").kind, "router");
+        assert_eq!(found(&report, "192.168.0.50").kind, "private");
+        assert!(found(&report, "192.168.0.50").new);
+        // Still new at the next look, until someone marks it as known.
+        let (again, next) = merge(&next, "192.168.0.20", "192.168.0.1", vec![router(), phone()], 2_000);
+        assert!(found(&again, "192.168.0.50").new);
+        saved = next;
+        saved.unknown.remove("3a:11:22:33:44:55");
+        saved.watched.insert("aa:bb:cc:dd:ee:ff".into());
+        saved.devices.iter_mut().for_each(|d| if d.key == "aa:bb:cc:dd:ee:ff" { d.watched = true; });
+        // The router does not answer: it stays, marked as not answering.
+        let (later, _) = merge(&saved, "192.168.0.20", "192.168.0.1", vec![phone()], 3_000);
+        let router_now = found(&later, "192.168.0.1");
+        assert!(!router_now.answering);
+        assert_eq!(router_now.last_seen_ms, 2_000);
+        assert!(!found(&later, "192.168.0.50").new);
+    }
+
+    #[test]
+    fn a_multicast_answer_names_the_address() {
+        let query = ptr_query(7, "50.0.168.192.in-addr.arpa");
+        assert_eq!(&query[..2], &[0, 7]);
+        // An answer: the question echoed, then a PTR to "iPhone.local".
+        let mut answer = vec![0, 0, 0x84, 0, 0, 0, 0, 1, 0, 0, 0, 0];
+        let owner = &query[12..query.len() - 4];
+        answer.extend_from_slice(owner);
+        answer.extend_from_slice(&[0, 12, 0x80, 1, 0, 0, 0, 120]);
+        let target = b"\x06iPhone\x05local\x00";
+        answer.extend_from_slice(&(target.len() as u16).to_be_bytes());
+        answer.extend_from_slice(target);
+        assert_eq!(ptr_answer(&answer), Some(("192.168.0.50".into(), "iPhone.local".into())));
+        assert_eq!(ptr_answer(&[0; 4]), None);
     }
 
     #[test]

@@ -1344,6 +1344,11 @@ button:focus-visible, a.button:focus-visible, input:focus-visible, select:focus-
 /* Disks: the other-computer forms open in full, not in a short scroll box. */
 #another[open] { max-height: none; overflow: visible; }
 #another .form { margin-top: var(--space-3); }
+/* Devices: one row each, with what can be done to it. */
+.device-row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
+.device-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: flex-end; }
+.device-actions input { min-width: 12rem; }
+
 /* Settings: light or full. */
 .version-row { border: 1px solid var(--line, rgba(255,255,255,.12)); border-radius: 10px; padding: var(--space-3); margin: 0 0 var(--space-3); }
 .version-row legend { font-weight: 600; padding: 0 var(--space-1); }
