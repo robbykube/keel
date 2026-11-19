@@ -286,6 +286,17 @@ for unit in cups.service cups-browsed.service cups.socket avahi-daemon.service \
     avahi-daemon.socket ModemManager.service lm-sensors.service; do
   if [ "${mem_kb:-0}" -lt 2621440 ]; then off "$unit"; else later "$unit"; fi
 done
+# The temporary space (/run) is memory. Linux makes it a fifth of the
+# memory or less when the computer starts, which on the Pi's 0.9 GB is under
+# 200 MB, and full /run stops every task. It may hold up to 40% of the
+# memory now. It still takes memory only for what is in it, and Keel
+# empties it each minute when it runs low (storage::keep_run_roomy).
+run_kb=$(df -Pk /run 2>/dev/null | awk 'NR==2 {print $2}')
+run_want=$(( ${mem_kb:-0} * 40 / 100 ))
+if [ -n "$run_kb" ] && [ "$run_want" -gt "$run_kb" ]; then
+  mount -o remount,size=${run_want}k /run >/dev/null 2>&1 || true
+fi
+
 # The Pi copy does not ship Bluetooth. Fetch it once, five minutes after
 # Keel is up, at low priority and with at most 200 MB of memory: apt at
 # every start, beside the apps starting, filled the memory. A failed fetch

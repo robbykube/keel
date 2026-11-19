@@ -190,6 +190,7 @@ mod tests {
         assert!(script.contains("start --no-block"));
         assert!(script.contains("2621440"));
         assert!(script.contains("--on-active=300"));
+        assert!(script.contains("remount,size=${run_want}k /run"));
         assert!(script.contains("less than six hours ago"));
         assert!(script.contains("bluez"));
         assert!(!script.contains("wifi_used"));

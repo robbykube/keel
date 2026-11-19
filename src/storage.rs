@@ -1198,9 +1198,10 @@ fn make_room_in_run(screen: bool) {
             .status();
     }
     eprintln!(
-        "keel: temporary space was full; freed /run from {} KB to {} KB",
+        "keel: temporary space was full; freed /run from {} KB to {} KB free. Largest: {}",
         before.map(|kb| kb.to_string()).unwrap_or_else(|| "?".into()),
-        free_in_run().map(|kb| kb.to_string()).unwrap_or_else(|| "?".into())
+        free_in_run().map(|kb| kb.to_string()).unwrap_or_else(|| "?".into()),
+        run_tenants()
     );
 }
 
