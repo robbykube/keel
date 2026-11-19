@@ -33,6 +33,8 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Next
 
+Settings refused 0.1.77 with “The package contains an unexpected file: apps”. The computer already running Keel checks the package before the new program starts, and it only allows the program, the service file, and the web folder. v0.1.79 installs with no apps folder and teaches that check to allow one. Do not pack the light Video program until 0.1.79 is installed. Leave the router's own DNS as it is.
+
 Papers: open it on a phone or another computer and create the account for this house. Papers you add are stored in Documents. Files already in Documents stay where they are. The Apps card shows the address with copy. On the Keel screen that address stays as text. On the phone, DNS for the house Wi-Fi is this computer. Leave the router's own DNS as it is.
 
 Mail: open it on a phone or another computer, sign in as mail, and add Gmail or another account. The Apps card shows the address and the password, each with copy. On the Keel screen those stay as text. On the phone, DNS for the house Wi-Fi is this computer. Leave the router's own DNS as it is. The first download is large.

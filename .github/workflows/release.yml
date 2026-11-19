@@ -67,10 +67,10 @@ jobs:
           install -m 0755 "target/${{ matrix.target }}/release/keel" release/keel/keel
           install -m 0644 packaging/systemd/keel.service release/keel/keel.service
           cp -a web release/keel/web
-          mkdir -p release/keel/apps/galene
-          install -m 0755 galene-bin release/keel/apps/galene/galene
-          cp -a galene-src/static release/keel/apps/galene/static
-          cp galene-src/LICENCE release/keel/apps/galene/LICENCE 2>/dev/null || cp galene-src/LICENSE release/keel/apps/galene/LICENSE
+          # Built above, but not packed in this release. The Keel already on the
+          # computer refuses a package that contains an apps folder. Pack the
+          # program once that computer is running a Keel that accepts the folder.
+          rm -rf galene-bin galene-src
           tar -C release -czf "keel-linux-${{ matrix.name }}-${GITHUB_REF_NAME}.tar.gz" keel
       - name: Upload package
         uses: actions/upload-artifact@v4

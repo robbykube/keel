@@ -770,6 +770,10 @@ fn save_previous() -> Result<(), String> {
     fs::copy("/usr/bin/keel", staging.join("keel"))
         .map_err(|error| format!("could not save the current Keel: {error}"))?;
     copy_tree(Path::new("/usr/lib/keel/web"), &staging.join("web"))?;
+    let installed_apps = Path::new("/usr/lib/keel/apps");
+    if installed_apps.is_dir() {
+        copy_tree(installed_apps, &staging.join("apps"))?;
+    }
     copy_data_snapshot(&staging.join("data"))?;
     if retired.exists() {
         fs::remove_dir_all(&retired).map_err(|error| error.to_string())?;
@@ -972,7 +976,7 @@ fn extract_package(bytes: &[u8], dest: &Path) -> Result<(), String> {
         let mut output = File::create(&target).map_err(|error| error.to_string())?;
         std::io::copy(&mut entry, &mut output)
             .map_err(|error| format!("could not unpack {}: {error}", relative.display()))?;
-        if relative == Path::new("keel") {
+        if relative == Path::new("keel") || relative == Path::new("apps/galene/galene") {
             mark_executable(&target)?;
         }
     }
@@ -999,6 +1003,7 @@ fn safe_member(path: &Path) -> Result<PathBuf, String> {
         || relative == Path::new("keel")
         || relative == Path::new("keel.service")
         || relative.starts_with("web")
+        || relative.starts_with("apps")
     {
         if relative == Path::new("keel.service") {
             return Ok(PathBuf::from("keel.service"));
@@ -1008,6 +1013,9 @@ fn safe_member(path: &Path) -> Result<PathBuf, String> {
         }
         if let Ok(rest) = relative.strip_prefix("web") {
             return Ok(Path::new("web").join(rest));
+        }
+        if let Ok(rest) = relative.strip_prefix("apps") {
+            return Ok(Path::new("apps").join(rest));
         }
         return Ok(relative);
     }
@@ -1600,6 +1608,8 @@ mod tests {
     fn package_paths_cannot_escape() {
         assert!(safe_member(Path::new("keel/keel")).is_ok());
         assert!(safe_member(Path::new("keel/web/index.html")).is_ok());
+        assert!(safe_member(Path::new("keel/apps/galene/galene")).is_ok());
+        assert!(safe_member(Path::new("keel/apps/galene/static/galene.html")).is_ok());
         assert!(safe_member(Path::new("keel/../etc/passwd")).is_err());
         assert!(safe_member(Path::new("/etc/passwd")).is_err());
         assert!(safe_member(Path::new("keel/etc/shadow")).is_err());

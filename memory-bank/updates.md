@@ -16,6 +16,9 @@ What works now:
   A release tagged before the arm64 file existed has nothing for the
   Pi to install. v0.1.79 is a normal release: the arm64 file is
   `keel-linux-arm64-v0.1.79.tar.gz` and the PC file keeps its own name.
+  That package contains no `apps` folder. The Keel already on the computer
+  refuses a package that contains one, so 0.1.79 only teaches it to accept
+  the folder. Pack the light Video program after 0.1.79 is installed.
   A Pi already running 0.1.28 installs the arm64 file. The v0.1.29 tag
   did not publish a package.
 - The private signing key lives only in the GitHub Actions secret
