@@ -192,6 +192,16 @@ fn stopped_issue(log: &str, now: i64) -> Option<Issue> {
             .is_some_and(|when| now - when < 24 * 3600)
     })?;
     let (_, what) = line.split_once(' ')?;
+    if what.starts_with("full ") {
+        return Some(Issue {
+            id: "memory-stopped",
+            severity: "red",
+            title: "Memory stays full",
+            why: "Memory stayed full even after Keel stopped an app. The computer restarted for this less than six hours ago, so Keel left it on this time. Close an app you do not need on Apps, or pick its light version in Settings.",
+            evidence: line.to_string(),
+            repair: None,
+        });
+    }
     let why = match what.strip_prefix("stopped ") {
         Some("Photos") => "Memory was full for three minutes, so Keel stopped Photos to keep the computer answering. Open it on Apps when you need it.",
         Some("Video") => "Memory was full for three minutes, so Keel stopped Video to keep the computer answering. Open it on Apps when you need it.",
@@ -390,5 +400,8 @@ tmpfs 400000 380000 20000 95% /run\n\
         assert!(super::stopped_issue(log, at + 2 * 24 * 3600).is_none());
         let restart = super::stopped_issue("2026-11-18T18:20:00+01:00 restart Memory stayed full after an app was stopped.\n", at).unwrap();
         assert!(restart.why.contains("restarted the computer"));
+        let left_on = super::stopped_issue("2026-11-18T18:30:00+01:00 full Memory stayed full; the computer restarted less than six hours ago, so it was left on.\n", at).unwrap();
+        assert_eq!(left_on.severity, "red");
+        assert!(left_on.why.contains("left it on"));
     }
 }

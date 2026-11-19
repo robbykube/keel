@@ -1065,8 +1065,30 @@ pub(crate) fn keep_run_roomy() {
         return;
     };
     if free < RUN_LOW_KB {
-        make_room_in_run(free < RUN_FULL_KB);
+        make_room_in_run(free < RUN_FULL_KB && screen_restart_allowed(now_secs()));
     }
+}
+
+/// When the minute loop last restarted the screen, in seconds since 1970.
+static LAST_SCREEN_RESTART: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The minute loop restarts the screen at most once an hour, so something
+/// else filling /run cannot make the screen blink every minute.
+fn screen_restart_allowed(now: u64) -> bool {
+    use std::sync::atomic::Ordering;
+    let last = LAST_SCREEN_RESTART.load(Ordering::Relaxed);
+    if last != 0 && now.saturating_sub(last) < 3600 {
+        return false;
+    }
+    LAST_SCREEN_RESTART.store(now, Ordering::Relaxed);
+    true
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 /// Repair → Empty the temporary space. Says what it freed.
@@ -1363,6 +1385,14 @@ mod tests {
         let df = "Filesystem     1024-blocks  Used Available Capacity Mounted on\ntmpfs               388460 388428        32     100% /run\n";
         assert_eq!(super::free_from_df(df), Some(32));
         assert_eq!(super::free_from_df(""), None);
+    }
+
+    #[test]
+    fn the_screen_restarts_at_most_once_an_hour() {
+        assert!(super::screen_restart_allowed(10_000));
+        assert!(!super::screen_restart_allowed(10_060));
+        assert!(!super::screen_restart_allowed(13_500));
+        assert!(super::screen_restart_allowed(13_600));
     }
 
     #[test]

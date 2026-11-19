@@ -14,8 +14,8 @@ What works now:
   that file once, and keeps the real PC program as
   `keel-linux-pc-v0.1.28.tar.gz`, which neither computer installs.
   A release tagged before the arm64 file existed has nothing for the
-  Pi to install. v0.1.85 is a normal release: the arm64 file is
-  `keel-linux-arm64-v0.1.85.tar.gz` and the PC file keeps its own name.
+  Pi to install. v0.1.86 is a normal release: the arm64 file is
+  `keel-linux-arm64-v0.1.86.tar.gz` and the PC file keeps its own name.
   From 0.1.80 the package carries `apps/galene` (the light Video program).
   Keel before 0.1.79 refuses a package with an `apps` folder, so a computer
   older than that installs 0.1.79 first.

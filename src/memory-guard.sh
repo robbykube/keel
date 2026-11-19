@@ -164,6 +164,16 @@ while sleep 30; do
   now=$(date +%s)
   if [ "$stopped_at" -gt 0 ] && [ $((now - stopped_at)) -lt 600 ]; then
     up=$(cut -d. -f1 /proc/uptime)
+    # At most one restart in six hours, so a computer that fills its memory
+    # by itself does not restart over and over. Repair says it stayed full.
+    last=$(grep ' restart ' "$note" 2>/dev/null | tail -n 1 | cut -d' ' -f1)
+    last_s=0
+    [ -n "$last" ] && last_s=$(date -d "$last" +%s 2>/dev/null || echo 0)
+    if [ $((now - last_s)) -lt 21600 ]; then
+      echo "$(date -Is) full Memory stayed full; the computer restarted less than six hours ago, so it was left on." >> "$note"
+      stopped_at=0
+      continue
+    fi
     if [ "$up" -ge 900 ]; then
       echo "$(date -Is) restart Memory stayed full after an app was stopped." >> "$note"
       echo "keel: memory stayed full after stopping an app; restarting the computer"
@@ -256,20 +266,38 @@ fi
 # Printing, Bluetooth, finding printers, modems, cron, sensors and Wi-Fi
 # stay off while the computer is starting. Once Keel is up it starts them,
 # so they do not hold the screen back and they are there afterwards.
+# A computer with under 2.5 GB of memory (the Pi has 0.9 GB) starts only
+# Bluetooth, Wi-Fi and cron: the others took memory the apps needed, memory
+# stayed full, and memory-watch restarted the computer again and again.
 later() {
   systemctl cat "$1" >/dev/null 2>&1 || return 0
   systemctl disable "$1" >/dev/null 2>&1 || true
   systemctl start --no-block "$1" >/dev/null 2>&1 || true
 }
-for unit in cups.service cups-browsed.service cups.socket bluetooth.service \
-    avahi-daemon.service avahi-daemon.socket ModemManager.service cron.service \
-    lm-sensors.service wpa_supplicant.service; do
+off() {
+  systemctl cat "$1" >/dev/null 2>&1 || return 0
+  systemctl disable --now "$1" >/dev/null 2>&1 || true
+}
+mem_kb=$(sed -n 's/^MemTotal: *\([0-9]*\).*/\1/p' /proc/meminfo)
+for unit in bluetooth.service cron.service wpa_supplicant.service; do
   later "$unit"
 done
-# The Pi copy does not ship Bluetooth. Fetch it once Keel is up, then start it.
-# A separate task, so this script can finish without waiting on the download.
-if ! systemctl cat bluetooth.service >/dev/null 2>&1; then
-  systemd-run --quiet --collect --unit=keel-bluetooth-fetch /bin/bash -c \
+for unit in cups.service cups-browsed.service cups.socket avahi-daemon.service \
+    avahi-daemon.socket ModemManager.service lm-sensors.service; do
+  if [ "${mem_kb:-0}" -lt 2621440 ]; then off "$unit"; else later "$unit"; fi
+done
+# The Pi copy does not ship Bluetooth. Fetch it once, five minutes after
+# Keel is up, at low priority and with at most 200 MB of memory: apt at
+# every start, beside the apps starting, filled the memory. A failed fetch
+# waits a day before the next try.
+bt_tried=/var/lib/keel/bluetooth-fetch.tried
+if ! systemctl cat bluetooth.service >/dev/null 2>&1 \
+    && ! systemctl is-active --quiet keel-bluetooth-fetch.service 2>/dev/null \
+    && ! systemctl is-active --quiet keel-bluetooth-fetch.timer 2>/dev/null \
+    && { [ ! -f "$bt_tried" ] || [ -n "$(find "$bt_tried" -mmin +1440 2>/dev/null)" ]; }; then
+  touch "$bt_tried"
+  systemd-run --quiet --collect --unit=keel-bluetooth-fetch --on-active=300 \
+    -p MemoryMax=200M -p Nice=19 -p IOSchedulingClass=idle /bin/bash -c \
     'apt-get update -qq && apt-get install -y --no-install-recommends bluez bluez-firmware && systemctl disable bluetooth.service >/dev/null 2>&1; rfkill unblock bluetooth >/dev/null 2>&1; systemctl start --no-block bluetooth.service >/dev/null 2>&1' \
     >/dev/null 2>&1 || true
 fi

@@ -188,7 +188,9 @@ mod tests {
         assert!(script.contains("--any --timeout=10"));
         assert!(script.contains("bluetooth.service"));
         assert!(script.contains("start --no-block"));
-        assert!(!script.contains("disable --now"));
+        assert!(script.contains("2621440"));
+        assert!(script.contains("--on-active=300"));
+        assert!(script.contains("less than six hours ago"));
         assert!(script.contains("bluez"));
         assert!(!script.contains("wifi_used"));
         assert!(script.contains("\"DiskCacheSize\": 33554432"));
