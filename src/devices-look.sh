@@ -35,3 +35,6 @@ while IFS= read -r line; do
 done
 wait
 }
+# Printed again so a long list still carries this computer's address.
+printf 'house|%s\n' "$house"
+[ -n "$gateway" ] && printf 'gateway|%s\n' "$gateway"

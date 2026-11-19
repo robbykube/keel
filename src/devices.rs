@@ -220,7 +220,10 @@ fn describe(device: &Device) -> String {
 fn capture() -> Result<String, String> {
     #[cfg(not(windows))]
     {
-        crate::storage::host_text("exec /bin/bash -s", &[], Some(LOOK_SH))
+        // The look prints one line per device. host_text keeps only the last
+        // line, which is never the house address, so the look would always
+        // say the network could not be seen.
+        crate::storage::host_all("exec /bin/bash -s", &[], Some(LOOK_SH))
     }
     #[cfg(windows)]
     {
@@ -825,6 +828,7 @@ house|192.168.0.20
         assert!(LOOK_SH.contains("ip -4 route get 1.1.1.1"));
         assert!(LOOK_SH.contains("ping -c 1 -W 1"));
         assert!(LOOK_SH.contains("ip -4 neigh show"));
+        assert!(LOOK_SH.matches("printf 'house|%s\\n'").count() >= 2);
         assert!(!LOOK_SH.contains("0.0.0.0/0"));
         assert!(!LOOK_SH.contains("nmap"));
     }

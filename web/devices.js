@@ -116,6 +116,12 @@ button.addEventListener("click", async () => {
 });
 
 fetch("/api/devices", { credentials: "same-origin" })
-  .then((res) => res.json())
-  .then(paint)
+  .then(async (res) => {
+    const data = await read(res);
+    if (!res.ok) {
+      status.textContent = data.message || "Keel could not see the house network.";
+      return;
+    }
+    paint(data);
+  })
   .catch(() => { status.textContent = "Keel could not see the house network."; });
