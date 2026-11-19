@@ -868,6 +868,7 @@ async fn watch_disks(state: AppState) {
         if crate::copies::due() {
             let _ = tokio::task::spawn_blocking(crate::copies::run_now).await;
         }
+        let _ = tokio::task::spawn_blocking(crate::storage::keep_run_roomy).await;
         let _ = tokio::task::spawn_blocking(crate::jitsi::close_if_quiet).await;
         let _ = tokio::task::spawn_blocking(crate::recordings::tidy).await;
         let _ = tokio::task::spawn_blocking(crate::devices::look_if_due).await;
@@ -1084,6 +1085,16 @@ async fn repair_run(Json(req): Json<RepairRequest>) -> Json<RepairResult> {
                 message: "The firewall did not change. The page stays as it was.".into(),
             }),
         );
+    }
+    if req.id == "empty-run" {
+        let (ok, message) = tokio::task::spawn_blocking(crate::storage::empty_run)
+            .await
+            .unwrap_or_else(|_| (false, "Keel could not empty the temporary space.".into()));
+        return Json(RepairResult {
+            ok,
+            id: "empty-run".into(),
+            message,
+        });
     }
     if req.id.starts_with("restart-") {
         return Json(

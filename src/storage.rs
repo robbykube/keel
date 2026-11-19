@@ -1008,7 +1008,7 @@ fn host_output(script: &str, args: &[&str], input: Option<&str>, capture: bool) 
     if output.status.success() || !could_not_start(&output.stderr) {
         return Ok(output);
     }
-    make_room_in_run();
+    make_room_in_run(true);
     host_once(script, args, input, capture)
 }
 
@@ -1048,15 +1048,110 @@ fn could_not_start(stderr: &[u8]) -> bool {
 
 fn host_error(stderr: &[u8]) -> String {
     if could_not_start(stderr) {
-        return "Keel could not start the task, because the temporary space on this computer is full. Restart the computer to empty it.".into();
+        return "Keel could not start the task, because the temporary space on this computer is full. Open Repair and press Empty the temporary space.".into();
     }
     last_stderr(stderr)
 }
 
+/// Below this much free in /run, Keel empties it by itself (minute loop).
+const RUN_LOW_KB: u64 = 32 * 1024;
+/// Below this, starting tasks is about to fail: the screen restarts too.
+const RUN_FULL_KB: u64 = 8 * 1024;
+
+/// The minute loop: empty /run before it is full, so tasks never fail.
+/// The screen restarts (a blink) only when /run is nearly full.
+pub(crate) fn keep_run_roomy() {
+    let Some(free) = free_in_run() else {
+        return;
+    };
+    if free < RUN_LOW_KB {
+        make_room_in_run(free < RUN_FULL_KB);
+    }
+}
+
+/// Repair → Empty the temporary space. Says what it freed.
+pub(crate) fn empty_run() -> (bool, String) {
+    let before = free_in_run();
+    make_room_in_run(true);
+    let after = free_in_run();
+    run_result(before, after)
+}
+
+fn run_result(before: Option<u64>, after: Option<u64>) -> (bool, String) {
+    match (before, after) {
+        (Some(b), Some(a)) if a >= RUN_LOW_KB => (
+            true,
+            format!("Keel emptied the temporary space: {} MB free now (was {} MB).", a / 1024, b / 1024),
+        ),
+        (Some(_), Some(a)) => (
+            false,
+            format!(
+                "Only {} MB of temporary space is free, even after emptying it. Logs shows what takes it. Restarting the computer empties all of it.",
+                a / 1024
+            ),
+        ),
+        _ => (false, "Keel could not measure the temporary space.".into()),
+    }
+}
+
+/// What takes /run, largest first: "keel-kiosk 120 MB, log 9 MB".
+pub(crate) fn run_tenants() -> String {
+    tenants_in(Path::new("/run"))
+}
+
+fn tenants_in(root: &Path) -> String {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return String::new();
+    };
+    let mut sizes: Vec<(String, u64)> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let kind = entry.file_type().ok()?;
+            let size = if kind.is_dir() {
+                size_of_dir(&entry.path(), 0)
+            } else if kind.is_file() {
+                entry.metadata().ok()?.len()
+            } else {
+                return None;
+            };
+            Some((entry.file_name().to_string_lossy().into_owned(), size))
+        })
+        .filter(|(_, size)| *size >= 1024 * 1024)
+        .collect();
+    sizes.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    sizes
+        .iter()
+        .take(4)
+        .map(|(name, size)| format!("{name} {} MB", size / (1024 * 1024)))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Bytes under `dir`. Symlinks are not followed, and no deeper than 12
+/// folders.
+fn size_of_dir(dir: &Path, depth: usize) -> u64 {
+    if depth > 12 {
+        return 0;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .flatten()
+        .map(|entry| match entry.file_type() {
+            Ok(kind) if kind.is_dir() => size_of_dir(&entry.path(), depth + 1),
+            Ok(kind) if kind.is_file() => entry.metadata().map(|m| m.len()).unwrap_or(0),
+            _ => 0,
+        })
+        .sum()
+}
+
 /// Frees /run without systemd's help. Keel's sandbox leaves /run writable.
-/// The kept logs are the usual tenant: older ones go first, then the
-/// current one is closed and goes too.
-fn make_room_in_run() {
+/// First the screen's browser caches and the kept logs. When that is not
+/// enough and `screen` is true, the screen restarts: systemd empties its
+/// whole folder in /run when it stops, which is what a restart of the
+/// computer would have freed there.
+fn make_room_in_run(screen: bool) {
     let before = free_in_run();
     // The screen's browser keeps its profile in /run. Its caches are the
     // usual tenant: pictures seen on the screen. They are safe to drop.
@@ -1066,9 +1161,16 @@ fn make_room_in_run() {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
-    if free_in_run().is_some_and(|kb| kb < 32 * 1024) {
+    if free_in_run().is_some_and(|kb| kb < RUN_LOW_KB) {
         let _ = Command::new("journalctl")
             .args(["--rotate", "--vacuum-size=1M"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    if screen && free_in_run().is_some_and(|kb| kb < RUN_LOW_KB) && Path::new("/run/keel-kiosk").is_dir() {
+        let _ = Command::new("systemctl")
+            .args(["restart", "keel-kiosk.service"])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
@@ -1091,7 +1193,12 @@ fn drop_screen_caches(root: &Path) {
         }
         let base = profile.path();
         for cache in ["Default/Cache", "Default/Code Cache", "Default/GPUCache", "GrShaderCache", "GraphiteDawnCache", "ShaderCache", "Default/Service Worker/CacheStorage"] {
-            let _ = std::fs::remove_dir_all(base.join(cache));
+            let path = base.join(cache);
+            // A link points at the disk (kiosk-caches), which /run does not pay for.
+            if path.is_symlink() {
+                continue;
+            }
+            let _ = std::fs::remove_dir_all(path);
         }
     }
 }
@@ -1256,6 +1363,31 @@ mod tests {
         let df = "Filesystem     1024-blocks  Used Available Capacity Mounted on\ntmpfs               388460 388428        32     100% /run\n";
         assert_eq!(super::free_from_df(df), Some(32));
         assert_eq!(super::free_from_df(""), None);
+    }
+
+    #[test]
+    fn emptying_the_run_folder_says_what_it_freed() {
+        let (ok, said) = super::run_result(Some(4 * 1024), Some(150 * 1024));
+        assert!(ok);
+        assert!(said.contains("150 MB free now (was 4 MB)"));
+        let (ok, said) = super::run_result(Some(4 * 1024), Some(10 * 1024));
+        assert!(!ok);
+        assert!(said.contains("Only 10 MB"));
+        assert!(!super::run_result(None, None).0);
+    }
+
+    #[test]
+    fn the_largest_tenants_of_the_run_folder_are_named() {
+        let root = std::env::temp_dir().join(format!("keel-run-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("keel-kiosk/profile-1/Default/Cache")).unwrap();
+        std::fs::write(root.join("keel-kiosk/profile-1/Default/Cache/data_1"), vec![0u8; 3 * 1024 * 1024]).unwrap();
+        std::fs::create_dir_all(root.join("log/journal")).unwrap();
+        std::fs::write(root.join("log/journal/system.journal"), vec![0u8; 2 * 1024 * 1024]).unwrap();
+        std::fs::create_dir_all(root.join("tiny")).unwrap();
+        std::fs::write(root.join("tiny/pid"), "1").unwrap();
+        assert_eq!(super::tenants_in(&root), "keel-kiosk 3 MB, log 2 MB");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     use super::*;

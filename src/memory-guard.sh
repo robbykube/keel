@@ -202,13 +202,35 @@ EOF
 
 # The screen's browser keeps its profile in /run, which is memory. Its
 # cache of pictures seen on the screen filled /run and then nothing could
-# start. 32 MB is plenty for pages served by this computer.
+# start. 32 MB is plenty for pages served by this computer, and the caches
+# now live on the disk (/var/cache/keel-kiosk, one folder per screen), so
+# they take no memory and cannot fill /run. The profile itself stays in
+# /run, emptied each time the screen starts.
 screen_before=$changed
 changed=0
 put /etc/chromium/policies/managed/keel.json 0644 <<'EOF'
 { "DiskCacheSize": 33554432 }
 EOF
+put /usr/lib/keel/kiosk-caches 0755 <<'EOF'
+#!/bin/sh
+# Before the screen starts: each screen profile's caches are links to the disk.
+for p in profile profile-1 profile-2 profile-3 profile-4; do
+  mkdir -p "/run/keel-kiosk/$p/Default"
+  for c in Cache "Code Cache" GPUCache; do
+    mkdir -p "/var/cache/keel-kiosk/$p/$c"
+    [ -e "/run/keel-kiosk/$p/Default/$c" ] || ln -s "/var/cache/keel-kiosk/$p/$c" "/run/keel-kiosk/$p/Default/$c"
+  done
+done
+exit 0
+EOF
+put /etc/systemd/system/keel-kiosk.service.d/caches.conf 0644 <<'EOF'
+[Service]
+CacheDirectory=keel-kiosk
+CacheDirectoryMode=0700
+ExecStartPre=-/usr/lib/keel/kiosk-caches
+EOF
 if [ "$changed" = 1 ] && systemctl is-active --quiet keel-kiosk.service 2>/dev/null; then
+  systemctl daemon-reload >/dev/null 2>&1 || true
   rm -rf /run/keel-kiosk/profile*/Default/Cache /run/keel-kiosk/profile*/Default/"Code Cache" 2>/dev/null || true
   systemctl restart keel-kiosk.service >/dev/null 2>&1 || true
 fi

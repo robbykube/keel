@@ -64,6 +64,12 @@ pub fn report(
             available: matches!(inventory, Inventory::Linux),
         },
         RepairAction {
+            id: "empty-run",
+            label: "Empty the temporary space",
+            safe: true,
+            available: matches!(inventory, Inventory::Linux),
+        },
+        RepairAction {
             id: "restart-samba",
             label: "Restart file sharing",
             safe: true,
@@ -259,19 +265,26 @@ fn space_issues(df: &str) -> Vec<Issue> {
         let found = match mount {
             "/" if avail < 300 * MB => Some(("system-full", "red", "The system disk is full", "Apps, updates and logs stop when the system disk is full. Remove apps you do not use on Apps, or move Media to a Keel disk.")),
             "/" if avail < 1536 * MB => Some(("system-low", "yellow", "The system disk is almost full", "Apps, updates and logs stop when the system disk fills. Remove apps you do not use on Apps, or move Media to a Keel disk.")),
-            "/run" if avail < 8 * MB => Some(("run-full", "red", "The temporary space is full", "Keel cannot start tasks when the temporary space is full. Restart the computer to empty it.")),
-            "/run" if avail < 32 * MB => Some(("run-low", "yellow", "The temporary space is almost full", "Keel cannot start tasks when the temporary space fills. Restart the computer if apps stop opening.")),
+            "/run" if avail < 8 * MB => Some(("run-full", "red", "The temporary space is full", "Keel cannot start tasks when the temporary space is full. Press Empty the temporary space below.")),
+            "/run" if avail < 32 * MB => Some(("run-low", "yellow", "The temporary space is almost full", "Keel empties it by itself each minute. If this stays, press Empty the temporary space below. Logs shows what takes it.")),
             m if m.starts_with("/srv/keel/") && percent < 2 => Some(("disk-full", "red", "A Keel disk is full", "New files and copies cannot be saved on this disk. Delete files you do not need, or give the job to a larger disk on Disks.")),
             m if m.starts_with("/srv/keel/") && percent < 10 => Some(("disk-low", "yellow", "A Keel disk is almost full", "New files and copies stop when this disk fills. Delete files you do not need, or give the job to a larger disk on Disks.")),
             _ => None,
         };
         if let Some((id, severity, title, why)) = found {
+            let mut evidence = format!("{mount}: {} MB free of {} MB ({percent}%)", avail / MB, size / MB);
+            if mount == "/run" && cfg!(target_os = "linux") {
+                let tenants = crate::storage::run_tenants();
+                if !tenants.is_empty() {
+                    evidence.push_str(&format!(". Largest: {tenants}"));
+                }
+            }
             items.push(Issue {
                 id,
                 severity,
                 title,
                 why,
-                evidence: format!("{mount}: {} MB free of {} MB ({percent}%)", avail / MB, size / MB),
+                evidence,
                 repair: None,
             });
         }
