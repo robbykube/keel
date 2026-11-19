@@ -1608,3 +1608,37 @@ html[data-theme="light"] .home-card:hover { box-shadow: 0 20px 38px rgba(93, 78,
   }
   nav > a.active { box-shadow: inset 0 -2px 0 var(--accent); }
 }
+
+/* A page opened from the Keel screen. The bar stays put, including in full screen. */
+body.open-app {
+  display: flex;
+  flex-direction: column;
+  grid-template-columns: none;
+  grid-template-rows: none;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.open-bar {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--sidebar);
+  border-bottom: 1px solid var(--line);
+}
+.open-bar button {
+  min-height: 44px;
+  padding: 8px 14px;
+}
+body.open-app iframe {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: #000;
+}
+.open-empty {
+  margin: 16px;
+}

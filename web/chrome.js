@@ -560,3 +560,46 @@ if (document.readyState === "loading") {
 } else {
   screenKeyboard();
 }
+
+// The Keel screen is one full-screen window with no browser back. A link that
+// leaves Keel opens under a bar, so Back and Full screen stay on the screen.
+const keelScreen = () => {
+  const host = location.hostname;
+  return host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "[::1]";
+};
+
+const outsideKeel = (href) => {
+  try {
+    const url = new URL(href, location.href);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+    const host = url.hostname;
+    return !(host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "[::1]");
+  } catch {
+    return false;
+  }
+};
+
+const openUnderBar = (href) => {
+  try { sessionStorage.setItem("keel-back", location.pathname + location.search); } catch { /* home still works */ }
+  location.href = `/open.html?to=${encodeURIComponent(href)}`;
+};
+
+if (keelScreen()) {
+  document.addEventListener("click", (event) => {
+    if (event.button !== 0) return;
+    const node = event.target;
+    if (!(node instanceof Element)) return;
+    const link = node.closest("a[href]");
+    if (!link || !outsideKeel(link.href)) return;
+    event.preventDefault();
+    openUnderBar(link.href);
+  }, true);
+  const opened = window.open.bind(window);
+  window.open = (url, ...rest) => {
+    if (url && outsideKeel(url)) {
+      openUnderBar(new URL(url, location.href).href);
+      return null;
+    }
+    return opened(url, ...rest);
+  };
+}
