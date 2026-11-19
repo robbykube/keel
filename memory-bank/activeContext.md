@@ -33,6 +33,8 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Next
 
+Bluetooth is a page under This computer (v0.1.84). Look, then Pair a keyboard or headphones. A code can be confirmed with Yes, typed on the keyboard, or typed on this screen. Disconnect and Forget are on the same page. Leave the router's own DNS as it is.
+
 Printing, Bluetooth, printer discovery, modems, cron, sensors and Wi-Fi stay off while the computer is starting. Keel starts them once it is up (v0.1.83). The Pi copy fetches Bluetooth then. There is no page to pair a keyboard or headphones yet. Leave the router's own DNS as it is.
 
 The Keel screen has no browser back. A link that leaves Keel opens under a bar with Back and Full screen (v0.1.82). The bar stays while the page is full screen. Leave the router's own DNS as it is.
@@ -49,6 +51,7 @@ Video: the call size and Close are in v0.1.61. A call holds as many people as th
 
 ## Recent
 
+- **v0.1.84 (2026-11-19):** Bluetooth page under This computer. Look finds keyboards and headphones, Pair connects one, and a code is confirmed with Yes, typed on the keyboard, or typed on this screen. Disconnect and Forget are on the same page.
 - **v0.1.83 (2026-11-19):** The extras that were left off (printing, Bluetooth, printer discovery, modems, cron, sensors, Wi-Fi) still do not start with the computer. Keel starts each one, without waiting, once it is up. A Pi without Bluetooth fetches bluez and bluez-firmware after Keel is up, then starts it. No pairing page yet.
 - **v0.1.82 (2026-11-19):** On the Keel screen, a link that leaves Keel opens under a bar with Back and Full screen. The bar is part of the full-screen page, and the page underneath cannot cover it. Back returns to the Keel page the link was on. A phone still follows the link itself.
 - **v0.1.81 (2026-11-19):** Full temporary space (/run) is fixed without restarting the computer. Each minute, when /run has under 32 MB free, Keel drops the screen browser caches and old logs (storage::keep_run_roomy); under 8 MB it also restarts the screen, since systemd empties /run/keel-kiosk when the screen stops. Repair has "Empty the temporary space" (POST /api/repair id empty-run, storage::empty_run), which does all three and says how much is free. The run-full and run-low issues say so instead of "restart the computer", and their evidence names the largest folders in /run (storage::run_tenants). The screen caches (Cache, Code Cache, GPUCache) now live on the disk: memory-guard.sh writes /usr/lib/keel/kiosk-caches and a keel-kiosk drop-in (CacheDirectory=keel-kiosk, ExecStartPre) that links each profile's caches to /var/cache/keel-kiosk/<profile>/, one folder per screen so two screens never share a cache. drop_screen_caches skips those links. Not yet run on the Pi.

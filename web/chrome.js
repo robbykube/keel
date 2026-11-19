@@ -5,7 +5,7 @@ const PRIMARY = [
   ["/overlay.html", "Away"],
 ];
 const computerNav = (showInstall) => {
-  const items = [["/pools.html", "Disks"], ["/devices.html", "Devices"]];
+  const items = [["/pools.html", "Disks"], ["/devices.html", "Devices"], ["/bluetooth.html", "Bluetooth"]];
   if (showInstall) items.push(["/installer.html", "Install"]);
   items.push(["/repair.html", "Repair"]);
   return items;
@@ -26,6 +26,7 @@ const NAV_ICONS = {
   Guide: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5A3.5 3.5 0 0 1 19 8v11.5H8.5A3.5 3.5 0 0 0 5 23z"/><path d="M5 4.5v15A3.5 3.5 0 0 1 8.5 16H19M8 8h7M8 11.5h7"/></svg>',
   Notes: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12a1.5 1.5 0 0 1 1.5 1.5v14a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V5A1.5 1.5 0 0 1 6 3.5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
   Devices: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="18" cy="17" r="2"/><path d="M8 12h8M16.2 8.2 8 12l8.2 3.8"/></svg>',
+  Bluetooth: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 7.5c2.2 1.4 2.2 7.6 0 9M5.5 10c1.3.8 1.3 3.2 0 4M12 4.5l6 5.2-6 5.2V4.5zM12 14.3l6 5.2-6 4.5"/></svg>',
   Disks: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6.5" rx="7" ry="2.5"/><path d="M5 6.5v11c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-11M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>',
   Install: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M4.5 16.5v2a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-2"/></svg>',
   Repair: '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.2a4.8 4.8 0 0 0-3.9 6.4l-6 6a1.9 1.9 0 0 0 2.7 2.7l6-6a4.8 4.8 0 0 0 6.4-3.9l-2.9 1.4-2.3-1.1-1.1-2.3z"/></svg>',
@@ -251,7 +252,7 @@ const powerMenu = (session) => {
 
 // Pages that need a signed-in person. Signed out, their links go to Sign in
 // first, which comes back to the page.
-const NEEDS_SIGN_IN = new Set(["/pools.html", "/devices.html", "/installer.html", "/repair.html", "/logs.html", "/settings.html"]);
+const NEEDS_SIGN_IN = new Set(["/pools.html", "/devices.html", "/bluetooth.html", "/installer.html", "/repair.html", "/logs.html", "/settings.html"]);
 
 const installKeelChrome = (state = {}) => {
   const session = { signed_in: Boolean(state.signed_in), can_sign_out: Boolean(state.can_sign_out), who: state.who || "" };

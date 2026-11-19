@@ -2,6 +2,7 @@ mod advisor;
 mod apps;
 mod assets;
 mod auth;
+mod bluetooth;
 mod catalog;
 mod config;
 mod devices;
@@ -415,6 +416,31 @@ async fn main() {
         .route(
             "/api/devices/look",
             post(devices_look).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route("/api/bluetooth", get(bluetooth_view).layer(axum::middleware::from_fn(auth::require_admin)))
+        .route(
+            "/api/bluetooth/look",
+            post(bluetooth_look).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/bluetooth/pair",
+            post(bluetooth_pair).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/bluetooth/connect",
+            post(bluetooth_connect).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/bluetooth/disconnect",
+            post(bluetooth_disconnect).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/bluetooth/forget",
+            post(bluetooth_forget).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/bluetooth/answer",
+            post(bluetooth_answer).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route(
             "/api/notes",
@@ -1039,6 +1065,76 @@ async fn devices_mark(Json(ask): Json<DeviceMark>) -> (StatusCode, Json<serde_js
 
 async fn devices_view() -> Json<crate::devices::Report> {
     Json(crate::devices::saved())
+}
+
+#[derive(serde::Deserialize)]
+struct BluetoothMac {
+    mac: String,
+}
+
+#[derive(serde::Deserialize)]
+struct BluetoothAnswer {
+    answer: String,
+}
+
+fn bluetooth_ok(report: crate::bluetooth::Report) -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::OK,
+        Json(serde_json::to_value(report).unwrap_or_else(|_| serde_json::json!({ "message": "Bluetooth did not answer." }))),
+    )
+}
+
+fn bluetooth_err(message: String) -> (StatusCode, Json<serde_json::Value>) {
+    (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "message": message })))
+}
+
+async fn bluetooth_view() -> Json<crate::bluetooth::Report> {
+    Json(tokio::task::spawn_blocking(crate::bluetooth::view).await.unwrap_or_else(|_| crate::bluetooth::Report {
+        message: "Bluetooth did not answer.".into(),
+        state: "idle".into(),
+        code: String::new(),
+        ask: String::new(),
+        mac: String::new(),
+        devices: Vec::new(),
+    }))
+}
+
+async fn bluetooth_look() -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    bluetooth_call(tokio::task::spawn_blocking(crate::bluetooth::look).await)
+}
+
+async fn bluetooth_pair(Json(body): Json<BluetoothMac>) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    bluetooth_call(tokio::task::spawn_blocking(move || crate::bluetooth::pair(&body.mac)).await)
+}
+
+async fn bluetooth_connect(Json(body): Json<BluetoothMac>) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    bluetooth_call(tokio::task::spawn_blocking(move || crate::bluetooth::connect(&body.mac)).await)
+}
+
+async fn bluetooth_disconnect(Json(body): Json<BluetoothMac>) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    bluetooth_call(tokio::task::spawn_blocking(move || crate::bluetooth::disconnect(&body.mac)).await)
+}
+
+async fn bluetooth_forget(Json(body): Json<BluetoothMac>) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    bluetooth_call(tokio::task::spawn_blocking(move || crate::bluetooth::forget(&body.mac)).await)
+}
+
+async fn bluetooth_answer(Json(body): Json<BluetoothAnswer>) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match tokio::task::spawn_blocking(move || crate::bluetooth::answer(&body.answer)).await {
+        Ok(Ok(())) => Ok((StatusCode::OK, Json(serde_json::json!({ "ok": true })))),
+        Ok(Err(message)) => Err(bluetooth_err(message)),
+        Err(_) => Err(bluetooth_err("Bluetooth did not answer.".into())),
+    }
+}
+
+fn bluetooth_call(
+    done: Result<Result<crate::bluetooth::Report, String>, tokio::task::JoinError>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match done {
+        Ok(Ok(report)) => Ok(bluetooth_ok(report)),
+        Ok(Err(message)) => Err(bluetooth_err(message)),
+        Err(_) => Err(bluetooth_err("Bluetooth did not answer.".into())),
+    }
 }
 
 fn devices_problem(message: String) -> (StatusCode, Json<serde_json::Value>) {

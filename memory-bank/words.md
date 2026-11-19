@@ -32,6 +32,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Papers | Documents filed at papers and the name you own. Open that address on your phone or another computer and create the account for this house. Papers you add are stored in Documents. Files already in Documents stay where they are. On the phone, DNS for the house Wi-Fi is this computer. Leave the router's own DNS as it is |
 | Mail | A mailbox on this computer, at mail and the name you own. Open it on your phone or another computer. Sign in as mail with the password Keel shows, then add Gmail or another account. Mail you move here stays here. On the phone, DNS for the house Wi-Fi is this computer. Leave the router's own DNS as it is |
 | Devices | Computers that answered on the house network. Look now writes the list. Nothing is blocked |
+| Bluetooth | Keyboards and headphones for this computer. Look, then Pair. Disconnect and Forget are on the same page |
 | The name you own | The name you bought, such as klaingar.com. Keel makes each app name, such as photos.klaingar.com, and asks for the lock. You do not type addresses |
 | Names | The book of names for this house. Keel opens it on its own. Leave the router DNS as it is |
 | Logs | Notes from Names and the front door. Sign in, then open Logs. That works from another computer |

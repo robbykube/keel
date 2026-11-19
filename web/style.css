@@ -1642,3 +1642,8 @@ body.open-app iframe {
 .open-empty {
   margin: 16px;
 }
+.bluetooth-code {
+  font-size: 32px;
+  letter-spacing: 0.12em;
+  margin: 8px 0;
+}
