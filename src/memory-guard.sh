@@ -253,23 +253,25 @@ fi
 [ "$changed" = 1 ] && systemctl daemon-reload >/dev/null 2>&1
 [ "$start_before" = 1 ] && changed=1
 
-# Programs Keel does not use stop starting with the computer: printing,
-# Bluetooth, finding printers on the network, modems, cron and sensors.
-# Wi-Fi only when no Wi-Fi connection is in use. They stay installed.
+# Printing, Bluetooth, finding printers, modems, cron, sensors and Wi-Fi
+# stay off while the computer is starting. Once Keel is up it starts them,
+# so they do not hold the screen back and they are there afterwards.
+later() {
+  systemctl cat "$1" >/dev/null 2>&1 || return 0
+  systemctl disable "$1" >/dev/null 2>&1 || true
+  systemctl start --no-block "$1" >/dev/null 2>&1 || true
+}
 for unit in cups.service cups-browsed.service cups.socket bluetooth.service \
     avahi-daemon.service avahi-daemon.socket ModemManager.service cron.service \
-    lm-sensors.service; do
-  if systemctl is-enabled "$unit" >/dev/null 2>&1; then
-    systemctl disable --now "$unit" >/dev/null 2>&1 || true
-  fi
+    lm-sensors.service wpa_supplicant.service; do
+  later "$unit"
 done
-wifi_used=0
-for dev in /sys/class/net/*; do
-  [ -d "$dev/wireless" ] || continue
-  [ "$(cat "$dev/operstate" 2>/dev/null)" = up ] && wifi_used=1
-done
-if [ "$wifi_used" = 0 ] && systemctl is-enabled wpa_supplicant.service >/dev/null 2>&1; then
-  systemctl disable --now wpa_supplicant.service >/dev/null 2>&1 || true
+# The Pi copy does not ship Bluetooth. Fetch it once Keel is up, then start it.
+# A separate task, so this script can finish without waiting on the download.
+if ! systemctl cat bluetooth.service >/dev/null 2>&1; then
+  systemd-run --quiet --collect --unit=keel-bluetooth-fetch /bin/bash -c \
+    'apt-get update -qq && apt-get install -y --no-install-recommends bluez bluez-firmware && systemctl disable bluetooth.service >/dev/null 2>&1; rfkill unblock bluetooth >/dev/null 2>&1; systemctl start --no-block bluetooth.service >/dev/null 2>&1' \
+    >/dev/null 2>&1 || true
 fi
 
 # A computer that stops answering completely restarts by itself. The chip

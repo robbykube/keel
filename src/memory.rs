@@ -187,7 +187,10 @@ mod tests {
         assert!(script.contains("Storage=persistent"));
         assert!(script.contains("--any --timeout=10"));
         assert!(script.contains("bluetooth.service"));
-        assert!(script.contains("wifi_used"));
+        assert!(script.contains("start --no-block"));
+        assert!(!script.contains("disable --now"));
+        assert!(script.contains("bluez"));
+        assert!(!script.contains("wifi_used"));
         assert!(script.contains("\"DiskCacheSize\": 33554432"));
         assert!(script.contains("ExecStartPre=-/usr/lib/keel/kiosk-caches"));
         assert!(script.contains("SystemMaxUse=64M"));
