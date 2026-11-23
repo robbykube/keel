@@ -42,23 +42,6 @@ jobs:
           fi
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.24'
-      - name: Build the light Video program (Galène)
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Pinned: the tag and the commit it must point at.
-          tag=galene-1.2.2
-          commit=f2becb441b409881a4bdd2f8f5bbf5d8e9ab28b9
-          git clone --quiet --depth 1 --branch "$tag" https://github.com/jech/galene galene-src
-          test "$(git -C galene-src rev-parse HEAD)" = "$commit"
-          (cd galene-src && CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.name }} go build -trimpath -ldflags='-s -w' -o ../galene-bin .)
-          # The meeting page loads Keel's call recorder after Galène's own script.
-          grep -q '<script src="/galene.js" defer></script>' galene-src/static/galene.html
-          sed -i 's#<script src="/galene.js" defer></script>#&\n    <script src="/keel-recording/recorder.js" defer></script>#' galene-src/static/galene.html
-          grep -q 'keel-recording/recorder.js' galene-src/static/galene.html
       - name: Package appliance payload
         shell: bash
         run: |
@@ -67,10 +50,10 @@ jobs:
           install -m 0755 "target/${{ matrix.target }}/release/keel" release/keel/keel
           install -m 0644 packaging/systemd/keel.service release/keel/keel.service
           cp -a web release/keel/web
-          mkdir -p release/keel/apps/galene
-          install -m 0755 galene-bin release/keel/apps/galene/galene
-          cp -a galene-src/static release/keel/apps/galene/static
-          cp galene-src/LICENCE release/keel/apps/galene/LICENCE 2>/dev/null || cp galene-src/LICENSE release/keel/apps/galene/LICENSE
+          # No apps folder. A computer still on 0.1.54 rejects that folder, and
+          # Settings always installs the latest package. Pack Galène again only
+          # after the EliteDesk has installed this release. The program in this
+          # package already accepts the folder.
           tar -C release -czf "keel-linux-${{ matrix.name }}-${GITHUB_REF_NAME}.tar.gz" keel
       - name: Upload package
         uses: actions/upload-artifact@v4

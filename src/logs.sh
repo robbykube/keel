@@ -41,6 +41,38 @@ show "Start"
 systemd-analyze 2>/dev/null | head -n 2 || true
 systemd-analyze blame --no-pager 2>/dev/null | head -n 12 || true
 systemd-analyze critical-chain keel.service --no-pager 2>/dev/null | tail -n +2 | head -n 12 || true
+# What failed or ran out of time while this computer was turning on.
+show "While turning on"
+failed=0
+units=$(systemctl list-units --state=failed --full --no-legend --plain --no-pager 2>/dev/null \
+  | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /\.(service|mount|socket|timer|swap)$/) { print $i; break } }' || true)
+while read -r unit; do
+  [ -n "${unit:-}" ] || continue
+  case "$unit" in
+    *[!A-Za-z0-9_@.:-]*) continue ;;
+  esac
+  failed=1
+  desc=$(systemctl show -p Description --value "$unit" 2>/dev/null | head -n 1 | cut -c 1-120)
+  [ -n "$desc" ] || desc="$unit"
+  result=$(systemctl show -p Result --value "$unit" 2>/dev/null | head -n 1)
+  if [ "$result" = "timeout" ]; then
+    why="ran out of time"
+  else
+    why="stopped with an error"
+  fi
+  line=$(journalctl -b -u "$unit" -o cat --no-pager -q 2>/dev/null | grep -F -e 'timed out' -e 'Timed out' -e 'Failed' | tail -n 1 | cut -c 1-180)
+  if [ -n "$line" ]; then
+    printf '%s %s. %s\n' "$desc" "$why" "$line"
+  else
+    printf '%s %s.\n' "$desc" "$why"
+  fi
+done <<EOF
+$units
+EOF
+if [ "$failed" -eq 0 ]; then
+  printf '%s\n' "Nothing failed while turning on."
+fi
+journalctl -b -o cat --no-pager -q 2>/dev/null | grep -F 'timed out' | head -n 15 || true
 # The last lines before the computer last stopped, when the logs were kept.
 show "Before the last stop"
 journalctl -b -1 -n 60 -o short --no-pager -q 2>/dev/null | tail -n 60 || true

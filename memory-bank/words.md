@@ -35,7 +35,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Bluetooth | Keyboards and headphones for this computer. Look, then Pair. Disconnect and Forget are on the same page |
 | The name you own | The name you bought, such as klaingar.com. Keel makes each app name, such as photos.klaingar.com, and asks for the lock. You do not type addresses |
 | Names | The book of names for this house. Keel opens it on its own. Leave the router DNS as it is |
-| Logs | Notes from Names and the front door. Sign in, then open Logs. That works from another computer |
+| Logs | Notes from Names and the front door. Sign in, then open Logs. That works from another computer. While turning on names what failed or ran out of time as the computer started |
 | Front door | A small program on this computer. It answers a name you own and sends it to that app. This page stays on its own address |
 | Photos | Pictures already in Media. Open shows the folders first. Choosing one shows its pictures, and more appear as you scroll. Back stays on the page, including when one picture is open. Pictures not in a folder have their own category. Small copies stay on the disk. Jellyfin is the full program. A small computer is refused it |
 | Send to the phone | When something is red, one message goes to the free ntfy app. The phone must be on Away |

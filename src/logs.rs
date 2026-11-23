@@ -24,6 +24,9 @@ mod tests {
         assert!(script.contains("podman logs --tail 80 keel-names"));
         assert!(script.contains("Front door, path"));
         assert!(script.contains("/var/lib/immich/setup.log"));
+        assert!(script.contains("While turning on"));
+        assert!(script.contains("list-units --state=failed"));
+        assert!(script.contains("Nothing failed while turning on."));
         assert!(script.contains("Listening"));
         assert!(script.contains("Rules"));
         assert!(!script.contains("9478"));
