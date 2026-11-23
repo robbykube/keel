@@ -327,6 +327,26 @@ fn label(proto: Proto, port: u16) -> String {
     format!("{} {port}", proto.word())
 }
 
+/// Where another computer opens this page. The address this computer uses
+/// on the house network wins. A container address is not reachable from a phone.
+pub fn page_address(house: Option<Ipv4Addr>, others: &[Ipv4Addr], port: u16) -> Option<String> {
+    let ip = house.filter(|ip| reachable(*ip)).or_else(|| {
+        others.iter().copied().find(|ip| is_192(*ip)).or_else(|| {
+            others.iter().copied().find(|ip| ip.is_private() && reachable(*ip))
+        })
+    })?;
+    Some(format!("http://{ip}:{port}"))
+}
+
+fn reachable(ip: Ipv4Addr) -> bool {
+    !ip.is_loopback() && !ip.is_unspecified() && !ip.is_link_local() && !ip.is_multicast() && !ip.is_broadcast()
+}
+
+fn is_192(ip: Ipv4Addr) -> bool {
+    let o = ip.octets();
+    o[0] == 192 && o[1] == 168 && reachable(ip)
+}
+
 /// This computer's address on the house network: the one it would use to
 /// reach the internet. No packet is sent.
 pub fn house_address() -> Option<Ipv4Addr> {
@@ -441,6 +461,26 @@ pub fn address_in_trace(text: &str) -> Option<Ipv4Addr> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_page_address_is_the_one_on_the_house_network() {
+        let house = "192.168.0.191".parse().ok();
+        let bridge = "10.88.0.1".parse().unwrap();
+        let here = "192.168.0.191".parse().unwrap();
+        assert_eq!(
+            page_address(house, &[bridge, here], 9478).as_deref(),
+            Some("http://192.168.0.191:9478")
+        );
+        assert_eq!(
+            page_address(None, &[bridge, here], 9478).as_deref(),
+            Some("http://192.168.0.191:9478")
+        );
+        assert_eq!(
+            page_address(None, &[bridge], 9478).as_deref(),
+            Some("http://10.88.0.1:9478")
+        );
+        assert_eq!(page_address(None, &["127.0.0.1".parse().unwrap()], 9478), None);
+    }
+
     #[test]
     fn the_ports_are_said_in_few_words() {
         let labels: Vec<String> = super::PORTS.iter().map(|(p, n)| super::label(*p, *n)).collect();

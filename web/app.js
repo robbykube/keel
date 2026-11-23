@@ -161,6 +161,26 @@ function disksCard(storage, failing) {
   </article>`;
 }
 
+function showReach(page) {
+  const box = $("reach");
+  if (!page) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  $("reach-address").textContent = page;
+  const copy = $("reach-copy");
+  copy.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(page);
+      copy.textContent = "Copied";
+    } catch {
+      copy.textContent = "Select the address and copy it";
+    }
+    window.setTimeout(() => { copy.textContent = "Copy"; }, 1600);
+  };
+}
+
 function showNotice(lines, href, failing) {
   const box = $("notice");
   if (!lines.length) {
@@ -316,6 +336,7 @@ async function load() {
     fix = afterSignIn("/repair.html", signedIn);
   }
   showNotice(lines, fix, red.length > 0);
+  showReach(s.page);
   showAppChoice(apps.data);
   showSpare();
 

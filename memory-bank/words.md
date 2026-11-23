@@ -6,6 +6,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 
 | We say | Means |
 | --- | --- |
+| From another computer | Open Keel at this address in a browser on the house network |
 | Files | The name a PC uses to open those files. Same name at home and away |
 | Disks | Where the files are stored |
 | Apps | Programs on this computer. Names and the front door open on their own. Save the name whenever you like, then open an app |

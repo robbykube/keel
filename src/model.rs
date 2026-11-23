@@ -20,6 +20,8 @@ pub struct SystemSnapshot {
     /// Non-loopback IPv4 addresses. The person sitting at the appliance has no
     /// other way to learn where to reach it from their own computer.
     pub addresses: Vec<String>,
+    /// Where another computer opens this page, such as http://192.168.0.191:9478.
+    pub page: String,
     pub cpu_pct: f32,
     pub mem_used: u64,
     pub mem_total: u64,
@@ -34,6 +36,7 @@ impl SystemSnapshot {
             os: std::env::consts::OS.into(),
             platform: std::env::consts::OS,
             addresses: Vec::new(),
+            page: String::new(),
             cpu_pct: 0.0,
             mem_used: 0,
             mem_total: 0,

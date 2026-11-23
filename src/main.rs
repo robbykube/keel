@@ -2179,11 +2179,15 @@ fn collect_system() -> SystemSnapshot {
     sys.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
     let rss = sys.process(pid).map(|p| p.memory()).unwrap_or(0);
 
+    let addresses = local_addresses();
+    let port = std::env::var("KEEL_PORT").ok().and_then(|value| value.parse().ok()).unwrap_or(9478);
+    let others: Vec<std::net::Ipv4Addr> = addresses.iter().filter_map(|text| text.parse().ok()).collect();
     SystemSnapshot {
         hostname: System::host_name().unwrap_or_else(|| "keel".into()),
         os: System::long_os_version().unwrap_or_else(|| std::env::consts::OS.into()),
         platform: std::env::consts::OS,
-        addresses: local_addresses(),
+        addresses,
+        page: crate::router::page_address(crate::router::house_address(), &others, port).unwrap_or_default(),
         cpu_pct: sys.global_cpu_usage(),
         mem_used: sys.used_memory(),
         mem_total: sys.total_memory(),

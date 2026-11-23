@@ -1073,6 +1073,8 @@ body.screen-keyboard-open .scroll { padding-bottom: 300px; }
   object-fit: cover;
   background: var(--panel-2);
 }
+.reach { margin-bottom: var(--space-4); }
+.reach .path-box code { font-size: 18px; }
 .home-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
