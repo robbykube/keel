@@ -205,7 +205,7 @@ fn stopped_issue(log: &str, now: i64) -> Option<Issue> {
     let why = match what.strip_prefix("stopped ") {
         Some("Photos") => "Memory was full for three minutes, so Keel stopped Photos to keep the computer answering. Open it on Apps when you need it.",
         Some("Video") => "Memory was full for three minutes, so Keel stopped Video to keep the computer answering. Open it on Apps when you need it.",
-        Some("Jellyfin") => "Memory was full for three minutes, so Keel stopped Jellyfin to keep the computer answering. Open it on Apps when you need it.",
+        Some("Watch") | Some("Jellyfin") => "Memory was full for three minutes, so Keel stopped Watch to keep the computer answering. Open it on Apps when you need it.",
         Some("Passwords") => "Memory was full for three minutes, so Keel stopped Passwords to keep the computer answering. Open it on Apps when you need it.",
         Some("Papers") => "Memory was full for three minutes, so Keel stopped Papers to keep the computer answering. Open it on Apps when you need it.",
         Some("Mail") => "Memory was full for three minutes, so Keel stopped Mail to keep the computer answering. Open it on Apps when you need it.",

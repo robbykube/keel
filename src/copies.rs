@@ -87,11 +87,10 @@ pub fn copy_computer() -> Result<String, String> {
 ///
 /// What goes in: the program, Keel's own settings (people, the name you own,
 /// disk jobs, the locks for the app names), the apps' settings and data
-/// (the password vault, Papers, Mail settings, Names, Video, Away's
-/// identity), and the admin token. Not the files, not picture copies, not
-/// downloaded programs, and not Photos' own database, which rebuilds from
-/// Media. An app is paused for the moment its data is copied, so its
-/// database is copied whole.
+/// (the password vault, Papers, Mail settings, Names, Video, Photos, Watch,
+/// Away's identity), and the admin token. Not the files and not picture
+/// copies. The pictures, films, and music stay in Media. An app is paused
+/// for the moment its data is copied, so its database is copied whole.
 const COMPUTER_COPY_SCRIPT: &str = r#"set -uo pipefail
 copy=/srv/keel/copy
 extra=/srv/keel/extra
@@ -103,6 +102,8 @@ containers_of() {
     thunderbird) echo keel-mail ;;
     technitium) echo keel-names ;;
     jitsi) echo keel-jitsi-prosody keel-jitsi-jicofo keel-jitsi-jvb keel-jitsi-web ;;
+    immich) echo keel-photos-server keel-photos-ml keel-photos-db keel-photos-redis ;;
+    jellyfin) echo keel-jellyfin ;;
   esac
 }
 build() {
@@ -115,7 +116,7 @@ build() {
     tar -C /var/lib/keel --exclude=./files --exclude=./previews --exclude=./updates/staged \
       --exclude=./updates/previous --exclude='./*.tmp' -cf - . | tar -C "$work/people" -xf - || return 1
   fi
-  for app in vaultwarden papra thunderbird technitium jitsi tailscale; do
+  for app in vaultwarden papra thunderbird technitium jitsi immich jellyfin tailscale; do
     [ -d "/var/lib/$app" ] || continue
     paused=""
     for name in $(containers_of "$app"); do
@@ -223,12 +224,15 @@ containers_of() {
     thunderbird) echo keel-mail ;;
     technitium) echo keel-names ;;
     jitsi) echo keel-jitsi-prosody keel-jitsi-jicofo keel-jitsi-jvb keel-jitsi-web ;;
+    immich) echo keel-photos-server keel-photos-ml keel-photos-db keel-photos-redis ;;
+    jellyfin) echo keel-jellyfin ;;
   esac
 }
 progress_of() {
   case "$1" in
     vaultwarden) echo passwords ;; papra) echo papers ;; thunderbird) echo mail ;;
-    technitium) echo names ;; jitsi) echo jitsi ;;
+    technitium) echo names ;; jitsi) echo jitsi ;; immich) echo photos ;;
+    jellyfin) echo jellyfin ;;
   esac
 }
 install -d -m 0755 /var/lib/keel
@@ -236,7 +240,7 @@ tar -C "$src/people" -cf - . | tar -C /var/lib/keel -xf - || fail "Keel could no
 for dir in "$src"/apps/*/; do
   [ -d "$dir" ] || continue
   app=$(basename "$dir")
-  case "$app" in vaultwarden|papra|thunderbird|technitium|jitsi|tailscale) ;; *) continue ;; esac
+  case "$app" in vaultwarden|papra|thunderbird|technitium|jitsi|immich|jellyfin|tailscale) ;; *) continue ;; esac
   for name in $(containers_of "$app"); do podman rm -f "$name" >/dev/null 2>&1 || true; done
   [ "$app" = tailscale ] && systemctl stop tailscaled >/dev/null 2>&1
   install -d -m 0755 "/var/lib/$app"
@@ -595,7 +599,7 @@ mod tests {
     fn the_copy_of_this_computer_keeps_the_apps_and_can_come_back() {
         let copy = super::COMPUTER_COPY_SCRIPT;
         assert!(!copy.contains("mktemp -d /tmp"), "the copy is built on the disk, not in memory");
-        for app in ["vaultwarden", "papra", "thunderbird", "technitium", "jitsi", "tailscale"] {
+        for app in ["vaultwarden", "papra", "thunderbird", "technitium", "jitsi", "immich", "jellyfin", "tailscale"] {
             assert!(copy.contains(app), "{app} is copied");
         }
         assert!(copy.contains("podman pause"));

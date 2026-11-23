@@ -138,7 +138,7 @@ app_of() {
 }
 title_of() {
   case "$1" in
-    photos) echo Photos ;; jitsi) echo Video ;; jellyfin) echo Jellyfin ;;
+    photos) echo Photos ;; jitsi) echo Video ;; jellyfin) echo Watch ;;
     passwords) echo Passwords ;; papers) echo Papers ;; mail) echo Mail ;;
   esac
 }

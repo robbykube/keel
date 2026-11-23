@@ -33,7 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Next
 
-The EliteDesk installed 0.1.88 on 2026-11-23. That program accepts an apps folder, so a later release may pack Galène again. v0.1.89 is still the Photos download, and its package has no apps folder. Leave the router's own DNS as it is.
+The EliteDesk installed 0.1.88 on 2026-11-23. That program accepts an apps folder, so a later release may pack Galène again. v0.1.92 adds Watch and still leaves the apps folder out. Install 0.1.92 from Settings once the package is finished. Leave the router's own DNS as it is.
 
 Bluetooth is a page under This computer (v0.1.84). Look, then Pair a keyboard or headphones. A code can be confirmed with Yes, typed on the keyboard, or typed on this screen. Disconnect and Forget are on the same page. Leave the router's own DNS as it is.
 
@@ -53,6 +53,7 @@ Video: the call size and Close are in v0.1.61. A call holds as many people as th
 
 ## Recent
 
+- **v0.1.92 (2026-11-23):** Watch is its own card: films, shows, and music already in Media. One Open button. The address is watch and the name you own, sent to the front door as keel-jellyfin on 8096, not the Photos name. A computer under 6 GB is refused it. Photos, Watch, Video, Passwords, Papers, and Mail each have a card, a name, and Open. The nightly copy of this computer includes Photos and Watch. Not yet installed.
 - **v0.1.91 (2026-11-23):** Photos has one Open button. Settings → Light or full chooses it. Light opens the pictures already in Media on Keel's own page. Full starts Immich (the pictures stay in Media). Switching stops Immich and the card waits for Open. Jellyfin is no longer on the Photos card. A films and music card is not added. Not yet installed.
 - **v0.1.90 (2026-11-23):** Home shows where another computer opens Keel. The address is the one this computer uses on the house network, with the page port, such as http://192.168.0.191:9478. A container address is not used while a house address is known. Copy is on the card. Not yet installed.
 - **v0.1.89 (2026-11-23):** Photos can save the open picture or video. Download on that page asks for the file itself (`download=1` on `/api/photos/picture`), and Keel sends it as a file to save, with the picture's own name. The screen copy stays what you see. The package still has no apps folder, so a computer on 0.1.54 can install it. Not yet installed.

@@ -7,6 +7,7 @@ pub fn guests(idle: bool) -> Vec<Guest> {
         (103, "vaultwarden", "passwords", false, false),
         (105, "jitsi", "video", false, true),
         (106, "immich", "photos", false, true),
+        (111, "jellyfin", "watch", false, true),
         (108, "npm", "proxy", false, false),
         (109, "papra", "documents", false, true),
         (110, "thunderbird", "mail", false, true),

@@ -1,5 +1,5 @@
-//! Jellyfin is the full program for a larger computer.
-//! A small computer is refused. Pictures stay in Media.
+//! Watch is films, shows, and music already in Media.
+//! A small computer is refused. The address is watch.<the name you own>.
 
 use std::fs;
 use std::path::Path;
@@ -48,7 +48,7 @@ pub fn view() -> Status {
         return Status {
             ready: false,
             address: String::new(),
-            message: "Jellyfin installs on the Keel computer.".into(),
+            message: "Watch installs on the Keel computer.".into(),
             state: "unavailable".into(),
             percent: 0,
             allowed: true,
@@ -74,26 +74,26 @@ pub fn view() -> Status {
 
 pub fn start() -> Result<Status, String> {
     if !machine_fits() {
-        return Err("Jellyfin needs a larger computer.".into());
+        return Err("Watch needs a larger computer.".into());
     }
     if !cfg!(target_os = "linux") {
-        return Err("Jellyfin installs on the Keel computer.".into());
+        return Err("Watch installs on the Keel computer.".into());
     }
     crate::names::prepared()?;
     let owned = crate::owned::load().ok_or("Type the name you own, then press Open.")?;
-    let address = crate::owned::app_address(&owned, "photos")?;
+    let address = crate::owned::app_address(&owned, "watch")?;
     if OPENING
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
         .is_err()
     {
         return Ok(view());
     }
-    write_progress("running", 8, "Opening Jellyfin. This can take a while.", "", false);
+    write_progress("running", 8, "Opening Watch. This can take a while.", "", false);
     std::thread::spawn(move || {
         write_progress(
             "running",
             36,
-            "Downloading Jellyfin. Pictures stay in Media.",
+            "Downloading Watch. Films, shows, and music stay in Media.",
             "",
             false,
         );
@@ -104,7 +104,7 @@ pub fn start() -> Result<Status, String> {
             return;
         }
         write_progress("running", 92, "Writing the name.", "", false);
-        match crate::names::publish("photos", "keel-jellyfin", 8096) {
+        match crate::names::publish("watch", "keel-jellyfin", 8096) {
             Ok(waiting) => write_progress("done", 100, &ready_message(&address, waiting), &address, true),
             Err(message) => write_progress("error", 0, &message, "", false),
         }
@@ -123,7 +123,7 @@ fn refused() -> Status {
     Status {
         ready: false,
         address: String::new(),
-        message: "Jellyfin needs a larger computer.".into(),
+        message: "Watch needs a larger computer.".into(),
         state: "refused".into(),
         percent: 0,
         allowed: false,
@@ -136,9 +136,9 @@ fn idle() -> Status {
         ready: false,
         address: String::new(),
         message: if installed {
-            "Jellyfin is on this computer. Press Jellyfin to start it.".into()
+            "Watch is on this computer. Press Open to start it.".into()
         } else {
-            "Jellyfin is the full program. The first time downloads it. Pictures stay in Media.".into()
+            "Films, shows, and music already in Media. Press Open. The first time downloads the program.".into()
         },
         state: "idle".into(),
         percent: 0,
@@ -148,7 +148,7 @@ fn idle() -> Status {
 
 fn ready_message(address: &str, waiting: bool) -> String {
     format!(
-        "Jellyfin is at {address}. Pictures stay in Media. The first visit asks you to set it up.{} You do not type addresses.",
+        "Watch is at {address}. The first visit asks you to set it up, and to point it at the films, shows, and music in Media.{} You do not type addresses.",
         crate::names::lock_note(waiting)
     )
 }

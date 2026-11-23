@@ -47,8 +47,9 @@ const programs = {
   papers: { id: "papers", title: "Papers", path: "/api/apps/papra", host: "added" },
   mail: { id: "mail", title: "Mail", path: "/api/apps/thunderbird", host: "added" },
   photos: { id: "photos", title: "Photos", path: "/api/apps/immich", host: "added" },
+  watch: { id: "watch", title: "Watch", path: "/api/apps/jellyfin", host: "added" },
 };
-const chosenProgram = { jitsi: "video", vaultwarden: "passwords", immich: "photos", papra: "papers", thunderbird: "mail" };
+const chosenProgram = { jitsi: "video", vaultwarden: "passwords", immich: "photos", papra: "papers", thunderbird: "mail", jellyfin: "watch" };
 const programTimers = {};
 const latest = {};
 let ownedName = "";
@@ -82,7 +83,7 @@ function programRow(spec, status) {
   const bar = opening
     ? `<div class="install-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>`
     : "";
-  const waiting = !status.local && spec.host === "added" && !sharedReady && !status.ready;
+  const waiting = !status.local && status.allowed !== false && spec.host === "added" && !sharedReady && !status.ready;
   const sharedDown = !latest.names || !latest.names.ready || !latest.door || !latest.door.ready;
   const message = status.local
     ? (status.message || "Pictures already in Media. Open shows them here.")
@@ -92,7 +93,7 @@ function programRow(spec, status) {
   const shared = spec.host === "names" && status.state !== "error";
   const open = status.local
     ? `<a class="button" href="/photos.html">Open</a>`
-    : (status.state === "unavailable" || status.ready || waiting || shared
+    : (status.allowed === false || status.state === "unavailable" || status.ready || waiting || shared
       ? ""
       : `<button type="button" data-program="${escapeHtml(spec.id)}"${opening ? " disabled" : ""}>Open</button>`);
   const close = status.ready && status.signups_open
@@ -359,7 +360,7 @@ async function load() {
     ? more.map((app) => row(app, false)).join("")
     : `<p class="meta">Every app on the list is already added.</p>`;
   if (opened.some((app) => app.id === "immich")) paintPhotos();
-  for (const appId of ["thunderbird", "papra", "vaultwarden", "jitsi"]) {
+  for (const appId of ["thunderbird", "papra", "vaultwarden", "jitsi", "jellyfin"]) {
     if (!opened.some((app) => app.id === appId)) continue;
     const spec = programs[chosenProgram[appId]];
     const status = await programStatus(spec);

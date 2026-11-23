@@ -39,6 +39,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Logs | Notes from Names and the front door. Sign in, then open Logs. That works from another computer. While turning on names what failed or ran out of time as the computer started |
 | Front door | A small program on this computer. It answers a name you own and sends it to that app. This page stays on its own address |
 | Photos | Pictures already in Media. One Open button. Settings picks light or full. Light opens the pictures on Keel's own page. Full starts Immich. Download saves the open picture or video to the phone or computer you are using |
+| Watch | Films, shows, and music already in Media. One Open button. The address is watch and the name you own. A small computer is refused it |
 | Send to the phone | When something is red, one message goes to the free ntfy app. The phone must be on Away |
 | Use this | Shared folder or files app a person should pick |
 | Leave this | Disks for other programs, installer files, or the computer itself |

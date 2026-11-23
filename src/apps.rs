@@ -111,6 +111,19 @@ pub fn manifests(idle: bool) -> Vec<AppManifest> {
             "The pictures and videos already in Media, sorted by when they were taken.",
         ),
         (
+            "jellyfin",
+            "Watch",
+            "container",
+            false,
+            true,
+            &[8096],
+            &[],
+            &["/var/lib/jellyfin"],
+            "http",
+            "on_demand",
+            "Films, shows, and music already in Media, at watch and the name you own.",
+        ),
+        (
             "npm",
             "Proxy",
             "container",
@@ -210,6 +223,7 @@ const CHOOSABLE: &[&str] = &[
     "vaultwarden",
     "jitsi",
     "immich",
+    "jellyfin",
     "papra",
     "thunderbird",
 ];
@@ -332,7 +346,7 @@ mod tests {
     #[test]
     fn every_manifest_has_a_runtime_and_policy() {
         let apps = manifests(true);
-        assert_eq!(apps.len(), 8);
+        assert_eq!(apps.len(), 9);
         assert!(apps.iter().all(|app| app.id != "open-archiver" && app.id != "mail-gateway"));
         assert!(apps
             .iter()
