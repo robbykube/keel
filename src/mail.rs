@@ -136,17 +136,11 @@ fn ready_message(address: &str, password: &str, waiting: bool) -> String {
     message_for(address, password, waiting, house.as_deref())
 }
 
-fn message_for(address: &str, password: &str, waiting: bool, house: Option<&str>) -> String {
-    let lock = crate::names::lock_note(waiting);
-    let names = match house {
-        Some(ip) => format!(
-            " On the phone, set DNS for the house Wi-Fi to {ip}. Leave the router's own DNS as it is."
-        ),
-        None => String::new(),
-    };
-    format!(
-        "Mail is at {address}. On your phone or another computer, open that address and sign in as mail. The password is {password}. Add Gmail or another account there. Mail you move into this computer stays here.{names}{lock}"
-    )
+/// Open brings Mail up on Keel's own address, so the card needs no address,
+/// name, or DNS step. The password is its own field (hidden from visitors),
+/// never part of the sentence.
+fn message_for(_address: &str, _password: &str, _waiting: bool, _house: Option<&str>) -> String {
+    "Press Open, sign in as mail with the password below, then add Gmail or another account. Mail you move here stays here.".into()
 }
 
 /// Light Mail: SnappyMail. People sign in with their own email address; the
@@ -156,7 +150,7 @@ fn light_message(address: &str, admin: &str, waiting: bool) -> String {
     let admin_line = if admin == "none" {
         String::new()
     } else {
-        format!(" For another provider, open {address}/?admin, sign in as admin with the password {admin}, and add it under Domains.")
+        format!(" For another provider, open {address}/?admin and sign in as admin with the password below.")
     };
     format!(
         "Mail is at {address}. Sign in with your email address and its password. Gmail, Yahoo, iCloud and AOL work straight away; they want an app password, made on the account's security page. Outlook and Hotmail need the full Mail in Settings, because Microsoft accepts only its own sign-in.{admin_line}{lock}"
@@ -260,21 +254,10 @@ mod tests {
     }
 
     #[test]
-    fn the_card_tells_you_where_to_open_mail() {
-        let text = super::message_for(
-            "https://mail.klaingar.com",
-            "abc123",
-            false,
-            Some("192.168.0.127"),
-        );
-        assert!(text.contains("https://mail.klaingar.com"));
+    fn the_card_never_carries_the_password() {
+        let text = super::message_for("https://mail.klaingar.com", "abc123", false, Some("192.168.0.127"));
         assert!(text.contains("sign in as mail"));
-        assert!(text.contains("abc123"));
-        assert!(text.contains("Add Gmail or another account"));
-        assert!(text.contains("set DNS for the house Wi-Fi to 192.168.0.127"));
-        assert!(text.contains("Leave the router's own DNS as it is."));
-        let waiting = super::message_for("https://mail.klaingar.com", "abc123", true, None);
-        assert!(waiting.contains("The lock is not ready yet."));
-        assert!(!waiting.contains("set DNS"));
+        assert!(!text.contains("abc123"));
+        assert!(!super::light_message("https://m", "secret9", false).contains("secret9"));
     }
 }

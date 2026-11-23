@@ -601,3 +601,25 @@ h2 button.help, h3 button.help { vertical-align: 1px; }
   table.stack .row-actions { justify-content: flex-start; }
   table.stack .row-actions:empty { display: none; }
 }
+
+/* The Keel window: the app's name in the bar, and the wait while it starts. */
+.open-bar .open-title { flex: 1 1 auto; min-width: 0; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 var(--space-2); }
+.open-bar .button { min-height: 44px; padding: 8px 14px; display: inline-flex; align-items: center; }
+.open-wait { flex: 1 1 auto; display: grid; align-content: center; justify-items: center; gap: var(--space-3); padding: var(--space-6); text-align: center; }
+.open-wait h1 { margin: 0; }
+.open-wait .install-bar { width: min(420px, 80vw); }
+.open-wait .install-message { max-width: 52ch; margin: 0; }
+body.open-app { padding: 0; gap: 0; margin: 0; }
+body.open-app iframe { display: block; }
+.open-bar { margin: 0; }
+.app-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.open-ask { width: min(360px, 86vw); text-align: left; grid-template-columns: 1fr; }
+.open-ask .actions { justify-content: flex-start; }
+/* The Keel screen's keyboard covers the bottom of the window: the sign-in
+   form moves up, drops its title, and scrolls above the keys. */
+.open-wait { overflow-y: auto; min-height: 0; }
+/* While asking, the form sits at the top and does not move when the keys
+   open or close, so a tap on Sign in lands where it was aimed. */
+.open-wait.asking { align-content: start; padding-top: var(--space-5); }
+body.open-app.keel-screen .open-wait.asking { padding-bottom: var(--keyboard-room, 300px); }
+.open-ask label { scroll-margin-top: var(--space-3); }

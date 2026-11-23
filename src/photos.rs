@@ -57,10 +57,11 @@ pub fn view() -> Status {
             return idle();
         }
         if saved.state == "running" || saved.state == "error" || saved.ready {
+            let message = if saved.ready { ready_message(true) } else { saved.message };
             return Status {
                 ready: saved.ready,
                 address: saved.address,
-                message: saved.message,
+                message,
                 state: saved.state,
                 percent: saved.percent,
                 local: false,
@@ -96,13 +97,13 @@ pub fn start() -> Result<Status, String> {
         let result = crate::storage::host_text("exec /bin/bash -s", &[], Some(&script));
         match result {
             Ok(line) => match outcome(&line) {
-                Some((email, password, included)) => {
+                Some((_email, _password, included)) => {
                     write_progress("running", 92, "Writing the name.", "", false);
                     match crate::names::publish("photos", "keel-photos-server", 2283) {
-                        Ok(waiting) => write_progress(
+                        Ok(_waiting) => write_progress(
                             "done",
                             100,
-                            &ready_message(&address, waiting, &email, &password, included),
+                            &ready_message(included),
                             &address,
                             true,
                         ),
@@ -138,16 +139,14 @@ fn outcome(line: &str) -> Option<(String, String, bool)> {
     Some((email, password, included == "yes"))
 }
 
-fn ready_message(address: &str, waiting: bool, email: &str, password: &str, included: bool) -> String {
-    let pictures = if included {
-        "Pictures already in Media show there."
+/// Open signs the person in, so the account and its password stay on this
+/// computer (/var/lib/immich/account.pass) and never reach the page.
+fn ready_message(included: bool) -> String {
+    if included {
+        "Press Open. Keel signs you in.".into()
     } else {
-        "Pictures stay in Media. Press Open again in a minute if they are not listed yet."
-    };
-    format!(
-        "Photos are at {address}. Sign in as {email}. The password is {password}. {pictures}{} You do not type addresses.",
-        crate::names::lock_note(waiting)
-    )
+        "Press Open. Pictures may take a minute to appear.".into()
+    }
 }
 
 fn idle() -> Status {
@@ -158,7 +157,7 @@ fn idle() -> Status {
         message: if installed {
             "Photos are on this computer. Press Open to start them.".into()
         } else {
-            "Press Open. Keel makes the photos name and asks for the lock. The first time downloads the program.".into()
+            "Press Open. The first time downloads the program.".into()
         },
         state: "idle".into(),
         percent: 0,
@@ -206,7 +205,13 @@ pub fn setup_script(owned: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{outcome, setup_script};
+    use super::{outcome, ready_message, setup_script};
+
+    #[test]
+    fn the_page_never_sees_the_photos_password() {
+        assert!(!ready_message(true).contains("password"));
+        assert!(!ready_message(false).contains("password"));
+    }
 
     #[test]
     fn the_result_line_carries_the_account_without_an_address() {

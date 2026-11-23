@@ -98,6 +98,19 @@ invent its own font size, gap, radius, or color.
   Sign out, Restart, and Shut down. Until then the menu is Sign in. Do not
   draw a second power control on a page.
 
+## Opening an app
+
+- Open is one press. It goes to the Keel window (`/open.html?app=<id>`),
+  which starts the app if needed and then shows it. No address to copy, no
+  password to type where Keel made the account.
+- A running app's card shows Open and Close side by side. Close stops the
+  app until Open; a restart does not start it again. Running is what the
+  computer reports, not what the page remembers.
+- The window keeps a slim bar: Back, the app's name, New tab, Full screen.
+  It is the same on the Keel screen and on a PC.
+- An app card shows a password only where the person must type one (Mail),
+  as its own field with Copy, for signed-in people. Never inside a sentence.
+
 ## Lists and rows
 
 - Each row carries its own action (Disks: “Give it a job…”). A destructive

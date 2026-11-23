@@ -18,6 +18,7 @@ mod inventory;
 mod issues;
 mod jitsi;
 mod jellyfin;
+mod launch;
 mod locked;
 mod logs;
 mod mail;
@@ -398,6 +399,22 @@ async fn main() {
         .route(
             "/api/apps/thunderbird/install",
             post(mail_install).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/apps/{id}/remember",
+            post(app_remember).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/apps/{id}/stop",
+            post(app_stop).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/apps/running",
+            get(apps_running).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/apps/{id}/launch",
+            post(app_launch).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route(
             "/api/apps/{id}/action",
@@ -1879,6 +1896,60 @@ async fn apps_choose(
                 Json(serde_json::json!({ "ok": false, "message": message })),
             )
         })
+}
+
+#[derive(Deserialize)]
+struct RememberAsk {
+    user: String,
+    password: String,
+}
+
+/// "Sign in once": Keel keeps an app's sign-in when the app accepts it.
+async fn app_remember(Path(id): Path<String>, Json(ask): Json<RememberAsk>) -> (StatusCode, Json<serde_json::Value>) {
+    match crate::launch::remember(&id, &ask.user, &ask.password).await {
+        Ok(message) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "message": message }))),
+        Err(message) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "ok": false, "message": message }))),
+    }
+}
+
+/// Close: stop an app until Open.
+async fn app_stop(Path(id): Path<String>) -> (StatusCode, Json<serde_json::Value>) {
+    match tokio::task::spawn_blocking(move || crate::launch::stop(&id)).await {
+        Ok(Ok(message)) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "message": message }))),
+        Ok(Err(message)) => (StatusCode::CONFLICT, Json(serde_json::json!({ "ok": false, "message": message }))),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "ok": false, "message": "Keel could not close that app." }))),
+    }
+}
+
+async fn apps_running() -> Json<Vec<&'static str>> {
+    Json(tokio::task::spawn_blocking(crate::launch::running).await.unwrap_or_default())
+}
+
+/// Open: the address the Keel window loads for an app that is running.
+async fn app_launch(Path(id): Path<String>, headers: axum::http::HeaderMap) -> (StatusCode, Json<crate::launch::Launch>) {
+    let Some(host) = crate::launch::browser_host(&headers) else {
+        return (StatusCode::BAD_REQUEST, Json(crate::launch::Launch { message: "Keel could not tell which address this page is on.".into(), ..Default::default() }));
+    };
+    let answer = tokio::task::spawn_blocking(move || {
+        let (ready, address) = match id.as_str() {
+            "photos" => { let s = crate::photos::view(); (s.ready, s.address) }
+            "watch" => { let s = crate::jellyfin::view(); (s.ready, s.address) }
+            "papers" => { let s = crate::papers::view(); (s.ready, s.address) }
+            "mail" => { let s = crate::mail::view(); (s.ready, s.address) }
+            "passwords" => { let s = crate::passwords::view(); (s.ready, s.address) }
+            "video" => { let s = video_view(); (s.ready, s.address) }
+            _ => (false, String::new()),
+        };
+        if !ready {
+            let title = crate::launch::app(&id).map(|a| a.title).unwrap_or("That app");
+            return crate::launch::Launch { message: format!("{title} is not open yet."), ..Default::default() };
+        }
+        crate::launch::launch(&id, &host, &address)
+    })
+    .await
+    .unwrap_or_default();
+    let code = if answer.ok { StatusCode::OK } else { StatusCode::CONFLICT };
+    (code, Json(answer))
 }
 
 async fn app_action(

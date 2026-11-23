@@ -31,4 +31,33 @@ for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27
   sleep 2
 done
 [ "$ok" = 1 ] || fail "Watch did not answer. Try Open again."
+# The first time, Keel finishes Watch's setup itself: one house account and
+# one library over Media, so Open signs in and the films are already there.
+signin=/var/lib/keel/signin/watch.json
+if [ ! -f "$signin" ] && curl -s --max-time 5 http://127.0.0.1:8096/System/Info/Public | grep -q '"StartupWizardCompleted":false'; then
+  account=$(openssl rand -hex 12 2>/dev/null || head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  j() { curl -sS -o /dev/null --max-time 15 -w '%{http_code}' -H 'Content-Type: application/json' "$@" || true; }
+  j -X POST http://127.0.0.1:8096/Startup/Configuration -d '{"UICulture":"en-US","MetadataCountryCode":"US","PreferredMetadataLanguage":"en"}' >/dev/null
+  curl -s -o /dev/null --max-time 15 http://127.0.0.1:8096/Startup/User || true
+  j -X POST http://127.0.0.1:8096/Startup/User -d "{\"Name\":\"house\",\"Password\":\"$account\"}" >/dev/null
+  j -X POST http://127.0.0.1:8096/Startup/RemoteAccess -d '{"EnableRemoteAccess":true,"EnableAutomaticPortMapping":false}' >/dev/null
+  done=$(j -X POST http://127.0.0.1:8096/Startup/Complete)
+  case "$done" in
+    2*)
+      install -d -m 0700 /var/lib/keel/signin
+      umask 077
+      printf '{"user":"house","password":"%s"}\n' "$account" > "$signin"
+      chmod 0600 "$signin"
+      auth='MediaBrowser Client="Keel", Device="Keel", DeviceId="keel-setup", Version="1"'
+      token=$(curl -sS --max-time 15 -X POST http://127.0.0.1:8096/Users/AuthenticateByName \
+        -H 'Content-Type: application/json' -H "Authorization: $auth" \
+        -d "{\"Username\":\"house\",\"Pw\":\"$account\"}" | sed -n 's/.*"AccessToken":"\([^"]*\)".*/\1/p')
+      if [ -n "$token" ]; then
+        curl -sS -o /dev/null --max-time 30 -X POST "http://127.0.0.1:8096/Library/VirtualFolders?name=Media&refreshLibrary=true" \
+          -H 'Content-Type: application/json' -H "Authorization: $auth, Token=\"$token\"" \
+          -d '{"LibraryOptions":{"PathInfos":[{"Path":"/media"}]}}' || true
+      fi
+      ;;
+  esac
+fi
 touch "$cfg/installed"

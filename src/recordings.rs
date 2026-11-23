@@ -7,8 +7,10 @@
 //! makes Everyone.mp4 with everyone side by side, each at the moment they
 //! started.
 //!
-//! This listener does nothing else: no page, no settings, no sign-in. It
-//! takes recordings only while Video is open.
+//! This listener takes recordings only while Video is open. It also answers
+//! Open's two paths (launch.rs): `/keel-open/<ticket>`, the one-time sign-in
+//! hand-off, and `/keel-gate/<app>`, the front door's question before Mail.
+//! No page and no settings.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -138,6 +140,9 @@ pub fn router() -> Router {
         .route("/keel-recording/{id}", get(have))
         .route("/keel-recording/{id}/{seq}", put(piece))
         .route("/keel-recording/{id}/done", post(done))
+        // Open's sign-in hand-off, on an app's port (see launch.rs).
+        .route("/keel-open/{ticket}", get(crate::launch::hand_off))
+        .route("/keel-gate/{id}", get(crate::launch::gate))
         .layer(axum::extract::DefaultBodyLimit::max(MAX_PIECE + 1024))
 }
 

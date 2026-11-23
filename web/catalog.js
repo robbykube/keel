@@ -55,6 +55,8 @@ const latest = {};
 const barMotion = {};
 let barLoop = 0;
 let ownedName = "";
+// Apps the computer says are running, whatever the card's own note says.
+let runningNow = new Set();
 let sharedReady = false;
 
 // The server reports the start of a step. The bar eases toward the end of
@@ -126,12 +128,9 @@ function programRow(spec, status) {
   const copy = (spec.id === "video" || spec.id === "passwords" || spec.id === "papers" || spec.id === "mail") && status.address
     ? ` <button type="button" class="texty" data-copy="${escapeHtml(status.address)}" data-label="${escapeHtml(copyLabel)}">${copyLabel}</button>`
     : "";
-  const stayHere = (spec.id === "passwords" || spec.id === "papers" || spec.id === "mail") && onKeelScreen();
-  const address = status.ready && status.address
-    ? (stayHere
-      ? `<p>${escapeHtml(status.address)}${copy}</p>`
-      : `<p><a href="${escapeHtml(status.address)}">${escapeHtml(status.address)}</a>${copy}</p>`)
-    : "";
+  // Open shows the app in the Keel window; the address is only for sharing
+  // a call link.
+  const address = status.ready && spec.id === "video" && status.address ? `<p class="meta">${copy.trim()}</p>` : "";
   const signIn = spec.id === "mail" && status.ready && status.password
     ? `<p>Sign in as mail. ${escapeHtml(status.password)} <button type="button" class="texty" data-copy="${escapeHtml(status.password)}" data-label="Copy password">Copy password</button></p>`
     : "";
@@ -139,29 +138,34 @@ function programRow(spec, status) {
   const bar = opening
     ? `<div class="install-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(percent)}"><span style="width:${percent}%"></span></div>`
     : "";
-  const waiting = !status.local && status.allowed !== false && spec.host === "added" && !sharedReady && !status.ready;
+  const waiting = !status.local && status.allowed !== false && spec.host === "added" && !sharedReady && !status.ready && !runningNow.has(spec.id);
   const sharedDown = !latest.names || !latest.names.ready || !latest.door || !latest.door.ready;
   const message = status.local
     ? (status.message || "Pictures already in Media. Open shows them here.")
     : (waiting && status.state !== "error" && status.state !== "running"
       ? (sharedDown ? "Closed until Names and the front door are ready." : "Closed until the name is saved.")
-      : (status.message || ""));
+      : (!status.ready && runningNow.has(spec.id) && status.state !== "running" && status.state !== "error"
+        ? ""
+        : (status.message || "")));
   // A raw error from the computer goes behind ?, with a sentence a person can act on.
   const said = failed ? String(status.message || "").trim() : "";
   const failText = failed ? `${spec.title} did not start. Try again, or open Logs to see why.` : "";
   const shared = spec.host === "names" && status.state !== "error";
   const open = status.local
     ? `<a class="button" href="/photos.html">Open</a>`
-    : (status.allowed === false || status.state === "unavailable" || status.ready || waiting || shared
+    : (status.allowed === false || status.state === "unavailable" || waiting || shared
       ? ""
-      : `<button type="button" data-program="${escapeHtml(spec.id)}"${opening ? " disabled" : ""}>${failed ? "Try again" : "Open"}</button>`);
+      : spec.host === "added"
+        ? `<a class="button" data-window="${escapeHtml(spec.id)}" href="/open.html?app=${encodeURIComponent(spec.id)}">${failed ? "Try again" : "Open"}</a>`
+        : `<button type="button" data-program="${escapeHtml(spec.id)}"${opening ? " disabled" : ""}>${failed ? "Try again" : "Open"}</button>`);
   const close = status.ready && status.signups_open
     ? `<button type="button" data-close="${escapeHtml(spec.id)}">Close new accounts</button>`
     : "";
-  const stop = spec.id === "video" && status.ready
+  const up = status.ready || runningNow.has(spec.id);
+  const stop = spec.host === "added" && up && !opening
     ? `<button type="button" data-stop="${escapeHtml(spec.id)}">Close</button>`
     : "";
-  const [state, tone] = stateOf(status, waiting);
+  const [state, tone] = up && !opening && !failed ? ["Running", "ok"] : stateOf(status, waiting);
   return `<article class="app-row" id="${escapeHtml(spec.id)}-row">
     <div>
       ${head(spec.title, state, tone)}
@@ -170,7 +174,7 @@ function programRow(spec, status) {
       ${signIn}
       ${bar}
     </div>
-    ${open}${close}${stop}
+    ${open || close || stop ? `<div class="app-actions">${open}${close}${stop}</div>` : ""}
   </article>`;
 }
 
@@ -348,23 +352,18 @@ async function copyLink(button) {
   window.setTimeout(() => { if (button.isConnected) button.textContent = button.dataset.label || "Copy link"; }, 2000);
 }
 
-async function stopVideo(spec) {
+async function stopProgram(spec) {
   if (programTimers[spec.id]) window.clearTimeout(programTimers[spec.id]);
-  paintProgram(spec, { state: "running", percent: 2, message: "Closing Video.", ready: false, address: "" });
+  paintProgram(spec, { state: "running", percent: 2, message: `Closing ${spec.title}.`, ready: false, address: "" });
   try {
-    const res = await fetch(`${spec.path}/close`, { method: "POST", credentials: "same-origin" });
+    const res = await fetch(`/api/apps/${spec.id}/stop`, { method: "POST", credentials: "same-origin" });
     const data = await readAnswer(res);
     if (!res.ok || data.ok === false) {
-      paintProgram(spec, { state: "error", percent: 0, message: data.message || "Keel could not close Video.", ready: false, address: "" });
+      paintProgram(spec, { ...(latest[spec.id] || {}), state: "idle", percent: 0, message: data.message || `Keel could not close ${spec.title}.` });
       return;
     }
-    paintProgram(spec, {
-      state: data.state || "idle",
-      percent: Number(data.percent) || 0,
-      message: data.message || "Video is on this computer. Press Open when you want a call.",
-      ready: false,
-      address: "",
-    });
+    runningNow.delete(spec.id);
+    paintProgram(spec, { state: "idle", percent: 0, message: data.message || `${spec.title} is closed.`, ready: false, address: "" });
   } catch (err) {
     paintProgram(spec, { state: "error", percent: 0, message: String(err), ready: false, address: "" });
   }
@@ -379,13 +378,17 @@ function onProgramClick(event) {
   const stop = event.target.closest("button[data-stop]");
   if (stop) {
     const spec = programs[stop.dataset.stop];
-    if (spec && askBeforeStop(stop)) stopVideo(spec);
+    if (spec && (spec.id !== "video" || askBeforeStop(stop))) stopProgram(spec);
     return;
   }
   const close = event.target.closest("button[data-close]");
   if (close) {
     const spec = programs[close.dataset.close];
     if (spec) closeProgram(spec);
+    return;
+  }
+  if (event.target.closest("a[data-window]")) {
+    try { sessionStorage.setItem("keel-back", "/catalog.html"); } catch { /* Back goes to Apps anyway */ }
     return;
   }
   const open = event.target.closest("button[data-program]");
@@ -406,7 +409,15 @@ async function loadAlways() {
   }
 }
 
+async function loadRunning() {
+  try {
+    const res = await fetch("/api/apps/running", { credentials: "same-origin" });
+    if (res.ok) runningNow = new Set(await res.json());
+  } catch { /* the cards' own notes stand */ }
+}
+
 async function load() {
+  await loadRunning();
   const apps = await fetch("/api/apps", { credentials: "same-origin" }).then((res) => res.json());
   const choices = (Array.isArray(apps) ? apps : []).filter((app) => app.choosable);
   const special = new Set(Object.keys(chosenProgram));

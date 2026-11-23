@@ -11,9 +11,30 @@
 <body class="open-app">
   <header class="open-bar">
     <button type="button" id="back">Back</button>
+    <span class="open-title" id="title"></span>
+    <a class="button" id="newtab" target="_blank" rel="noopener" hidden>New tab</a>
     <button type="button" id="full">Full screen</button>
   </header>
-  <iframe id="frame" title="App" referrerpolicy="no-referrer" allow="camera; microphone; autoplay; display-capture" sandbox="allow-scripts allow-same-origin allow-forms allow-modals"></iframe>
+  <section class="open-wait" id="wait" hidden>
+    <h1 id="wait-title"></h1>
+    <p class="install-message" id="wait-message" aria-live="polite"></p>
+    <div class="install-bar" id="wait-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="wait-fill"></span></div>
+    <form class="form open-ask" id="ask" hidden>
+      <label><span id="ask-word">Name</span> <input id="ask-user" autocomplete="username" spellcheck="false" autocapitalize="off" /></label>
+      <label>Password <input id="ask-pass" type="password" autocomplete="current-password" /></label>
+      <div class="actions">
+        <button type="submit" id="ask-go">Sign in</button>
+        <a class="button texty" id="ask-skip">Open without</a>
+      </div>
+      <p class="meta" id="ask-status" aria-live="polite"></p>
+    </form>
+    <div class="actions" id="wait-actions" hidden>
+      <button type="button" id="again">Try again</button>
+      <a class="button texty" href="/logs.html">Logs</a>
+    </div>
+  </section>
+  <iframe id="frame" title="App" referrerpolicy="no-referrer" allow="camera; microphone; autoplay; display-capture; fullscreen; clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads" hidden></iframe>
+  <script src="/chrome.js"></script>
   <script src="/open.js"></script>
 </body>
 </html>

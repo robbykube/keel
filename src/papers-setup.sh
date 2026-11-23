@@ -27,6 +27,16 @@ else
   printf '%s\n' "$secret" > "$cfg/auth.secret"
   chmod 0600 "$cfg/auth.secret"
 fi
+# Open shows Papers on Keel's own addresses, port 9483 (launch.rs). Papers
+# keeps its sign-in only on the address it is told about, so it is told
+# about each one: the Keel screen, the house, Away, and the name.
+house=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -n 1)
+away=$(ip -4 addr show tailscale0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -n 1)
+base="http://${house:-127.0.0.1}:9483"
+origins="http://127.0.0.1:9483,$base${away:+,http://$away:9483},https://$host"
+# The first time, Keel makes the house account itself, so Open signs in.
+first=yes
+[ -f "$cfg/installed" ] && first=no
 image=ghcr.io/papra-hq/papra:26.7.1-root
 if ! podman image exists "$image" >/dev/null 2>&1; then
   mark 50 "Downloading Papers. This can take a while."
@@ -39,7 +49,8 @@ podman network exists keel-papers >/dev/null 2>&1 || podman network create keel-
 podman rm -f keel-papers >"$log" 2>&1 || true
 if ! podman run -d --name keel-papers --hostname papers \
   --network keel-papers --network-alias papers \
-  -e APP_BASE_URL="https://$host" \
+  -e APP_BASE_URL="$base" \
+  -e TRUSTED_ORIGINS="$origins" \
   -e AUTH_SECRET="$secret" \
   -e DOCUMENT_STORAGE_DRIVER=filesystem \
   -e DOCUMENT_STORAGE_FILESYSTEM_ROOT=/documents \
@@ -81,6 +92,22 @@ WantedBy=multi-user.target
 EOF
 systemctl daemon-reload >"$log" 2>&1 || true
 systemctl enable keel-papers.service >"$log" 2>&1 || true
+if [ "$first" = yes ] && [ ! -f /var/lib/keel/signin/papers.json ]; then
+  owned=${host#papers.}
+  email="papers@$owned"
+  account=$(openssl rand -hex 12)
+  code=$(curl -sS -o /dev/null --max-time 15 -w '%{http_code}' -X POST "http://127.0.0.1:1221/api/auth/sign-up/email" \
+    -H 'Content-Type: application/json' -H "Origin: $base" \
+    -d "{\"email\":\"$email\",\"password\":\"$account\",\"name\":\"House\"}" || true)
+  case "$code" in
+    2*)
+      install -d -m 0700 /var/lib/keel/signin
+      umask 077
+      printf '{"user":"%s","password":"%s"}\n' "$email" "$account" > /var/lib/keel/signin/papers.json
+      chmod 0600 /var/lib/keel/signin/papers.json
+      ;;
+  esac
+fi
 touch "$cfg/installed"
 printf 'ready\n'
 exit 0

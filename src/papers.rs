@@ -117,17 +117,10 @@ fn ready_message(address: &str, waiting: bool) -> String {
     message_for(address, waiting, house.as_deref())
 }
 
-fn message_for(address: &str, waiting: bool, house: Option<&str>) -> String {
-    let lock = crate::names::lock_note(waiting);
-    let names = match house {
-        Some(ip) => format!(
-            " On the phone, set DNS for the house Wi-Fi to {ip}. Leave the router's own DNS as it is."
-        ),
-        None => String::new(),
-    };
-    format!(
-        "Papers are at {address}. On your phone or another computer, open that address and create the account for this house. Papers you add are stored in Documents. Files already in Documents stay where they are.{names}{lock}"
-    )
+/// Open shows Papers on Keel's own address and signs in, so the card needs
+/// no address, account step, or DNS step.
+fn message_for(_address: &str, _waiting: bool, _house: Option<&str>) -> String {
+    "Press Open. Papers you add are stored in Documents; files already there stay where they are.".into()
 }
 
 fn idle() -> Status {
@@ -181,7 +174,11 @@ mod tests {
         let script = setup_script("papers.klaingar.com");
         assert!(script.contains("host='papers.klaingar.com'"));
         assert!(script.contains("ghcr.io/papra-hq/papra:26.7.1-root"));
-        assert!(script.contains("APP_BASE_URL=\"https://$host\""));
+        assert!(script.contains("-e APP_BASE_URL=\"$base\""));
+        assert!(script.contains("base=\"http://${house:-127.0.0.1}:9483\""));
+        assert!(script.contains("origins=\"http://127.0.0.1:9483,$base${away:+,http://$away:9483},https://$host\""));
+        assert!(script.contains("/api/auth/sign-up/email"));
+        assert!(script.contains("chmod 0600 /var/lib/keel/signin/papers.json"));
         assert!(script.contains("DOCUMENT_STORAGE_FILESYSTEM_ROOT=/documents"));
         assert!(script.contains("docs=/srv/keel/files/Documents"));
         assert!(script.contains("\"$docs:/documents\""));
@@ -194,16 +191,10 @@ mod tests {
     }
 
     #[test]
-    fn the_card_tells_you_where_to_open_papers() {
+    fn the_card_says_press_open() {
         let text = super::message_for("https://papers.klaingar.com", false, Some("192.168.0.127"));
-        assert!(text.contains("https://papers.klaingar.com"));
-        assert!(text.contains("create the account for this house"));
+        assert!(text.starts_with("Press Open."));
         assert!(text.contains("Papers you add are stored in Documents"));
-        assert!(text.contains("Files already in Documents stay where they are."));
-        assert!(text.contains("set DNS for the house Wi-Fi to 192.168.0.127"));
-        assert!(text.contains("Leave the router's own DNS as it is."));
-        let waiting = super::message_for("https://papers.klaingar.com", true, None);
-        assert!(waiting.contains("The lock is not ready yet."));
-        assert!(!waiting.contains("set DNS"));
+        assert!(!text.contains("DNS"));
     }
 }

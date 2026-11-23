@@ -146,11 +146,10 @@ fn idle() -> Status {
     }
 }
 
-fn ready_message(address: &str, waiting: bool) -> String {
-    format!(
-        "Watch is at {address}. The first visit asks you to set it up, and to point it at the films, shows, and music in Media.{} You do not type addresses.",
-        crate::names::lock_note(waiting)
-    )
+/// Open shows Watch on Keel's own address and signs in, so the card needs no
+/// address or setup step.
+fn ready_message(_address: &str, _waiting: bool) -> String {
+    "Press Open. Films, shows, and music in Media show up there.".into()
 }
 
 fn read_progress() -> Option<Saved> {
