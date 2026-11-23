@@ -23,7 +23,8 @@ Windows is for building the GUI and for `keelctl`, not the NAS OS.
 - productContext.md
 - systemPatterns.md
 - techContext.md
-- activeContext.md
+- activeContext.md (what the app is today)
+- releases.md (what each release changed)
 - troubleshooting.md
 - intranet.md (install onto existing OS; LAN/VLAN/Proxmox failure modes)
 - lab-rok.md (this homelab’s Proxmox inventory)

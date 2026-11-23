@@ -41,6 +41,9 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Photos | Pictures already in Media. One Open button. Settings picks light or full. Light opens the pictures on Keel's own page. Full starts Immich. Download saves the open picture or video to the phone or computer you are using |
 | Watch | Films, shows, and music already in Media. One Open button. The address is watch and the name you own. A small computer is refused it |
 | Send to the phone | When something is red, one message goes to the free ntfy app. The phone must be on Away |
+| Give it a job | Choose what a disk is for (Files, Nightly copy, …). It erases the disk, after you type its name |
+| ? | Press for the why. The page itself says only what to do |
+| All good / 1 thing to look at / Needs fixing | The health line above Power, Home's notice and Repair all use these words |
 | Use this | Shared folder or files app a person should pick |
 | Leave this | Disks for other programs, installer files, or the computer itself |
 

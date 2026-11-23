@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>keel · Settings</title>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/components.css" />
+  <link rel="stylesheet" href="/surfaces.css" />
 </head>
 <body>
   <aside>
@@ -15,27 +17,15 @@
       </svg>
       <span>keel</span>
     </div>
-    <nav>
-      <a href="/">Home</a>
-      <a href="/shares.html">Files</a>
-      <a href="/catalog.html">Apps</a>
-      <a href="/overlay.html">Away</a>
-      <a class="quiet" href="/pools.html">Disks</a>
-      <a class="quiet" href="/installer.html">Install</a>
-      <a class="quiet" href="/repair.html">Repair</a>
-      <a class="quiet" href="/notes.html">Notes</a>
-      <a class="quiet" href="/guide.html">Guide</a>
-      <a class="quiet active" href="/settings.html">Settings</a>
-      <a class="quiet" href="/login.html">Sign in</a>
-    </nav>
+    <nav aria-label="Navigation"></nav>
+    <div class="aside-foot" id="health"></div>
   </aside>
   <main>
     <header><h1>Settings</h1></header>
-    <p class="lede">Updates, the people who sign in, and how this computer rests.</p>
+    <p class="lede">Updates, people, and how this computer rests.</p>
     <div class="scroll">
       <section class="settings-card" id="updates-card">
-        <h2>Updates</h2>
-        <p>Keel updates from a release on GitHub, not from every change. If the new version does not start, the previous one comes back.</p>
+        <h2>Updates <button type="button" class="help" data-tip="Keel installs published releases from GitHub, not every change. If a new version does not start, the previous one comes back by itself." aria-label="What is this?" aria-expanded="false">?</button></h2>
         <div class="lede" id="updates">Checking for a Keel update…</div>
       <div id="update-progress" hidden>
         <p class="install-message" id="update-progress-message" aria-live="polite"></p>
@@ -45,7 +35,7 @@
       </div>
         <details class="why" id="github-why">
           <summary>Where updates come from</summary>
-          <p>Updates come from your GitHub repository, github.com/robbykube/keel. It is private, so this computer needs your permission to see it. Connect GitHub on your phone or this computer. The sign-in stays on this computer.</p>
+          <p>The Keel repository is private, so this computer needs your permission to read it. The sign-in stays on this computer.</p>
         <div id="github-connect">
           <button type="button" id="github-connect-button">Connect GitHub</button>
           <button type="button" id="github-disconnect-button" hidden>Disconnect GitHub</button>
@@ -54,14 +44,14 @@
             <div class="install-token-box github-code">
               <code id="github-user-code"></code>
             </div>
-            <p class="meta">On your phone or another computer, open <a id="github-device-link" href="https://github.com/login/device" rel="noreferrer">github.com/login/device</a> and enter that code. Then allow Keel to read releases.</p>
+            <p class="meta">On a phone or computer, open <a id="github-device-link" href="https://github.com/login/device" rel="noreferrer">github.com/login/device</a> and enter that code.</p>
             <button type="button" id="github-cancel">Cancel</button>
           </div>
           <p class="meta" id="github-connect-status"></p>
         </div>
         <details class="why" id="github-manual">
           <summary>Paste a token instead</summary>
-          <p>A GitHub token with read access to <code>robbykube/keel</code> also works. The page never shows it again.</p>
+          <p>A token with read access to <code>robbykube/keel</code>. It is not shown again.</p>
           <form class="form" id="token-form">
             <label class="wide">GitHub token
               <input id="github-token" type="password" autocomplete="off" spellcheck="false" />
@@ -74,19 +64,17 @@
             </label>
             <button type="submit">Save app id</button>
           </form>
-          <p class="meta">The app id is public. It is only needed if Connect GitHub does not start. That GitHub App is a login on the repository you already have, not a new project. Tick Enable Device Flow, turn off expiring tokens, Contents read, and allow it on robbykube/keel.</p>
+          <p class="meta">Only needed if Connect GitHub does not start. <button type="button" class="help" data-tip="The app id is public. In the GitHub App: tick Enable Device Flow, turn off expiring tokens, give Contents read, and allow it on robbykube/keel." aria-label="What is this?" aria-expanded="false">?</button></p>
         </details>
         </details>
       </section>
       <section class="settings-card" id="versions">
-        <h2>Light or full</h2>
-        <p>Some apps come in two versions: a light one for a small computer, and the full program. Keel suggests one for this computer. The app keeps its name and its address either way.</p>
+        <h2>Light or full <button type="button" class="help" data-tip="Some apps come in a light version for a small computer and the full program. Keel suggests one based on this computer's memory. The app keeps its name and address either way." aria-label="What is this?" aria-expanded="false">?</button></h2>
         <div id="versions-list"><p class="meta">Checking this computer.</p></div>
         <p class="meta" id="versions-status"></p>
       </section>
       <section class="settings-card" id="people">
-        <h2>People</h2>
-        <p>Each person signs in with a name and password, so the page knows who it was. Adding an existing name replaces that password. Opening folders in File Explorer still uses the name on the Files page.</p>
+        <h2>People <button type="button" class="help" data-tip="Each person signs in to this page with a name and password, so Keel knows who did what. Adding an existing name replaces its password. Opening folders in File Explorer uses the name set on the Files page." aria-label="What is this?" aria-expanded="false">?</button></h2>
         <ul id="people-list"></ul>
         <form class="form" id="people-form">
           <label>Name <input id="people-name" autocomplete="off" spellcheck="false" /></label>
@@ -97,18 +85,16 @@
         <p class="meta" id="people-status"></p>
         <h3>Recent sign-ins</h3>
         <ul id="people-visits"></ul>
-        <p class="meta">From another computer, <a href="/login.html">sign in</a> with a name and password. Allow on this screen is still there when someone is standing at it.</p>
+
       </section>
       <section class="settings-card" id="quiet">
-        <h2>When it is quiet</h2>
-        <p>Stay reachable. The computer stays on and Away stays up. Sleep when quiet waits until a small computer on Away can wake this one.</p>
-        <p>Prepare wake turns on wake for the built-in network port. It does not put this computer to sleep.</p>
+        <h2>When it is quiet <button type="button" class="help" data-tip="Today the computer stays on so Away keeps working. Sleep comes later, once a small always-on computer on Away can wake this one. Prepare wake turns on wake for the network port; it does not put anything to sleep." aria-label="What is this?" aria-expanded="false">?</button></h2>
+        <p>Stays on, so Away keeps working.</p>
         <button type="button" id="wake-prepare">Prepare wake</button>
         <p class="meta" id="wake-status"></p>
       </section>
       <section class="settings-card" id="appearance">
         <h2>Appearance</h2>
-        <p>Light or dark. This screen remembers the choice.</p>
         <div id="theme-slot"></div>
       </section>
     </div>

@@ -137,11 +137,23 @@ pub async fn check() -> UpdateStatus {
             "GitHub refused this computer's sign-in. Connect GitHub again in Settings.".into(),
         );
     }
+    if response.status() == reqwest::StatusCode::FORBIDDEN
+        || response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS
+    {
+        return unavailable(
+            current,
+            restore,
+            "GitHub is not letting this computer check right now. Connect GitHub below, or try again in an hour.".into(),
+        );
+    }
     if !response.status().is_success() {
         return unavailable(
             current,
             restore,
-            format!("GitHub returned HTTP {}.", response.status().as_u16()),
+            format!(
+                "GitHub did not answer properly (HTTP {}). Try again later.",
+                response.status().as_u16()
+            ),
         );
     }
 
@@ -578,10 +590,11 @@ async fn fetch_latest(client: &reqwest::Client) -> Result<GithubRelease, String>
         return Err("GitHub sent an unexpected address.".into());
     }
     if !response.status().is_success() {
-        return Err(format!(
-            "GitHub returned HTTP {}.",
-            response.status().as_u16()
-        ));
+        return Err(match response.status().as_u16() {
+            401 | 404 => "Keel cannot see the updates. Connect GitHub in Settings.".to_string(),
+            403 | 429 => "GitHub is not letting this computer check right now. Try again in an hour.".to_string(),
+            code => format!("GitHub did not answer properly (HTTP {code}). Try again later."),
+        });
     }
     let release = response
         .json::<GithubRelease>()

@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>keel</title>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/components.css" />
+  <link rel="stylesheet" href="/surfaces.css" />
 </head>
 <body>
   <aside>
@@ -15,19 +17,7 @@
       </svg>
       <span>keel</span>
     </div>
-    <nav>
-      <a class="active" href="/">Home</a>
-      <a href="/shares.html">Files</a>
-      <a href="/catalog.html">Apps</a>
-      <a href="/overlay.html">Away</a>
-      <a class="quiet" href="/pools.html">Disks</a>
-      <a class="quiet" href="/installer.html">Install</a>
-      <a class="quiet" href="/repair.html">Repair</a>
-      <a class="quiet" href="/notes.html">Notes</a>
-      <a class="quiet" href="/guide.html">Guide</a>
-      <a class="quiet" href="/settings.html">Settings</a>
-      <a class="quiet" href="/login.html">Sign in</a>
-    </nav>
+    <nav aria-label="Navigation"></nav>
     <div class="aside-foot" id="health"></div>
   </aside>
   <main>
@@ -45,34 +35,31 @@
         </div>
         <p class="meta" id="spare-offer-status"></p>
       </section>
-      <section class="card" id="apps-choice" hidden>
-        <h2 class="home-title">What will you use Keel for?</h2>
-        <p>Pick the ones you want. You can add more later from Apps.</p>
+      <section class="home-grid" id="home"></section>
+      <section class="reach" id="reach" hidden>
+        <span class="reach-label">From another computer</span>
+        <code id="reach-address"></code>
+        <button type="button" class="copy-button" id="reach-copy">Copy</button>
+        <button type="button" class="help" data-tip="Type this address into a browser on any computer or phone in the house to open this page." aria-label="What is this?" aria-expanded="false">?</button>
+      </section>
+      <section class="card apps-choice" id="apps-choice" hidden>
+        <h2 class="home-title">What will you use Keel for? <button type="button" class="help" data-tip="Pick the apps this house wants. Nothing starts yet; each app opens from Apps when you need it. You can add more later." aria-label="What is this?" aria-expanded="false">?</button></h2>
         <form class="form" id="apps-choice-form">
-          <div id="apps-choice-rows"></div>
+          <div class="choice-chips" id="apps-choice-rows"></div>
           <div class="actions">
             <button type="submit" id="apps-use" disabled>Use these</button>
-            <button type="button" id="apps-later">Not now</button>
+            <button type="button" class="texty" id="apps-later">Not now</button>
           </div>
         </form>
         <p class="meta" id="apps-choice-status"></p>
       </section>
-      <p class="meta" id="apps-again" hidden><button type="button" id="apps-show">Choose apps</button></p>
-      <section class="card reach" id="reach" hidden>
-        <h2 class="home-title">From another computer</h2>
-        <p>Open this address in a browser on the house network.</p>
-        <div class="path-box">
-          <code id="reach-address"></code>
-          <button type="button" class="copy-button" id="reach-copy">Copy</button>
-        </div>
-      </section>
-      <section class="home-grid" id="home"></section>
+      <p class="meta" id="apps-again" hidden><button type="button" class="texty" id="apps-show">Choose apps</button></p>
       <p class="glance" id="rest"></p>
       <details class="why" id="details">
         <summary>Details</summary>
         <div id="detail-body"></div>
       </details>
-      <p class="meta" data-only="windows">This PC is for trying the screen. Files stay on the other computer.</p>
+      <p class="meta" data-only="windows">Practice copy: disks here are pretend.</p>
     </div>
   </main>
   <script src="/platform.js"></script>

@@ -233,7 +233,7 @@ fn idle_status() -> GithubConnectStatus {
         message: if crate::updates::github_can_connect() {
             "Press Connect GitHub. A code will appear. Enter it on GitHub from your phone or this PC.".into()
         } else {
-            "Press Connect GitHub. GitHub will ask you to allow this computer to read your existing robbykube/keel repository.".into()
+            String::new()
         },
         github_token_set: github_token_is_set(),
         can_connect: crate::updates::github_can_connect(),

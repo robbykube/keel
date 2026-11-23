@@ -38,19 +38,6 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-function plainSize(n) {
-  if (!n) return { number: "—", unit: "" };
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0;
-  let x = n;
-  while (x >= 1000 && i < units.length - 1) {
-    x /= 1000;
-    i++;
-  }
-  const digits = i && x < 10 ? 1 : 0;
-  return { number: x.toFixed(digits), unit: units[i] };
-}
-
 function greeting(date) {
   const hour = date.getHours();
   if (hour < 5 || hour >= 17) return "Good evening";
@@ -81,21 +68,17 @@ function filesCard(share) {
   const ready = Boolean(share && share.ready && share.lan && share.lan[0]);
   const path = ready ? share.lan[0] : "";
   const mac = path ? smbUrl(path) : "";
+  const how = `Windows: paste it into the File Explorer address bar. Mac: Finder, Go, Connect to Server, ${mac || "smb://…"}. Phone: the Files app, Connect to server.`;
   const body = ready
-    ? `<div class="path-box"><code>${escapeHtml(path)}</code><button type="button" class="copy-button" id="copy-path" data-path="${escapeHtml(path)}" aria-label="Copy the files address">Copy <span aria-hidden="true">↗</span></button></div>
-       <dl>
-         <div class="pair"><dt>Windows</dt><dd>Paste into File Explorer</dd></div>
-         <div class="pair"><dt>Mac</dt><dd>Finder → Go → Connect to Server, ${escapeHtml(mac)}</dd></div>
-         <div class="pair"><dt>Phone</dt><dd>Files app → Connect to server → same address</dd></div>
-       </dl>`
-    : `<p>The family folder is not ready on this computer yet.</p>
-       <a class="button push" href="/shares.html">Open Files</a>`;
+    ? `<div class="path-box"><code>${escapeHtml(path)}</code><button type="button" class="copy-button" id="copy-path" data-path="${escapeHtml(path)}" aria-label="Copy the files address">Copy</button></div>
+       <p class="meta">Open it in File Explorer or Finder ${keelHelp(how, "How to open it")}</p>`
+    : `<p>Give a disk the job of keeping files first.</p>
+       <a class="button push" href="/pools.html">Choose a disk</a>`;
   return `<article class="card home-card">
     <div class="home-card-head">
       <h2 class="home-title"><span class="home-icon" aria-hidden="true">${homeIcon("Files")}</span><span>Files</span></h2>
       <span class="pill ${ready ? "ok" : ""}">${ready ? "Ready" : "Not set up"}</span>
     </div>
-    <p>Open the family folder from any computer in the house.</p>
     ${body}
   </article>`;
 }
@@ -103,21 +86,16 @@ function filesCard(share) {
 function awayCard(overlay, owner) {
   const state = overlay && overlay.state;
   const ready = state === "connected";
-  const who = owner
-    ? `${owner} connects Keel once`
-    : "The person who set up this computer connects Keel once";
   const pill = ready ? "Ready" : state === "unavailable" ? "Not on this computer" : "Not set up";
+  const who = owner ? `${owner} connects` : "The person who set up Keel connects";
+  const tip = `${who} this computer once. After that, the same Files address works on a laptop or phone outside the house.`;
   return `<article class="card home-card">
     <div class="home-card-head">
-      <h2 class="home-title"><span class="home-icon" aria-hidden="true">${homeIcon("Away")}</span><span>Away</span></h2>
+      <h2 class="home-title"><span class="home-icon" aria-hidden="true">${homeIcon("Away")}</span><span>Away</span> ${keelHelp(tip)}</h2>
       <span class="pill ${ready ? "ok" : ""}">${escapeHtml(pill)}</span>
     </div>
-    <p>Open the same files when you are not at home. Only the phones and laptops you trust can reach them.</p>
-    <ol class="steps">
-      <li><span>1</span>${escapeHtml(who)}</li>
-      <li><span>2</span>Use the same address anywhere</li>
-    </ol>
-    <a class="button push" href="/overlay.html">How Away works</a>
+    <p>${ready ? "Your files open outside the house too." : "Open your files outside the house."}</p>
+    <a class="button push" href="/overlay.html">${ready ? "Open Away" : "Set up Away"}</a>
   </article>`;
 }
 
@@ -134,29 +112,28 @@ function roomBar(disk) {
 function disksCard(storage, failing) {
   const disks = (storage.disks || []).map((row) => row.disk ? { ...row.disk, holds: row.holds } : row);
   const total = disks.reduce((sum, disk) => sum + (disk.size || 0), 0);
-  const size = plainSize(total);
+  const size = keelSize(total).split(" ");
   const rows = disks.map((disk) => {
     const name = disk.model || disk.name || "Disk";
     const extra = disk.transport === "usb" ? " · USB" : "";
-    const shown = plainSize(disk.size);
+    const shown = keelSize(disk.size);
     const failingDisk = disk.health === "failing";
     return `<div class="disk-row${failingDisk ? " failing" : ""}">
       <div class="name">${escapeHtml(name)}</div>
-      <div class="size">${escapeHtml(shown.number)} ${escapeHtml(shown.unit)}</div>
+      <div class="size">${escapeHtml(shown)}</div>
       <div class="holds">${escapeHtml(disk.holds || "")}${escapeHtml(extra)}</div>
       ${roomBar(disk)}
     </div>`;
   }).join("");
   const headline = disks.length
-    ? `<p class="display">${escapeHtml(size.number)} <span>${escapeHtml(size.unit)}</span></p><p>in this computer</p>`
+    ? `<p class="display">${escapeHtml(size[0])} <span>${escapeHtml(size[1] || "")}</span></p>`
     : `<p>No disks yet.</p>`;
   return `<article class="card home-card">
     <div class="home-card-head">
-      <h2 class="home-title"><span class="home-icon" aria-hidden="true">${homeIcon("Disks")}</span><span>Disks</span></h2>
+      <h2 class="home-title"><span class="home-icon" aria-hidden="true">${homeIcon("Disks")}</span><span>Disks</span> ${keelHelp("The big number is how much all the disks in this computer hold. Each bar fills as its disk fills up.")}</h2>
       <span class="pill ${failing ? "bad" : ""}">${failing ? "Needs a look" : (disks.length === 1 ? "1 disk" : `${disks.length} disks`)}</span>
     </div>
     ${headline}
-    ${disks.length ? '<p class="card-note">The number above is how much the disks hold. The bar fills as a disk is used.</p>' : ''}
     <div class="disk-list">${rows}</div>
   </article>`;
 }
@@ -188,7 +165,7 @@ function showNotice(lines, href, failing) {
     box.replaceChildren();
     return;
   }
-  const title = lines.length === 1 ? "1 thing to look at" : `${lines.length} things to look at`;
+  const title = failing ? "Needs fixing" : lines.length === 1 ? "1 thing to look at" : `${lines.length} things to look at`;
   box.className = failing ? "notice bad" : "notice";
   box.hidden = false;
   box.innerHTML = `
@@ -248,7 +225,7 @@ async function showSpare() {
     box.hidden = true;
     return;
   }
-  $("spare-offer-text").textContent = `This computer looks new, and the ${spare.disk} disk holds a copy of a Keel from ${spareWhen(spare.when)}. Bringing it back restores the people, the name you own, the disk jobs, and the apps' settings and data, such as the password vault. The files are already on their disks.`;
+  $("spare-offer-text").textContent = `A Keel copy from ${spareWhen(spare.when)} is on ${spare.disk}. Restore its settings and app data; files stay on their disks.`;
   box.hidden = false;
   const go = $("spare-offer-go");
   if (!go.dataset.ready) {
@@ -270,23 +247,23 @@ function showAppChoice(apps) {
     again.hidden = true;
     return;
   }
-  rows.innerHTML = choices.map((app) => `<label class="check">
+  rows.innerHTML = choices.map((app) => `<label class="chip-check">
       <input type="checkbox" name="app" value="${escapeHtml(app.id)}">
-      <span><strong>${escapeHtml(app.role)}</strong> ${escapeHtml(app.why)}</span>
+      <span>${escapeHtml(app.role)}</span>
+      ${keelHelp(app.why, `About ${app.role}`)}
     </label>`).join("");
-  // Which version Keel suggests for this computer, under the app it is for.
+  // Which version Keel suggests goes into that app's ? bubble.
   fetch("/api/versions", { credentials: "same-origin" })
     .then((res) => (res.ok ? res.json() : []))
     .then((list) => {
       const forApp = { video: "jitsi", photos: "immich" };
       for (const v of list) {
         const input = rows.querySelector(`input[value="${forApp[v.app] || v.app}"]`);
-        if (!input || input.closest("label").querySelector(".version-hint")) continue;
-        const hint = document.createElement("span");
-        hint.className = "meta version-hint";
+        const help = input && input.closest("label").querySelector("button.help");
+        if (!help || help.dataset.version) continue;
         const name = v.suggested === "light" ? v.light : v.full;
-        hint.textContent = ` Keel suggests the ${v.suggested} version here (${name}). ${v.why} Settings can change it.`;
-        input.closest("label").querySelector("span").appendChild(hint);
+        help.dataset.version = "1";
+        help.dataset.tip += ` Keel suggests the ${v.suggested} version here (${name}). Settings can change it.`;
       }
     })
     .catch(() => {});
@@ -317,24 +294,15 @@ async function load() {
   const now = new Date();
   $("kicker").textContent = `${now.toLocaleDateString([], { weekday: "long" })} · ${s.hostname || "Keel"}`;
   $("title").textContent = greeting(now);
-  $("health").textContent = issues.data.red
-    ? "Needs a look"
-    : `v${health.data.version}`;
+  keelShowHealth(issues.data, health.data.version);
   $("rest").innerHTML = `<a href="/sleep.html">Let this computer rest</a> when you are done.`;
 
-  const filesRole = (storage.data.roles || []).find((role) => role.id === "files");
-  const lines = [];
-  let fix = afterSignIn("/pools.html", signedIn);
-  if (!filesRole || !filesRole.ready) {
-    lines.push(s.platform === "linux"
-      ? "No disk has been picked for files yet. Files are saved on the system disk for now."
-      : "No disk has been picked for files yet.");
-  }
-  const red = (issues.data.items || []).filter((item) => item.severity === "red");
-  if (red.length) {
-    red.forEach((item) => lines.push(item.title));
-    fix = afterSignIn("/repair.html", signedIn);
-  }
+  // The notice counts what Repair counts, so Home, Repair and the sidebar agree.
+  const items = issues.data.items || [];
+  const red = items.filter((item) => item.severity === "red");
+  const lines = (red.length ? red : items).map((item) => `${item.title}.`);
+  const onlyDisk = !red.length && items.length && items.every((item) => item.id === "no-pool" || item.id === "no-share");
+  const fix = afterSignIn(onlyDisk ? "/pools.html" : "/repair.html", signedIn);
   showNotice(lines, fix, red.length > 0);
   showReach(s.page);
   showAppChoice(apps.data);
@@ -406,6 +374,6 @@ $("apps-show").addEventListener("click", () => {
   $("apps-again").hidden = true;
 });
 
-load().catch((err) => {
-  $("health").textContent = String(err);
+load().catch(() => {
+  showNotice(["Keel did not answer. Check that the Keel computer is on, then reload this page."], "/repair.html", true);
 });

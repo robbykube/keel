@@ -13,8 +13,8 @@ pub fn report(
         items.push(Issue {
             id: "mock-inventory",
             severity: "yellow",
-            title: "This GUI is the control-plane host, not the NAS yet",
-            why: "Windows has no lsblk. Disks are mock. Repair is: install keel on the Debian box, not a button here.",
+            title: "Practice copy: the disks are pretend",
+            why: "This computer cannot read real disks. Install Keel on the Keel computer to use real ones.",
             evidence: "inventory=mock".into(),
             repair: None,
         });

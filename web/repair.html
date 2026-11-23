@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>keel · Repair</title>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/components.css" />
+  <link rel="stylesheet" href="/surfaces.css" />
   <script src="/approve.js"></script>
   <script src="/chrome.js"></script>
 </head>
@@ -17,19 +19,7 @@
       </svg>
       <span>keel</span>
     </div>
-    <nav>
-      <a href="/">Home</a>
-      <a href="/shares.html">Files</a>
-      <a href="/catalog.html">Apps</a>
-      <a href="/overlay.html">Away</a>
-      <a class="quiet" href="/pools.html">Disks</a>
-      <a class="quiet" href="/installer.html">Install</a>
-      <a class="quiet active" href="/repair.html">Repair</a>
-      <a class="quiet" href="/notes.html">Notes</a>
-      <a class="quiet" href="/guide.html">Guide</a>
-      <a class="quiet" href="/settings.html">Settings</a>
-      <a class="quiet" href="/login.html">Sign in</a>
-    </nav>
+    <nav aria-label="Navigation"></nav>
     <div class="aside-foot" id="health"></div>
   </aside>
   <main>
@@ -37,7 +27,7 @@
       <h1>Repair</h1>
       <div class="meta" id="banner"></div>
     </header>
-    <p class="lede">Each problem says what to do. The buttons on the right are safe to press.</p>
+    <p class="lede">Problems, and safe buttons to fix them.</p>
     <div class="work-split">
       <div class="work-col">
         <h2>Issues</h2>
@@ -45,12 +35,10 @@
       </div>
       <div class="work-col">
         <div class="dock">
-          <h2>Fixes</h2>
-          <p class="prose">Safe buttons. Grey means this one is not ready yet.</p>
+          <h2>Fixes <button type="button" class="help" data-tip="Every button here is safe to press. A grey one does not apply to this computer right now." aria-label="What is this?" aria-expanded="false">?</button></h2>
           <p id="playbook"></p>
           <p class="meta" id="status"></p>
-          <h2>Phone</h2>
-          <p class="prose">When something needs fixing, the phone gets one message. The app is free. It is called ntfy. The phone must be on Away.</p>
+          <h2>Phone <button type="button" class="help" data-tip="When something needs fixing, Keel sends one message to the free ntfy app. The phone must be on Away." aria-label="What is this?" aria-expanded="false">?</button></h2>
           <p class="meta" id="phone"></p>
           <button type="button" id="phonesend">Send to the phone</button>
         </div>

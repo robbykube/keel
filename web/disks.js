@@ -45,11 +45,7 @@ async function bringBack(status, button) {
   let chosen = null;
   let busy = false;
 
-  function size(n) {
-    if (!n) return "";
-    const tb = n / 1e12;
-    return tb >= 1 ? `${tb.toFixed(1)} TB` : `${Math.round(n / 1e9)} GB`;
-  }
+  const size = (n) => (n ? keelSize(n) : "");
 
   function when(ms) {
     if (!ms) return "never";
@@ -60,7 +56,7 @@ async function bringBack(status, button) {
   function diskName(d) {
     const model = d.model || "Disk";
     const via = d.transport === "usb" ? " · USB" : d.transport === "nvme" ? " · NVMe" : "";
-    return `${esc(model)} <span class="meta">${esc(d.name)}${via}</span>`;
+    return `<div class="disk-model">${esc(model)}</div><div class="disk-dev">${esc(d.name)}${via}</div>`;
   }
 
   function nextRole() {
@@ -84,8 +80,8 @@ async function bringBack(status, button) {
       if (offers.includes("files")) buttons.push(`<button type="button" data-keep="files" data-index="${i}">These are the Files</button>`);
       if (offers.includes("software")) buttons.push(`<button type="button" data-keep="software" data-index="${i}">These are Software and Inbox</button>`);
       if (offers.includes("everyday")) buttons.push(`<button type="button" data-keep="everyday" data-index="${i}">Use this disk</button>`);
-      if (d.can_use) buttons.push(`<button type="button" data-use="${i}">Erase…</button>`);
-      return `<tr class="${d.health === "failing" ? "failing" : ""}"><td>${diskName(d)}</td><td class="disk-size">${size(d.size)}${room(d)}</td><td>${esc(d.holds)}</td><td>${buttons.join(" ")}</td></tr>`;
+      if (d.can_use) buttons.push(`<button type="button" data-use="${i}">Give it a job…</button>`);
+      return `<tr class="${d.health === "failing" ? "failing" : ""}"><td>${diskName(d)}</td><td class="disk-size">${size(d.size)}${room(d)}</td><td class="cell-wide">${esc(d.holds)}</td><td><div class="row-actions">${buttons.join(" ")}</div></td></tr>`;
     });
     el("diskrows").innerHTML = rows.join("") || `<tr><td colspan="4">No disks found.</td></tr>`;
   }
@@ -94,10 +90,10 @@ async function bringBack(status, button) {
     const c = view.copies;
     const hasCopyDisk = view.roles.some((r) => (r.id === "copy" || r.id === "extra") && r.disk);
     let text;
-    if (view.copy_running) text = "Copying now. This can take hours the first time.";
-    else if (!hasCopyDisk) text = "A copy needs another disk. One disk can hold the everyday folders, and Keel copies them once a day when a second disk is there.";
-    else if (!view.can_copy) text = "Copies wait until the Files disk and a copy disk are both connected.";
-    else if (!c.last_run_ms) text = "Keel makes the first copy within a minute or two.";
+    if (view.copy_running) text = "Copying now. The first copy can take hours.";
+    else if (!hasCopyDisk) text = "Needs a second disk with the Nightly copy job.";
+    else if (!view.can_copy) text = "Waiting for the Files disk and the copy disk to be connected.";
+    else if (!c.last_run_ms) text = "The first copy starts in a minute or two.";
     else text = `Last copy ${when(c.last_run_ms)}. ${c.message}`;
     el("copystatus").textContent = text;
     el("copynow").hidden = !view.can_copy;
@@ -109,11 +105,11 @@ async function bringBack(status, button) {
     const c = view.computer_copy || {};
     let text;
     if (!view.can_copy_computer) {
-      text = "Give a disk the Nightly copy job. Keel keeps a copy of itself there, apart from the files.";
+      text = "Needs a disk with the Nightly copy job.";
     } else if (c.message) {
       text = c.message;
     } else {
-      text = "Keel copies this computer every night onto the Nightly copy disk, apart from the files: people, the name you own, disk jobs, and the apps' settings and data.";
+      text = "Saved every night onto the Nightly copy disk.";
     }
     el("computerstatus").textContent = text;
     el("computersavego").disabled = !view.can_copy_computer;
@@ -126,7 +122,7 @@ async function bringBack(status, button) {
     spare = await fetch("/api/spare", { credentials: "same-origin" }).then((r) => r.json()).catch(() => ({}));
     el("spare").hidden = !spare.found;
     if (!spare.found || el("sparego").dataset.asked) return;
-    el("sparetext").textContent = `The ${spare.disk} disk holds a copy of this computer from ${spareWhen(spare.when)}. Keel makes a new one every night.`;
+    el("sparetext").textContent = `Last copy on ${spare.disk}: ${spareWhen(spare.when)}.`;
   }
 
   function showUse(index) {

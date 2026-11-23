@@ -309,7 +309,7 @@ const showSignInNeeded = () => {
   box.id = "sign-in-needed";
   box.className = "card sign-in-needed";
   const text = document.createElement("p");
-  text.textContent = "Sign in to see this page. It shows how this computer is set up, so it opens only for someone signed in.";
+  text.textContent = "Sign in to see this page.";
   const link = document.createElement("a");
   link.className = "button";
   link.href = `/login.html?next=${encodeURIComponent(window.location.pathname)}`;
@@ -604,3 +604,112 @@ if (keelScreen()) {
     return opened(url, ...rest);
   };
 }
+
+// ---------------------------------------------------------------------------
+// Help: a small ? next to a heading or a control. Pressing it shows the
+// explanation in a bubble; pressing anywhere else, or Escape, closes it.
+// Pages write <button class="help" data-tip="…"></button>, or call
+// keelHelp("…") when they draw HTML in script.
+function keelHelp(text, label = "What is this?") {
+  const safe = String(text ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return `<button type="button" class="help" data-tip="${safe}" aria-label="${label}" aria-expanded="false">?</button>`;
+}
+
+(() => {
+  let bubble = null;
+  let owner = null;
+  const close = () => {
+    if (bubble) bubble.hidden = true;
+    if (owner) owner.setAttribute("aria-expanded", "false");
+    owner = null;
+  };
+  const open = (button) => {
+    if (!bubble) {
+      bubble = document.createElement("div");
+      bubble.className = "help-bubble";
+      bubble.id = "help-bubble";
+      bubble.setAttribute("role", "note");
+      document.body.appendChild(bubble);
+    }
+    bubble.textContent = button.dataset.tip || "";
+    if (typeof keelLinkTerms === "function") bubble.innerHTML = keelLinkTerms(bubble.innerHTML);
+    bubble.hidden = false;
+    owner = button;
+    button.setAttribute("aria-expanded", "true");
+    button.setAttribute("aria-controls", "help-bubble");
+    const at = button.getBoundingClientRect();
+    const width = Math.min(320, window.innerWidth - 24);
+    bubble.style.width = `${width}px`;
+    const left = Math.max(12, Math.min(at.left + at.width / 2 - width / 2, window.innerWidth - width - 12));
+    bubble.style.left = `${left}px`;
+    const below = at.bottom + 8;
+    bubble.style.top = `${below}px`;
+    const h = bubble.offsetHeight;
+    if (below + h > window.innerHeight - 8) bubble.style.top = `${Math.max(8, at.top - h - 8)}px`;
+  };
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest && event.target.closest("button.help");
+    if (button) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (owner === button) close();
+      else open(button);
+      return;
+    }
+    if (bubble && !bubble.contains(event.target)) close();
+  }, true);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && owner) {
+      const back = owner;
+      close();
+      back.focus();
+    }
+  });
+  window.addEventListener("resize", close);
+  document.addEventListener("scroll", close, true);
+})();
+
+// One way to write a size everywhere: 1000-based, like the label on a disk.
+function keelSize(n) {
+  if (!n || n < 0) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+  let i = 0;
+  let x = n;
+  while (x >= 1000 && i < units.length - 1) {
+    x /= 1000;
+    i++;
+  }
+  return `${x.toFixed(i && x < 10 ? 1 : 0)} ${units[i]}`;
+}
+
+// The line above Power says the same thing on every page, in the same
+// words Repair and Home use.
+function keelHealthWord(issues) {
+  const items = (issues && issues.items) || [];
+  if (issues && issues.red) return { word: "Needs fixing", tone: "bad" };
+  if (items.length) return { word: items.length === 1 ? "1 thing to look at" : `${items.length} things to look at`, tone: "warn" };
+  return { word: "All good", tone: "ok" };
+}
+
+function keelShowHealth(issues, version) {
+  const foot = document.getElementById("health");
+  if (!foot) return;
+  const { word, tone } = keelHealthWord(issues);
+  if (!version) version = (foot.querySelector(".health-version")?.textContent || "").replace(/^v/, "");
+  foot.innerHTML = `<a class="health-line ${tone}" href="/repair.html"><span class="health-dot" aria-hidden="true"></span><span>${word}</span></a>${version ? `<span class="health-version">v${version}</span>` : ""}`;
+}
+
+(() => {
+  const run = () => {
+    if (!document.getElementById("health")) return;
+    Promise.all([
+      fetch("/api/issues", { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch("/api/health", { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([issues, health]) => {
+      if (issues) keelShowHealth(issues, health && health.version);
+    });
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run, { once: true });
+  else run();
+})();

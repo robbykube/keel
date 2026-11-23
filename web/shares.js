@@ -55,7 +55,7 @@ function renderFolders() {
       const note = folder.read_only ? " · copy only" : "";
       return `<button type="button" class="roster-item${folder.name === share ? " active" : ""}" data-share="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}${note}</button>`;
     })
-    .join("") || `<p class="meta">No folders yet.</p>`;
+    .join("");
 }
 
 function renderCrumb() {
@@ -156,9 +156,13 @@ function watchThumbs() {
 function renderListing() {
   const folder = currentFolder();
   const readOnly = Boolean(folder && folder.read_only) || Boolean(listing && listing.read_only);
-  $("newfolder").hidden = readOnly;
+  const none = !(home && home.folders && home.folders.length);
+  $("newfolder").hidden = readOnly || none;
+  $("newsection").hidden = none;
   if (!listing) {
-    $("rows").innerHTML = `<tr><td colspan="4">${escapeHtml(home.message || "Choose a folder on the left.")}</td></tr>`;
+    $("rows").innerHTML = none
+      ? `<tr><td colspan="4"><div class="empty-state"><p>No folders yet. Give a disk the job of keeping files, and Documents, Work and Media appear here.</p><a class="button" href="/pools.html">Choose a disk</a></div></td></tr>`
+      : `<tr><td colspan="4">Choose a folder on the left.</td></tr>`;
     renderCrumb();
     renderPending();
     return;
@@ -186,7 +190,7 @@ function renderListing() {
     ].join("");
     return `<tr><td>${name}</td><td>${kindWord(entry.kind)}</td><td>${sizeOf(entry)}</td><td class="row-actions">${actions}</td></tr>`;
   });
-  $("rows").innerHTML = rows.join("") || `<tr><td colspan="4">Nothing in this folder yet. Make a folder here, or copy files in from another computer.</td></tr>`;
+  $("rows").innerHTML = rows.join("") || `<tr><td colspan="4">Empty folder.</td></tr>`;
   watchThumbs();
   renderCrumb();
   renderPending();
@@ -218,13 +222,7 @@ async function loadHome() {
   if (!res.ok) {
     home = { folders: [], message: home.message || "Sign in first (bottom of the sidebar)." };
   }
-  if (home.sample) {
-    $("lede").textContent = home.message;
-  } else if (home.message && !home.folders.length) {
-    $("lede").textContent = home.message;
-  } else {
-    $("lede").textContent = "Open a folder and see what is in it. Pictures stay files in Media.";
-  }
+  $("lede").textContent = home.sample ? home.message : "The house's shared folders.";
   if (!share || !home.folders.some((folder) => folder.name === share)) {
     share = (home.folders.find((folder) => !folder.read_only) || home.folders[0] || {}).name || "";
     path = "";

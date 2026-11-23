@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>keel · Files</title>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/components.css" />
+  <link rel="stylesheet" href="/surfaces.css" />
   <script src="/approve.js"></script>
   <script src="/chrome.js"></script>
 </head>
@@ -17,33 +19,22 @@
       </svg>
       <span>keel</span>
     </div>
-    <nav>
-      <a href="/">Home</a>
-      <a class="active" href="/shares.html">Files</a>
-      <a href="/catalog.html">Apps</a>
-      <a href="/overlay.html">Away</a>
-      <a class="quiet" href="/pools.html">Disks</a>
-      <a class="quiet" href="/installer.html">Install</a>
-      <a class="quiet" href="/repair.html">Repair</a>
-      <a class="quiet" href="/notes.html">Notes</a>
-      <a class="quiet" href="/guide.html">Guide</a>
-      <a class="quiet" href="/settings.html">Settings</a>
-      <a class="quiet" href="/login.html">Sign in</a>
-    </nav>
+    <nav aria-label="Navigation"></nav>
+    <div class="aside-foot" id="health"></div>
   </aside>
   <main>
     <header>
       <h1>Files</h1>
     </header>
-    <p class="lede" id="lede">Open a folder and see what is in it.</p>
+    <p class="lede" id="lede">The house's shared folders.</p>
     <div class="notes-split">
       <div class="roster-col">
         <div class="roster scroll" id="folders"></div>
         <form class="folder-tools" id="newsection">
-          <label>New section <input id="sectionname" maxlength="80" placeholder="Family" autocomplete="off" spellcheck="false" /></label>
+          <label>New section <button type="button" class="help" data-tip="A section groups folders in the list on the left. Make one, then move folders into it." aria-label="What is this?" aria-expanded="false">?</button> <input id="sectionname" maxlength="80" placeholder="Family" autocomplete="off" spellcheck="false" /></label>
           <button type="submit">Add</button>
         </form>
-        <p class="meta" id="sectionstatus">It sits next to Documents and Work. Move a folder into it when you want that folder on its own.</p>
+        <p class="meta" id="sectionstatus"></p>
         <details class="why">
           <summary>Who opens these folders</summary>
           <p class="meta" id="ownerwhy">Checking…</p>
@@ -57,7 +48,7 @@
         </details>
         <details class="why">
           <summary>Open these from another computer</summary>
-          <p>In File Explorer, paste the address into the address bar (it starts with two backslashes). Until you choose a name above, anyone on this house network can open the folders. After you choose one, Windows asks for that name and password once; tick Remember my credentials.</p>
+          <p>Paste this into the File Explorer address bar. Until a name is set under "Who opens these folders", anyone in the house can open them.</p>
           <p class="meta" id="access"></p>
         </details>
         <details class="why">

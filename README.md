@@ -33,4 +33,4 @@ cargo run --bin keelctl -- bootstrap --host user@192.168.1.50 --binary target/x8
 
 ## Status
 
-v0: dashboard, disk inventory, stub pools/shares. Storage mutations come next.
+v0.1.x: Home, Files (SMB), Disks with jobs and nightly copies, Away (Tailscale/Headscale), Repair, and optional apps (Passwords, Video, Photos, Watch, Papers, Mail). Current state: `memory-bank/activeContext.md`.

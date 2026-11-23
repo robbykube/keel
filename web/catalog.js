@@ -19,7 +19,7 @@ function row(app, added) {
     ? ""
     : `<button type="button" data-app="${escapeHtml(app.id)}">Add</button>`;
   const note = added
-    ? "Added. It stays closed until the program is on this computer."
+    ? "Added. Opens once its program is on this computer."
     : app.why;
   return `<article class="app-row">
     <div>
@@ -34,7 +34,7 @@ function stateOf(status, waiting) {
   if (status.local) return ["Ready", "ok"];
   if (status.ready) return ["Running", "ok"];
   if (status.state === "running") return ["Opening", ""];
-  if (status.state === "error") return ["Stopped", "bad"];
+  if (status.state === "error") return ["Stopped", "idle"];
   if (status.state === "unavailable") return ["Not on this computer", ""];
   return [waiting ? "Waiting" : "Closed", ""];
 }
@@ -146,12 +146,15 @@ function programRow(spec, status) {
     : (waiting && status.state !== "error" && status.state !== "running"
       ? (sharedDown ? "Closed until Names and the front door are ready." : "Closed until the name is saved.")
       : (status.message || ""));
+  // A raw error from the computer goes behind ?, with a sentence a person can act on.
+  const said = failed ? String(status.message || "").trim() : "";
+  const failText = failed ? `${spec.title} did not start. Try again, or open Logs to see why.` : "";
   const shared = spec.host === "names" && status.state !== "error";
   const open = status.local
     ? `<a class="button" href="/photos.html">Open</a>`
     : (status.allowed === false || status.state === "unavailable" || status.ready || waiting || shared
       ? ""
-      : `<button type="button" data-program="${escapeHtml(spec.id)}"${opening ? " disabled" : ""}>Open</button>`);
+      : `<button type="button" data-program="${escapeHtml(spec.id)}"${opening ? " disabled" : ""}>${failed ? "Try again" : "Open"}</button>`);
   const close = status.ready && status.signups_open
     ? `<button type="button" data-close="${escapeHtml(spec.id)}">Close new accounts</button>`
     : "";
@@ -162,7 +165,7 @@ function programRow(spec, status) {
   return `<article class="app-row" id="${escapeHtml(spec.id)}-row">
     <div>
       ${head(spec.title, state, tone)}
-      <p class="install-message${failed ? " install-error" : ""}">${escapeHtml(message)}</p>
+      <p class="install-message">${failed ? `${escapeHtml(failText)} ${said ? keelHelp(said, "What the computer said") : ""}` : escapeHtml(message)}</p>
       ${address}
       ${signIn}
       ${bar}
@@ -194,9 +197,9 @@ function updateGate() {
     const failed = (names && names.state === "error") || (door && door.state === "error");
     if (!names || !names.ready || !door || !door.ready) {
       note.textContent = failed
-        ? "Names or the front door stopped. Sign in, then open Logs. Apps stay closed until both are ready."
-        : "Names and the front door open on their own. Apps stay closed until they are ready.";
-    } else if (!ownedName) note.textContent = "Save the name you own. You can change it later. Apps stay closed until it is saved.";
+        ? "Apps wait until Names and the front door are running."
+        : "Names and the front door are starting. Apps wait for them.";
+    } else if (!ownedName) note.textContent = "Save the name you own first. Apps wait for it.";
     else note.textContent = "";
   }
   if (was === sharedReady) return;
@@ -412,7 +415,7 @@ async function load() {
   const more = choices.filter((app) => !app.installed);
   $("added").innerHTML = added.length
     ? added.map((app) => row(app, true)).join("")
-    : (opened.length ? "" : `<p class="meta">None yet. Add one below, or pick the first ones on Home.</p>`);
+    : (opened.length ? "" : `<p class="meta">None yet. Add one below.</p>`);
   $("more").innerHTML = more.length
     ? more.map((app) => row(app, false)).join("")
     : `<p class="meta">Every app on the list is already added.</p>`;
@@ -439,7 +442,7 @@ async function loadOwned() {
   if (data.name) {
     input.value = data.name;
     ownedName = data.name;
-    status.textContent = `Keel uses that name for each app, such as ${data.photos}. You can change it later.`;
+    status.textContent = `Apps will use names like ${data.photos}.`;
   } else {
     ownedName = "";
   }
@@ -463,7 +466,7 @@ $("owned-form").addEventListener("submit", async (event) => {
       return;
     }
     ownedName = data.name || $("owned-input").value.trim();
-    status.textContent = `Keel uses that name for each app, such as ${data.photos}. You can change it later.`;
+    status.textContent = `Apps will use names like ${data.photos}.`;
     updateGate();
   } catch (err) {
     status.textContent = String(err);
@@ -505,7 +508,7 @@ async function loadOutside() {
   const pill = $("outside-pill");
   pill.textContent = "Checking";
   pill.className = "pill";
-  $("outside-sentence").textContent = "Keel is looking at the router and at how the internet sees this house.";
+  $("outside-sentence").textContent = "Checking the router.";
   try {
     const res = await fetch("/api/router", { credentials: "same-origin" });
     if (!res.ok) {

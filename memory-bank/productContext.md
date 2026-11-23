@@ -9,6 +9,7 @@ keel exists so we can cut work that does not serve “store files, share them, s
 1. Install the appliance (or push keel onto Debian).
 2. First boot: hostname, pool disks, admin, join Tailscale (or the overlay we ship) so files work away. No settings tour.
 3. Home answers three questions: where the files are, whether they open away from home, and whether the disks are all right. Repair is a sentence plus a safe Fix. Do not live in Settings.
+4. Apps are optional extras on top: Passwords, Video, Photos, Watch, Papers, Mail. Each stays closed until opened, under the name you own. They must never crowd out 1–3: Home shows Files, Away and Disks before anything about apps.
 
 ## GUI-first rule
 
@@ -27,7 +28,7 @@ stays Keel: sea-glass on deep water. Details in [ui.md](ui.md).
 - **The window is the frame.** The page does not grow a document scrollbar. Chrome stays put. The sidebar never scrolls; extra pages open from a short menu. Notes stays at the bottom of the sidebar. Wide pages use two panes so they fill the window.
 - **Save-button rule** (Cerebro): ticks and choices save on change; typed fields keep a button; hard-to-undo still confirms; a failed save repaints from the source of truth.
 - Why boxes start **closed** so they do not eat the fold. If opened, they scroll inside themselves.
-- Help assumes the reader knows nothing. Errors name the fix. Optional/not-running is grey, not red.
+- Few words on the page; the why lives behind a `?`. Help assumes the reader knows nothing. Errors name the fix. Optional/not-running is grey, not red.
 - Small JS, no SPA framework tax in v0
 - Information density over marketing cards
 - Same explanation bar as Cerebro / the AI Suite: a always-on **Guide**, **Notes** for ideas, and **Why this?** at consequential actions (what, why, what changes, how to undo)

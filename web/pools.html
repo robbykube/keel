@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>keel · Disks</title>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/components.css" />
+  <link rel="stylesheet" href="/surfaces.css" />
   <script src="/approve.js"></script>
   <script src="/chrome.js"></script>
 </head>
@@ -17,32 +19,20 @@
       </svg>
       <span>keel</span>
     </div>
-    <nav>
-      <a href="/">Home</a>
-      <a href="/shares.html">Files</a>
-      <a href="/catalog.html">Apps</a>
-      <a href="/overlay.html">Away</a>
-      <a class="quiet active" href="/pools.html">Disks</a>
-      <a class="quiet" href="/installer.html">Install</a>
-      <a class="quiet" href="/repair.html">Repair</a>
-      <a class="quiet" href="/notes.html">Notes</a>
-      <a class="quiet" href="/guide.html">Guide</a>
-      <a class="quiet" href="/settings.html">Settings</a>
-      <a class="quiet" href="/login.html">Sign in</a>
-    </nav>
+    <nav aria-label="Navigation"></nav>
+    <div class="aside-foot" id="health"></div>
   </aside>
   <main>
     <header>
       <h1>Disks</h1>
     </header>
-    <p class="lede">Keel opens a disk that already has files. Everyday folders can share one disk. A copy still needs a disk of its own. <a href="/guide.html#pool">What this means.</a></p>
+    <p class="lede">Give each disk a job. <a href="/guide.html#pool">About disk jobs</a></p>
     <div class="work-split">
       <div class="work-col">
         <div class="pane">
-          <h2>In this computer</h2>
-          <p class="meta">New disks show up here a few seconds after you plug them in. Keel reads the folders that are already there. It erases a disk only after you type its name.</p>
+          <h2>In this computer <button type="button" class="help" data-tip="A disk you plug in shows up here within a few seconds. Giving a disk a job erases it, so Keel asks you to type its name first." aria-label="What is this?" aria-expanded="false">?</button></h2>
           <div class="table-wrap">
-            <table>
+            <table class="stack">
               <thead>
                 <tr><th>Disk</th><th>Size</th><th>What it holds</th><th></th></tr>
               </thead>
@@ -53,20 +43,20 @@
             <p class="meta wide" id="usewhich"></p>
             <label class="wide">Use it for <select id="userole"></select></label>
             <p class="meta wide" id="userolewhat"></p>
-            <label class="wide">Type <span id="usename"></span> to erase everything on it <input id="useconfirm" autocomplete="off" spellcheck="false" /></label>
+            <label class="wide confirm-label"><span>Type <span id="usename"></span> to erase it</span> <input id="useconfirm" autocomplete="off" spellcheck="false" /></label>
             <div class="actions wide">
               <button type="submit" class="danger" id="usego">Erase and use</button>
               <button type="button" id="usecancel">Cancel</button>
             </div>
           </form>
           <p class="meta" id="diskstatus"></p>
-          <h2>When a disk is idle</h2>
-          <p class="meta" id="sleepstatus">Keel can ask one spinning disk in the USB box to sleep, unless that box is already doing it.</p>
+          <h2>When a disk is idle <button type="button" class="help" data-tip="A spinning USB disk can sleep when nothing reads it, which saves power and wear. Try it on one disk to see if the box allows it." aria-label="What is this?" aria-expanded="false">?</button></h2>
+          <p class="meta" id="sleepstatus"></p>
           <button type="button" id="sleeptry">Try it on one disk</button>
-          <h2>Copies</h2>
+          <h2>Copies <button type="button" class="help" data-tip="With a second disk set as Nightly copy, Keel copies the files to it once a day." aria-label="What is this?" aria-expanded="false">?</button></h2>
           <p class="meta" id="copystatus">Checking…</p>
           <button type="button" id="copynow" hidden>Copy now</button>
-          <h2>This computer</h2>
+          <h2>This computer <button type="button" class="help" data-tip="Each night Keel also saves its own settings, people and app data onto the Nightly copy disk, apart from the files. If this computer is replaced, Keel can bring them back." aria-label="What is this?" aria-expanded="false">?</button></h2>
           <p class="meta" id="computerstatus">Checking…</p>
           <button type="button" id="computersavego">Copy this computer</button>
           <div class="spare" id="spare" hidden>
@@ -77,12 +67,11 @@
       </div>
       <div class="work-col">
         <div class="pane">
-          <h2>On another computer</h2>
-          <p class="meta">Files kept on another computer, such as a Proxmox or TrueNAS box, can show here too. Nothing there is changed.</p>
+          <h2>On another computer <button type="button" class="help" data-tip="List files that live on another machine, such as Proxmox or TrueNAS. Keel only reads; it never changes that computer's disks." aria-label="What is this?" aria-expanded="false">?</button></h2>
           <details class="why another" id="another">
           <summary>Use a disk on another computer</summary>
           <form class="form look" id="lookform">
-            <label class="wide">Look around (type a name or number — not a search of every machine)
+            <label class="wide">Name or address of that computer
               <input name="host" id="host" placeholder="name or number of that computer" />
             </label>
             <button type="submit">Look around</button>
@@ -101,11 +90,11 @@
             <label class="check"><input type="checkbox" id="insecure" /> Homemade certificate (only if the lock is red)</label>
             <button type="submit">Sign in</button>
           </form>
-          <p class="meta" id="signinwhy">Sign in on this page. Do not paste the password into chat. keel keeps the name, not the password. The Proxmox session stays in memory so you can list files until keel restarts.</p>
+          <p class="meta" id="signinwhy">Keel keeps the name, not the password. <button type="button" class="help" data-tip="The sign-in stays in memory so you can list files until Keel restarts. The password is never saved to disk." aria-label="What is this?" aria-expanded="false">?</button></p>
           <label class="check"><input type="checkbox" id="theirnames" /> Show the names that computer uses</label>
           <div class="found" id="places" hidden></div>
           <form class="form" id="filesform" hidden>
-            <p class="meta">Check files — files app name and password, not Proxmox. Paste the files website if List files did not find it.</p>
+            <p class="meta">Sign in to the files app on that computer (not Proxmox).</p>
             <label class="wide">Files app address <input id="filesurl" placeholder="https://… the site you already open for files" /></label>
             <label>Name on the files app <input id="filesuser" autocomplete="username" /></label>
             <label>Password <input id="filespass" type="password" autocomplete="current-password" /></label>
@@ -118,11 +107,11 @@
           <label>Where are the files?
             <select name="kind">
               <option value="foreign">On another computer (keep Proxmox / TrueNAS)</option>
-              <option value="local">Disks in this machine (later)</option>
+              <option value="local" disabled>Disks in this machine (coming)</option>
             </select>
           </label>
           <label class="wide">Address of that folder
-            <input name="source" placeholder="ask the other machine; paste what it gives you" />
+            <input name="source" placeholder="paste the folder address from that computer" />
           </label>
           <button type="submit">Add these files</button>
         </form>

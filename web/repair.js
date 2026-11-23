@@ -26,8 +26,8 @@ function issueCard(i) {
 
 async function load() {
   const data = await fetch("/api/issues").then((r) => r.json());
-  $("banner").textContent = data.red ? "Something needs fixing" : data.items.length ? "Nothing urgent" : "All good";
-  $("health").textContent = data.red ? "Needs fixing" : "No problems";
+  $("banner").textContent = keelHealthWord(data).word;
+  keelShowHealth(data);
   $("items").innerHTML = data.items.map(issueCard).join("") || "<p class='prose'>Nothing to fix.</p>";
   $("playbook").innerHTML = data.playbook
     .map((p) => {

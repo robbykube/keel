@@ -21,16 +21,21 @@ conventions (15 Sep 2026).
 
 Keel’s mapping in `web/chrome.js`:
 
-- Everyday: Home, Files, Away. Apps stays hidden until one is chosen.
-  Home asks “What will you use Keel for?” until then. After the first choice,
-  Apps stays in the sidebar and more can be added there. Home is the family page: a greeting, one notice,
-  then Files, Away, and Disks. No person’s name. No Family/Admin switch.
-- **This computer** is a sidebar title, with Disks and Repair under it, after Sign in.
+- Everyday: Home, Files, Apps, Away. Home asks “What will you use Keel for?”
+  (chips, under the three cards) until apps are chosen; Apps can add more.
+  Home is the family page, in this order: a greeting, one notice, then the
+  Files, Away and Disks cards, then the address other computers use (one line
+  with Copy), then the app chooser. No person’s name. No Family/Admin switch.
+- **This computer** is a sidebar title, with Disks, Devices, Bluetooth and Repair under it.
   Install is only on the live USB image (`can_install`), never in the installed
   app. The row names the page you are on when it belongs to that menu.
 - Support: Guide stays. Settings and Sign in follow the session. Sign in is
   there until you are signed in; Settings appears after that.
-- Notes at the bottom, then health and a Power button (icon + word). Its menu
+- Notes at the bottom, then the health line, then a Power button (icon + word).
+  The health line is drawn by `chrome.js` on every page from `/api/issues`:
+  a dot and “All good”, “1 thing to look at” (or n things), or “Needs
+  fixing”, with the version on the right; it links to Repair. Every page has
+  `#health`, so the sidebar sits the same on every page. Its menu
   opens upward. Signed in: Sign out (only for a browser session), Restart,
   Shut down. Until then the menu is Sign in, so someone in the house cannot
   shut the computer down from the page. Restart and Shut down confirm first.
@@ -55,6 +60,15 @@ Keel’s mapping in `web/chrome.js`:
 
 ## Words and help
 
+- **The page says what to do; `?` says why.** A heading or control gets one
+  short line at most. Anything longer (why, how it works, what it touches)
+  goes behind a `?` button: `<button class="help" data-tip="…">` in HTML, or
+  `keelHelp(text)` in script. Pressing it opens a bubble; anywhere else or
+  Escape closes it. It works by tap on the Keel screen. No hover-only help.
+- Do not write the same sentence twice on a page (lede and empty state).
+- A raw message from the computer (systemd, HTTP codes, tool output) is never
+  the sentence on a card. The card says what happened and what to press; the
+  raw text goes behind `?` (“What the computer said”) or into Logs.
 - Help assumes the reader knows nothing, and says why each thing is done.
 - Errors name the fix a person can do.
 - Plain page names. If a part name is needed, it is a small label, not the
@@ -84,11 +98,25 @@ invent its own font size, gap, radius, or color.
   Sign out, Restart, and Shut down. Until then the menu is Sign in. Do not
   draw a second power control on a page.
 
+## Lists and rows
+
+- Each row carries its own action (Disks: “Give it a job…”). A destructive
+  action is never the only or the first button on a row; the erase is inside
+  the form that asks for the disk name.
+- A disk is named by its model, with the device name (`sda`) small under it.
+- Sizes use one format everywhere: `keelSize` (1000-based, like the label on
+  a disk).
+- An empty list shows one sentence and the button that fills it (Files: “Choose
+  a disk”), and hides tools that need something in the list.
+- On a phone, a wide table uses `class="stack"` and becomes stacked rows; no
+  button may be cut off at the edge.
+- `[hidden]` always hides, even on a grid or flex form.
+
 ## Colour and status (intent, not palette)
 
 - Accent is for interactive highlight and live/ok work. Healthy status uses
   green, attention uses brass, and only a real repair uses red.
-- An optional service that is not running reads **grey**, not red. Red is a
+- An optional service that is not running, or an app that did not start, reads **grey** (`pill idle`), not red. Red is a
   failure that needs Repair. “Overlay not enrolled yet” is grey.
 - Scroll bars are thin and themed (track quiet, thumb warm/accent on hover).
 - Keyboard focus is always visible; pointer clicks do not need a ring.
