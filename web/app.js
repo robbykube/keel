@@ -278,7 +278,7 @@ function showAppChoice(apps) {
   fetch("/api/versions", { credentials: "same-origin" })
     .then((res) => (res.ok ? res.json() : []))
     .then((list) => {
-      const forApp = { video: "jitsi" };
+      const forApp = { video: "jitsi", photos: "immich" };
       for (const v of list) {
         const input = rows.querySelector(`input[value="${forApp[v.app] || v.app}"]`);
         if (!input || input.closest("label").querySelector(".version-hint")) continue;

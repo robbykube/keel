@@ -40,6 +40,15 @@ const APPS: &[App] = &[App {
     full_mb: crate::memory::NEEDS_MAIL,
     light_is: "A web mail page for Gmail, Yahoo, iCloud and AOL. The mail stays at your provider.",
     full_is: "Thunderbird in the browser, Outlook and Hotmail included. Mail you move into it stays here.",
+}, App {
+    id: "photos",
+    title: "Photos",
+    light: "This page",
+    full: "Immich",
+    light_mb: 80,
+    full_mb: crate::memory::NEEDS_PHOTOS,
+    light_is: "The pictures already in Media, on Keel's own page.",
+    full_is: "Immich, with search and the phone apps. The pictures stay in Media.",
 }];
 
 /// Where Keel keeps Galène, from the Keel package.
@@ -94,6 +103,8 @@ fn suggest(total_mb: u64) -> &'static str {
 fn light_ready(app: &str) -> bool {
     match app {
         "video" => Path::new(GALENE).is_file() || std::env::var_os("KEEL_GALENE").is_some(),
+        // The pictures page ships with Keel. Immich is downloaded on Open.
+        "photos" => true,
         // A downloaded program, like the full one: ready on any computer.
         "mail" => true,
         _ => false,
@@ -165,6 +176,16 @@ pub fn choose(app: &str, version: &str) -> Result<String, String> {
                 }
                 let _ = std::fs::remove_file("/run/keel/mail.json");
             }
+            "photos" => {
+                if cfg!(target_os = "linux") {
+                    let _ = crate::storage::host(
+                        "podman rm -f keel-photos-server keel-photos-ml keel-photos-db keel-photos-redis >/dev/null 2>&1 || true",
+                        &[],
+                        None,
+                    );
+                }
+                let _ = std::fs::remove_file("/run/keel/photos.json");
+            }
             _ => {}
         }
     }
@@ -191,5 +212,8 @@ mod tests {
         let said = super::why(914, video, "light");
         assert!(said.contains("0.9 GB"), "{said}");
         assert!(said.contains("Galène needs about 150 MB"), "{said}");
+        let photos = super::APPS.iter().find(|app| app.id == "photos").unwrap();
+        assert_eq!(photos.full, "Immich");
+        assert!(super::light_ready("photos"));
     }
 }

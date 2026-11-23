@@ -23,6 +23,8 @@ pub struct Status {
     pub message: String,
     pub state: String,
     pub percent: u8,
+    /// The light choice: pictures on Keel's own page, not Immich.
+    pub local: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -37,6 +39,9 @@ struct Saved {
 }
 
 pub fn view() -> Status {
+    if crate::versions::light("photos") {
+        return local_page();
+    }
     if !cfg!(target_os = "linux") {
         return Status {
             ready: false,
@@ -44,6 +49,7 @@ pub fn view() -> Status {
             message: "Photos install on the Keel computer.".into(),
             state: "unavailable".into(),
             percent: 0,
+            local: false,
         };
     }
     if let Some(saved) = read_progress() {
@@ -57,6 +63,7 @@ pub fn view() -> Status {
                 message: saved.message,
                 state: saved.state,
                 percent: saved.percent,
+                local: false,
             };
         }
     }
@@ -64,6 +71,9 @@ pub fn view() -> Status {
 }
 
 pub fn start() -> Result<Status, String> {
+    if crate::versions::light("photos") {
+        return Ok(local_page());
+    }
     if !cfg!(target_os = "linux") {
         return Err("Photos install on the Keel computer.".into());
     }
@@ -152,6 +162,18 @@ fn idle() -> Status {
         },
         state: "idle".into(),
         percent: 0,
+        local: false,
+    }
+}
+
+fn local_page() -> Status {
+    Status {
+        ready: false,
+        address: String::new(),
+        message: "Pictures already in Media. Open shows them here.".into(),
+        state: "local".into(),
+        percent: 0,
+        local: true,
     }
 }
 

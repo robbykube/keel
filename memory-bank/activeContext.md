@@ -53,6 +53,7 @@ Video: the call size and Close are in v0.1.61. A call holds as many people as th
 
 ## Recent
 
+- **v0.1.91 (2026-11-23):** Photos has one Open button. Settings → Light or full chooses it. Light opens the pictures already in Media on Keel's own page. Full starts Immich (the pictures stay in Media). Switching stops Immich and the card waits for Open. Jellyfin is no longer on the Photos card. A films and music card is not added. Not yet installed.
 - **v0.1.90 (2026-11-23):** Home shows where another computer opens Keel. The address is the one this computer uses on the house network, with the page port, such as http://192.168.0.191:9478. A container address is not used while a house address is known. Copy is on the card. Not yet installed.
 - **v0.1.89 (2026-11-23):** Photos can save the open picture or video. Download on that page asks for the file itself (`download=1` on `/api/photos/picture`), and Keel sends it as a file to save, with the picture's own name. The screen copy stays what you see. The package still has no apps folder, so a computer on 0.1.54 can install it. Not yet installed.
 - **v0.1.88 (2026-11-23):** The EliteDesk, then on 0.1.54, refused the latest package with "The package contains an unexpected file: apps". This package has no apps folder, and the program accepts that folder for a later update. Logs has "While turning on": each failed start says whether it ran out of time or stopped with an error, plus the sentence the computer wrote, and the "timed out" lines from this start. The EliteDesk installed this on 2026-11-23.

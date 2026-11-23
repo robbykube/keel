@@ -31,6 +31,7 @@ function row(app, added) {
 }
 
 function stateOf(status, waiting) {
+  if (status.local) return ["Ready", "ok"];
   if (status.ready) return ["Running", "ok"];
   if (status.state === "running") return ["Opening", ""];
   if (status.state === "error") return ["Stopped", "bad"];
@@ -45,6 +46,7 @@ const programs = {
   passwords: { id: "passwords", title: "Passwords", path: "/api/apps/vaultwarden", host: "added" },
   papers: { id: "papers", title: "Papers", path: "/api/apps/papra", host: "added" },
   mail: { id: "mail", title: "Mail", path: "/api/apps/thunderbird", host: "added" },
+  photos: { id: "photos", title: "Photos", path: "/api/apps/immich", host: "added" },
 };
 const chosenProgram = { jitsi: "video", vaultwarden: "passwords", immich: "photos", papra: "papers", thunderbird: "mail" };
 const programTimers = {};
@@ -80,15 +82,19 @@ function programRow(spec, status) {
   const bar = opening
     ? `<div class="install-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>`
     : "";
-  const waiting = spec.host === "added" && !sharedReady && !status.ready;
+  const waiting = !status.local && spec.host === "added" && !sharedReady && !status.ready;
   const sharedDown = !latest.names || !latest.names.ready || !latest.door || !latest.door.ready;
-  const message = waiting && status.state !== "error" && status.state !== "running"
-    ? (sharedDown ? "Closed until Names and the front door are ready." : "Closed until the name is saved.")
-    : (status.message || "");
+  const message = status.local
+    ? (status.message || "Pictures already in Media. Open shows them here.")
+    : (waiting && status.state !== "error" && status.state !== "running"
+      ? (sharedDown ? "Closed until Names and the front door are ready." : "Closed until the name is saved.")
+      : (status.message || ""));
   const shared = spec.host === "names" && status.state !== "error";
-  const open = status.state === "unavailable" || status.ready || waiting || shared
-    ? ""
-    : `<button type="button" data-program="${escapeHtml(spec.id)}"${opening ? " disabled" : ""}>Open</button>`;
+  const open = status.local
+    ? `<a class="button" href="/photos.html">Open</a>`
+    : (status.state === "unavailable" || status.ready || waiting || shared
+      ? ""
+      : `<button type="button" data-program="${escapeHtml(spec.id)}"${opening ? " disabled" : ""}>Open</button>`);
   const close = status.ready && status.signups_open
     ? `<button type="button" data-close="${escapeHtml(spec.id)}">Close new accounts</button>`
     : "";
@@ -231,99 +237,12 @@ async function closeProgram(spec) {
   }
 }
 
-function photosCard(status) {
-  const allowed = !!(status && status.allowed);
-  const opening = allowed && status.state === "running";
-  const failed = allowed && status.state === "error";
-  const ready = allowed && status.ready;
-  const address = ready && status.address
-    ? `<p><a href="${escapeHtml(status.address)}">${escapeHtml(status.address)}</a></p>`
-    : "";
-  const percent = Math.max(0, Math.min(100, Number(status && status.percent) || 0));
-  const bar = opening
-    ? `<div class="install-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>`
-    : "";
-  let full = `<p class="app-warn">Jellyfin needs a larger computer.</p>`;
-  let jelly = "";
-  if (allowed && status.state === "unavailable") {
-    full = `<p class="install-message">${escapeHtml(status.message || "Jellyfin installs on the Keel computer.")}</p>`;
-  } else if (allowed && !sharedReady && !opening && !failed && !ready) {
-    full = `<p class="install-message">Jellyfin stays closed until Names and the front door are ready.</p>`;
-  } else if (allowed) {
-    full = `<p class="install-message${failed ? " install-error" : ""}">${escapeHtml(status.message || "")}</p>${address}${bar}`;
-    jelly = ready
-      ? ""
-      : `<button type="button" data-program="jellyfin"${opening ? " disabled" : ""}>Jellyfin</button>`;
-  }
-  return `<article class="app-row" id="photos-row">
-    <div>
-      ${head("Photos", "Ready", "ok")}
-      <p class="install-message">Pictures already in Media. Open shows them here.</p>
-      ${full}
-    </div>
-    <a class="button" href="/photos.html">Open</a>
-    ${jelly}
-  </article>`;
-}
-
 async function paintPhotos() {
-  let status = { allowed: false, state: "refused", message: "Jellyfin needs a larger computer." };
-  try {
-    const res = await fetch("/api/apps/jellyfin", { credentials: "same-origin" });
-    if (res.ok) status = await res.json();
-  } catch {
-    /* The sentence stays the refusal. */
-  }
-  const host = $("added");
-  if (!host) return;
-  const html = photosCard(status);
-  const existing = $("photos-row");
-  if (existing) existing.outerHTML = html;
-  else host.insertAdjacentHTML("afterbegin", html);
-  if (status.state === "running") {
-    window.setTimeout(paintPhotos, 800);
-  }
-}
-
-async function openJellyfin() {
-  const host = $("added");
-  if (!host || !$("photos-row")) return;
-  $("photos-row").outerHTML = photosCard({
-    allowed: true,
-    state: "running",
-    percent: 8,
-    message: "Opening Jellyfin. This can take a while.",
-    ready: false,
-    address: "",
-  });
-  try {
-    const res = await fetch("/api/apps/jellyfin/install", { method: "POST", credentials: "same-origin" });
-    const data = await readAnswer(res);
-    if (!res.ok || data.ok === false) {
-      $("photos-row").outerHTML = photosCard({
-        allowed: true,
-        state: "error",
-        percent: 0,
-        message: data.message || "Keel could not open Jellyfin.",
-        ready: false,
-        address: "",
-      });
-      return;
-    }
-    $("photos-row").outerHTML = photosCard(data);
-    if (!data.ready) window.setTimeout(paintPhotos, 800);
-  } catch (err) {
-    if ($("photos-row")) {
-      $("photos-row").outerHTML = photosCard({
-        allowed: true,
-        state: "error",
-        percent: 0,
-        message: String(err),
-        ready: false,
-        address: "",
-      });
-    }
-  }
+  const spec = programs.photos;
+  const status = await programStatus(spec);
+  if (!status) return;
+  paintProgram(spec, status);
+  if (status.state === "running") watchProgram(spec);
 }
 
 // Closing ends any call in progress, so the first press asks.
@@ -410,10 +329,6 @@ function onProgramClick(event) {
   }
   const open = event.target.closest("button[data-program]");
   if (!open) return;
-  if (open.dataset.program === "jellyfin") {
-    openJellyfin();
-    return;
-  }
   const spec = programs[open.dataset.program];
   if (spec) openProgram(spec);
 }

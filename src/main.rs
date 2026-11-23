@@ -1806,6 +1806,7 @@ async fn photos_install() -> Result<(StatusCode, Json<serde_json::Value>), (Stat
                 "message": status.message,
                 "state": status.state,
                 "percent": status.percent,
+                "local": status.local,
             })),
         )),
         Err(message) => Err((
