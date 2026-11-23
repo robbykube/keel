@@ -34,7 +34,7 @@ Do not invent clever metaphors. Say what the thing is and what to do.
 | Mail | A mailbox on this computer, at mail and the name you own. Open it on your phone or another computer. Sign in as mail with the password Keel shows, then add Gmail or another account. Mail you move here stays here. On the phone, DNS for the house Wi-Fi is this computer. Leave the router's own DNS as it is |
 | Devices | Computers that answered on the house network. Look now writes the list. Nothing is blocked |
 | Bluetooth | Keyboards and headphones for this computer. Look, then Pair. Disconnect and Forget are on the same page |
-| The name you own | The name you bought, such as klaingar.com. Keel makes each app name, such as photos.klaingar.com, and asks for the lock. You do not type addresses |
+| The name you own | The name you bought, such as klaingar.com, saved in Settings. Keel makes each app name, such as photos.klaingar.com, and asks for the lock. You do not type addresses |
 | Names | The book of names for this house. Keel opens it on its own. Leave the router DNS as it is |
 | Logs | Notes from Names and the front door. Sign in, then open Logs. That works from another computer. While turning on names what failed or ran out of time as the computer started |
 | Front door | A small program on this computer. It answers a name you own and sends it to that app. This page stays on its own address |

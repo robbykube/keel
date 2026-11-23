@@ -482,6 +482,41 @@ async function chooseVersion(app, version) {
   await loadVersions();
 }
 
+async function loadOwnedName() {
+  const input = $("owned-input");
+  if (!input) return;
+  const res = await fetch("/api/name", { credentials: "same-origin" });
+  if (!res.ok) return;
+  const data = await res.json();
+  if (data.name) {
+    input.value = data.name;
+    $("owned-status").textContent = `Apps will use names like ${data.photos}.`;
+  }
+}
+
+$("owned-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const status = $("owned-status");
+  status.textContent = "Saving.";
+  try {
+    const res = await fetch("/api/name", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ name: $("owned-input").value }),
+    });
+    const data = await res.json().catch(() => ({ message: "Keel could not store the name." }));
+    if (!res.ok || !data.ok) {
+      status.textContent = data.message || "Keel could not store the name.";
+      return;
+    }
+    status.textContent = data.photos ? `Apps will use names like ${data.photos}.` : "Saved.";
+  } catch (err) {
+    status.textContent = String(err);
+  }
+});
+
+loadOwnedName();
 loadVersions();
 loadWake();
 loadPeople();

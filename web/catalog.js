@@ -199,7 +199,7 @@ function updateGate() {
       note.textContent = failed
         ? "Apps wait until Names and the front door are running."
         : "Names and the front door are starting. Apps wait for them.";
-    } else if (!ownedName) note.textContent = "Save the name you own first. Apps wait for it.";
+    } else if (!ownedName) note.textContent = "Save the name you own in Settings. Apps wait for it.";
     else note.textContent = "";
   }
   if (was === sharedReady) return;
@@ -433,45 +433,12 @@ async function load() {
 }
 
 async function loadOwned() {
-  const input = $("owned-input");
-  const status = $("owned-status");
-  if (!input || !status) return;
   const res = await fetch("/api/name", { credentials: "same-origin" });
   if (!res.ok) return;
   const data = await res.json();
-  if (data.name) {
-    input.value = data.name;
-    ownedName = data.name;
-    status.textContent = `Apps will use names like ${data.photos}.`;
-  } else {
-    ownedName = "";
-  }
+  ownedName = data.name || "";
   updateGate();
 }
-
-$("owned-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const status = $("owned-status");
-  status.textContent = "Saving.";
-  try {
-    const res = await fetch("/api/name", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ name: $("owned-input").value }),
-    });
-    const data = await res.json().catch(() => ({ message: "Keel could not store the name." }));
-    if (!res.ok || !data.ok) {
-      status.textContent = data.message || "Keel could not store the name.";
-      return;
-    }
-    ownedName = data.name || $("owned-input").value.trim();
-    status.textContent = `Apps will use names like ${data.photos}.`;
-    updateGate();
-  } catch (err) {
-    status.textContent = String(err);
-  }
-});
 
 $("names").addEventListener("click", onProgramClick);
 $("added").addEventListener("click", onProgramClick);

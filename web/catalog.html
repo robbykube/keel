@@ -20,12 +20,12 @@
     <div class="scroll">
       <header><h1>Apps</h1></header>
       <p class="lede">Programs on this computer. Each opens when you need it.</p>
-      <h2>The name you own <button type="button" class="help" data-tip="The web address you bought, such as klaingar.com. Keel gives each app its own name under it, like photos.klaingar.com, and asks for the lock. You never type app addresses." aria-label="What is this?" aria-expanded="false">?</button></h2>
-      <form class="form" id="owned-form">
-        <label>Name <input id="owned-input" autocomplete="off" spellcheck="false" placeholder="klaingar.com" /></label>
-        <button type="submit">Save</button>
-      </form>
-      <p class="meta" id="owned-status"></p>
+      <h2>On this computer</h2>
+      <p class="meta" id="apps-wait"></p>
+      <div class="app-grid" id="added"></div>
+      <h2>Add another</h2>
+      <div class="app-grid" id="more"></div>
+      <p class="meta" id="status"></p>
       <h2>From outside the house <button type="button" class="help" data-tip="Ask the router opens TCP 80 and 443 for the app names, and UDP 10000 to 10019 for calls, to this computer only. Most routers allow it without a password. Keel renews it every 20 minutes; Stop takes it back. Away works either way." aria-label="What is this?" aria-expanded="false">?</button></h2>
       <section class="card outside-card" id="outside">
         <div class="app-head"><h3>Can people outside reach the apps?</h3><span class="pill" id="outside-pill">Checking</span></div>
@@ -39,12 +39,6 @@
       </section>
       <h2>Names <button type="button" class="help" data-tip="Two small programs every app needs. Names answers the house's questions about app names; the front door sends each name to its app. They start on their own." aria-label="What is this?" aria-expanded="false">?</button></h2>
       <div class="app-grid" id="names"></div>
-      <h2>On this computer</h2>
-      <p class="meta" id="apps-wait"></p>
-      <div class="app-grid" id="added"></div>
-      <h2>Add another</h2>
-      <div class="app-grid" id="more"></div>
-      <p class="meta" id="status"></p>
     </div>
   </main>
   <script src="/catalog.js"></script>

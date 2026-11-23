@@ -19,14 +19,14 @@ Sidebar on a computer screen; a top bar with Home, Files, Apps, Away and
 | --- | --- | --- |
 | Everyday | **Home** | Greeting, one notice (same count as Repair), then three cards: Files, Away, Disks. Under them: the address other computers use (one line, Copy) and, until apps are chosen, “What will you use Keel for?” as chips. Rest link and Details at the bottom. |
 | | **Files** | The shared folders (`\\ip\files`). Browse, make folders, move, copy, download, view pictures. Sections group folders. Who opens the folders (SMB name/password) and extra share names are in closed boxes. Empty until a disk has the Files job. |
-| | **Apps** | The name you own, “From outside the house” (router check, Ask the router), Names and the front door, then one card per chosen app with Open. |
+| | **Apps** | Chosen apps first, each with Open. Then Add another, “From outside the house”, and Names and the front door. The name you own is in Settings. |
 | | **Away** | Install and connect the overlay (Tailscale or a server you run); Lock the page. |
 | This computer | **Disks** | Each disk with model, size, fill bar and what it holds; per-row “Give it a job…” (erases after typing the disk name). Idle sleep, nightly Copies, Copy this computer / bring it back. Another computer (Proxmox/TrueNAS/WebDAV) read-only. |
 | | **Devices** | What is on the house network; mark known, watch important ones. |
 | | **Bluetooth** | Look, Pair, Disconnect, Forget. |
 | | **Repair** | Issues (red “Needs fixing”, yellow “Worth a look”), safe Fix buttons, Send to the phone (ntfy). |
 | | **Install** | Only on the live USB. |
-| Support | **Guide**, **Logs**, **Settings** (Updates from GitHub, Light or full, People, When it is quiet, Appearance), **Sign in** until signed in | |
+| Support | **Guide**, **Logs**, **Settings** (Updates from GitHub, the name you own, Light or full, People, When it is quiet, Appearance), **Sign in** until signed in | |
 | Bottom | **Notes**, health line, **Power** | |
 
 ### Apps (each opens only when asked)
@@ -47,7 +47,11 @@ version; Keel suggests light under 2.5 GB of memory. See
 - **This Windows PC**: development. `cargo run` serves the page with pretend
   disks. Files cannot be served from Windows.
 
-## Latest change (v0.1.94)
+## Latest change (v0.1.95)
+
+Apps opens on the apps. The name you own is a field in Settings, under Updates. “From outside the house” and Names sit below the apps. If the name is not saved, the apps say so and point to Settings. Not yet installed.
+
+## Previous (v0.1.94)
 
 A usability pass on the page. Nothing in the API changed meaning.
 
@@ -81,7 +85,7 @@ Linux build with pretend data. Not yet seen on the EliteDesk or the Pi.
 
 ## Next
 
-1. Install v0.1.94 on the EliteDesk from Settings. It is not on that computer until then.
+1. Install v0.1.95 on the EliteDesk from Settings. It is not on that computer until then.
 2. Core path before more apps: pick a disk for Files on the EliteDesk, open
    `\\ip\files` from Windows, connect Away, until Home shows no notice.
 3. `GET /api/shares` still returns the folder password without a session.
