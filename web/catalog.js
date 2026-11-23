@@ -52,8 +52,64 @@ const programs = {
 const chosenProgram = { jitsi: "video", vaultwarden: "passwords", immich: "photos", papra: "papers", thunderbird: "mail", jellyfin: "watch" };
 const programTimers = {};
 const latest = {};
+const barMotion = {};
+let barLoop = 0;
 let ownedName = "";
 let sharedReady = false;
+
+// The server reports the start of a step. The bar eases toward the end of
+// that step and stops just short of it, so a long download keeps moving
+// without claiming it has finished.
+function stageCap(floor) {
+  if (floor >= 100) return 100;
+  if (floor >= 92) return 99;
+  return 90;
+}
+
+function motionOff() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function shownPercent(id, status) {
+  const floor = Math.max(0, Math.min(100, Number(status.percent) || 0));
+  if (status.state !== "running") {
+    delete barMotion[id];
+    return floor;
+  }
+  if (motionOff()) return floor;
+  let motion = barMotion[id];
+  if (!motion || motion.floor !== floor) {
+    const carried = motion && motion.shown > floor ? motion.shown : floor;
+    motion = { floor, from: carried, started: performance.now(), shown: carried };
+    barMotion[id] = motion;
+  }
+  const cap = stageCap(floor);
+  const elapsed = (performance.now() - motion.started) / 1000;
+  const value = motion.from + (cap - motion.from) * (1 - Math.pow(0.5, elapsed / 45));
+  motion.shown = Math.min(cap - 0.4, Math.max(floor, value));
+  return motion.shown;
+}
+
+function pumpBars() {
+  barLoop = 0;
+  let moving = false;
+  for (const spec of Object.values(programs)) {
+    const status = latest[spec.id];
+    if (!status || status.state !== "running" || motionOff()) continue;
+    moving = true;
+    const value = shownPercent(spec.id, status);
+    const row = $(`${spec.id}-row`);
+    const span = row && row.querySelector(".install-bar > span");
+    const track = row && row.querySelector(".install-bar");
+    if (span) span.style.width = `${value}%`;
+    if (track) track.setAttribute("aria-valuenow", String(Math.round(value)));
+  }
+  if (moving) barLoop = window.setTimeout(pumpBars, 120);
+}
+
+function keepBarsMoving() {
+  if (!barLoop) pumpBars();
+}
 
 function onKeelScreen() {
   const host = location.hostname;
@@ -79,9 +135,9 @@ function programRow(spec, status) {
   const signIn = spec.id === "mail" && status.ready && status.password
     ? `<p>Sign in as mail. ${escapeHtml(status.password)} <button type="button" class="texty" data-copy="${escapeHtml(status.password)}" data-label="Copy password">Copy password</button></p>`
     : "";
-  const percent = Math.max(0, Math.min(100, Number(status.percent) || 0));
+  const percent = opening ? shownPercent(spec.id, status) : 0;
   const bar = opening
-    ? `<div class="install-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>`
+    ? `<div class="install-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(percent)}"><span style="width:${percent}%"></span></div>`
     : "";
   const waiting = !status.local && status.allowed !== false && spec.host === "added" && !sharedReady && !status.ready;
   const sharedDown = !latest.names || !latest.names.ready || !latest.door || !latest.door.ready;
@@ -124,6 +180,7 @@ function paintProgram(spec, status) {
   if (existing) existing.outerHTML = html;
   else if (spec.host === "added") host.insertAdjacentHTML("afterbegin", html);
   else host.insertAdjacentHTML("beforeend", html);
+  if (status.state === "running") keepBarsMoving();
   if (spec.id === "names" || spec.id === "door") updateGate();
 }
 

@@ -33,7 +33,7 @@ Signed program updates: Settings checks GitHub, verifies `SHA256SUMS.sig`, and c
 
 ## Next
 
-The EliteDesk installed 0.1.88 on 2026-11-23. That program accepts an apps folder, so a later release may pack Galène again. v0.1.92 adds Watch and still leaves the apps folder out. Install 0.1.92 from Settings once the package is finished. Leave the router's own DNS as it is.
+The EliteDesk installed 0.1.88 on 2026-11-23. That program accepts an apps folder, so a later release may pack Galène again. v0.1.93 smooths the bar on an app while it opens, and still leaves the apps folder out. Install 0.1.93 from Settings once the package is finished. Leave the router's own DNS as it is.
 
 Bluetooth is a page under This computer (v0.1.84). Look, then Pair a keyboard or headphones. A code can be confirmed with Yes, typed on the keyboard, or typed on this screen. Disconnect and Forget are on the same page. Leave the router's own DNS as it is.
 
@@ -53,6 +53,7 @@ Video: the call size and Close are in v0.1.61. A call holds as many people as th
 
 ## Recent
 
+- **v0.1.93 (2026-11-23):** While an app is opening, its card keeps a bar. The bar eases toward the end of the current step and stops just short of it until Keel finishes that step, so a long download keeps moving without saying it is done. The sentence still names the step. Not yet installed.
 - **v0.1.92 (2026-11-23):** Watch is its own card: films, shows, and music already in Media. One Open button. The address is watch and the name you own, sent to the front door as keel-jellyfin on 8096, not the Photos name. A computer under 6 GB is refused it. Photos, Watch, Video, Passwords, Papers, and Mail each have a card, a name, and Open. The nightly copy of this computer includes Photos and Watch. Not yet installed.
 - **v0.1.91 (2026-11-23):** Photos has one Open button. Settings → Light or full chooses it. Light opens the pictures already in Media on Keel's own page. Full starts Immich (the pictures stay in Media). Switching stops Immich and the card waits for Open. Jellyfin is no longer on the Photos card. A films and music card is not added. Not yet installed.
 - **v0.1.90 (2026-11-23):** Home shows where another computer opens Keel. The address is the one this computer uses on the house network, with the page port, such as http://192.168.0.191:9478. A container address is not used while a house address is known. Copy is on the card. Not yet installed.

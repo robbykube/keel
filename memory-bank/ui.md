@@ -41,7 +41,7 @@ Keel’s mapping in `web/chrome.js`:
 - **Content fills the width.** Prose keeps a reading measure. Cards sit 16px
   apart. A form sits beside its list when there is room (Shares, Pools).
 - **Save is never below the fold.**
-- An install or a download shows one sentence and a bar. The sentence names the step. Tool output stays off the page.
+- An install or a download shows one sentence and a bar. The sentence names the step. The bar moves through that step and stops just short of the next one until the step is finished. Tool output stays off the page.
 - On a small screen the top bar stays put and does not scroll. Home, Files, and Away share that row. Disks, Repair, Guide, Settings, and Notes open from More. Page columns stack. The page content is the one scroll, including the folder list and the file list on Files.
 
 ## Save-button rule

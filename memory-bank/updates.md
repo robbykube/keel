@@ -20,7 +20,7 @@ What works now:
   Keel before 0.1.79 refuses a package with an `apps` folder. Settings
   installs only the latest release, so v0.1.88 leaves that folder out.
   The EliteDesk installed 0.1.88 on 2026-11-23, so a later release may
-  pack Galène again. v0.1.92 still leaves the folder out.
+  pack Galène again. v0.1.93 still leaves the folder out.
   A Pi already running 0.1.28 installs the arm64 file. The v0.1.29 tag
   did not publish a package.
 - The private signing key lives only in the GitHub Actions secret
