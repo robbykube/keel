@@ -322,6 +322,26 @@ pub fn original(rel: &str) -> Result<PathBuf, String> {
     Ok(full)
 }
 
+/// The picture or video itself, opened so the browser can save it.
+pub struct SavedFile {
+    pub file: std::fs::File,
+    pub name: String,
+    pub len: u64,
+}
+
+pub fn open_original(rel: &str) -> Result<SavedFile, String> {
+    let full = original(rel)?;
+    let name = full
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty() && !name.contains(['/', '\\', '"']) && !name.chars().any(char::is_control))
+        .ok_or_else(|| "That file name cannot be downloaded.".to_string())?
+        .to_string();
+    let meta = std::fs::metadata(&full).map_err(|_| "That picture is not there.".to_string())?;
+    let file = std::fs::File::open(&full).map_err(|_| "Keel could not download that picture.".to_string())?;
+    Ok(SavedFile { file, name, len: meta.len() })
+}
+
 struct Job {
     source: PathBuf,
     copies: Copies,
@@ -1323,7 +1343,7 @@ fn needs_reader(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        categories_in, file_in, in_library, library, limits_for, list_in, open_sized_in, pictures_for, plan_copy_in,
+        categories_in, file_in, in_library, library, limits_for, list_in, open_original, open_sized_in, pictures_for, plan_copy_in,
         take_next, tidy_in, Job, Size,
     };
     use std::fs;
@@ -1364,6 +1384,8 @@ mod tests {
         assert!(in_library("Pictures/Holiday/a.jpg"));
         assert!(!in_library("Audiobooks/cover.jpg"));
         assert!(!in_library("../secret.jpg"));
+        assert!(open_original("../secret.jpg").is_err());
+        assert!(open_original("Audiobooks/cover.jpg").is_err());
         let _ = fs::remove_dir_all(&media);
     }
 

@@ -1637,6 +1637,9 @@ struct PictureQuery {
     /// The picture's version. With it, the browser may keep the copy.
     #[serde(default)]
     v: String,
+    /// Save the picture or video itself, instead of showing a copy.
+    #[serde(default)]
+    download: String,
 }
 
 async fn picture_file(
@@ -1658,6 +1661,21 @@ async fn picture_file(
     let Some(size) = size else {
         // The picture or video itself. Videos need to start part way through.
         let path = query.path.clone();
+        if query.download == "1" {
+            let saved = tokio::task::spawn_blocking(move || crate::gallery::open_original(&path))
+                .await
+                .unwrap_or_else(|_| Err("Keel could not download that picture.".into()))
+                .map_err(refused)?;
+            let header = crate::folders::attachment_header(&saved.name);
+            let file = tokio::fs::File::from_std(saved.file);
+            let body = Body::from_stream(tokio_util::io::ReaderStream::new(file));
+            return Response::builder()
+                .header(CONTENT_TYPE, "application/octet-stream")
+                .header(CONTENT_DISPOSITION, header)
+                .header(CONTENT_LENGTH, saved.len.to_string())
+                .body(body)
+                .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Keel could not download that picture.".to_string()));
+        }
         let full = tokio::task::spawn_blocking(move || crate::gallery::original(&path))
             .await
             .unwrap_or_else(|_| Err("Keel could not open that picture.".into()))

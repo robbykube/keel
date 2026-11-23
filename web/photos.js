@@ -377,6 +377,9 @@ function showAt(index) {
   $("viewer-prev").disabled = index <= 0;
   $("viewer-next").disabled = index >= album.length - 1;
   $("viewer-count").textContent = `${index + 1} of ${album.length}`;
+  const save = $("viewer-download");
+  save.href = pictureUrl(picture, "&download=1");
+  save.setAttribute("download", picture.name || "picture");
 }
 
 function step(by) {
