@@ -17,6 +17,7 @@
     <div class="aside-foot" id="health"></div>
   </aside>
   <main>
+    <div class="scroll">
     <header><h1>Away</h1><div class="meta" id="state"></div></header>
     <p class="lede">Your files, outside the house.</p>
     <div class="work-split">
@@ -59,6 +60,18 @@
         <p class="meta" id="locked"></p>
         <button type="button" id="lockpage">Lock the page</button>
       </div>
+    </div>
+    <h2>From outside the house <button type="button" class="help" data-tip="Ask the router opens TCP 80 and 443 for the app names, and UDP 10000 to 10019 for calls, to this computer only. Most routers allow it without a password. Keel renews it every 20 minutes; Stop takes it back. Away works either way." aria-label="What is this?" aria-expanded="false">?</button></h2>
+    <section class="card outside-card" id="outside">
+      <div class="app-head"><h3>Can people outside reach the apps?</h3><span class="pill" id="outside-pill">Checking</span></div>
+      <p id="outside-sentence">Checking the router.</p>
+      <p class="meta" id="outside-note"></p>
+      <div class="actions">
+        <button type="button" id="outside-ask" hidden>Ask the router</button>
+        <button type="button" id="outside-stop" hidden>Stop asking the router</button>
+        <button type="button" class="texty" id="outside-again">Check again</button>
+      </div>
+    </section>
     </div>
   </main>
   <script src="/overlay.js"></script>
