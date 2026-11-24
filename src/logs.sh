@@ -22,6 +22,11 @@ show "Photos"
 if [ -f /var/lib/immich/setup.log ]; then
   tail -n 20 /var/lib/immich/setup.log || true
 fi
+show "Mail"
+if [ -f /var/lib/thunderbird/setup.log ]; then
+  tail -n 30 /var/lib/thunderbird/setup.log || true
+fi
+podman ps -a --filter name=keel-mail --format '{{.Names}}: {{.Status}}: {{.Ports}}' 2>&1 | head -n 5 || true
 df -Pk /run / 2>/dev/null | awk 'NR==1 || $6=="/run" || $6=="/" { print }'
 # What takes the temporary space, largest last.
 du -xsk /run/* 2>/dev/null | sort -n | tail -n 5 || true

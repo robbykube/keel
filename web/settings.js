@@ -373,6 +373,57 @@ async function loadPeople() {
   renderPeople(await res.json());
 }
 
+async function loadAppSignins() {
+  const list = $("app-signins-list");
+  try {
+    const res = await fetch("/api/apps/signins", { credentials: "same-origin" });
+    if (!res.ok) throw new Error("Sign in as an administrator to manage app sign-ins.");
+    const signins = await res.json();
+    list.replaceChildren(...(signins.length ? signins.map((signin) => {
+      const item = document.createElement("li");
+      const label = document.createElement("span");
+      label.textContent = `${signin.title} · ${signin.user}`;
+      const forget = document.createElement("button");
+      forget.type = "button";
+      forget.textContent = "Forget";
+      forget.addEventListener("click", async () => {
+        forget.disabled = true;
+        try {
+          const { res: result, message } = await postJson(`/api/apps/${encodeURIComponent(signin.id)}/forget`, {});
+          $("app-signins-status").textContent = message;
+          if (result.ok) await loadAppSignins();
+        } catch (error) {
+          $("app-signins-status").textContent = String(error);
+          forget.disabled = false;
+        }
+      });
+      item.append(label, " ", forget);
+      return item;
+    }) : [Object.assign(document.createElement("li"), { textContent: "No saved app sign-ins." })]));
+  } catch (error) {
+    list.replaceChildren(Object.assign(document.createElement("li"), { textContent: String(error.message || error) }));
+  }
+}
+
+$("app-signin-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const app = $("app-signin-app").value;
+  const user = $("app-signin-user").value.trim();
+  const password = $("app-signin-pass").value;
+  const status = $("app-signins-status");
+  status.textContent = "Checking with the app…";
+  try {
+    const { res, message } = await postJson(`/api/apps/${encodeURIComponent(app)}/remember`, { user, password });
+    status.textContent = message;
+    if (res.ok) {
+      $("app-signin-pass").value = "";
+      await loadAppSignins();
+    }
+  } catch (error) {
+    status.textContent = String(error);
+  }
+});
+
 $("people-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const name = $("people-name").value.trim();
@@ -520,6 +571,7 @@ loadOwnedName();
 loadVersions();
 loadWake();
 loadPeople();
+loadAppSignins();
 loadUpdates();
 loadUpdateProgress();
 refreshConnect();

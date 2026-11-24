@@ -112,7 +112,7 @@ pub(crate) fn door_script() -> String {
 
 /// The front door's helper: it writes the Caddyfile from the sites list and
 /// reloads the door. Written when the door is set up and with each name.
-const DOOR_HELPER: &str = include_str!("door-helper.sh");
+pub(crate) const DOOR_HELPER: &str = include_str!("door-helper.sh");
 
 pub fn prepared() -> Result<(), String> {
     if !names_view().ready {

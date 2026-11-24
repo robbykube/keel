@@ -266,6 +266,45 @@ fn save_creds(id: &str, cred: &Cred) -> Result<(), String> {
     std::fs::rename(&tmp, &path).map_err(|_| "Keel could not keep the sign-in.".to_string())
 }
 
+#[derive(Serialize)]
+pub struct RememberedSignIn {
+    pub id: &'static str,
+    pub title: &'static str,
+    pub user: String,
+}
+
+/// Only list user-supplied sign-ins. Keel-generated app credentials stay out
+/// of this manager and are handled by the app's own card.
+pub fn remembered_signins() -> Vec<RememberedSignIn> {
+    ["photos", "papers", "watch"]
+        .into_iter()
+        .filter_map(|id| {
+            let spec = app(id)?;
+            let bytes = std::fs::read(format!("{SIGNIN_DIR}/{id}.json")).ok()?;
+            let cred = serde_json::from_slice::<Cred>(&bytes).ok()?;
+            (!cred.user.is_empty() && !cred.password.is_empty()).then_some(RememberedSignIn {
+                id: spec.id,
+                title: spec.title,
+                user: cred.user,
+            })
+        })
+        .collect()
+}
+
+/// Forget only the credential Keel saved; the app account and its data stay.
+pub fn forget_signin(id: &str) -> Result<String, String> {
+    let spec = app(id).ok_or("Keel does not know that app.")?;
+    if entry(id) != Entry::Account {
+        return Err(format!("Keel does not keep a sign-in for {}.", spec.title));
+    }
+    let path = std::path::Path::new(SIGNIN_DIR).join(format!("{id}.json"));
+    if !path.exists() {
+        return Err(format!("Keel has no saved sign-in for {}.", spec.title));
+    }
+    std::fs::remove_file(path).map_err(|_| format!("Keel could not forget the {} sign-in.", spec.title))?;
+    Ok(format!("Keel forgot the {} sign-in. The app account and its data stay.", spec.title))
+}
+
 /// "Sign in once": Keel tries the name and password on the app itself, and
 /// keeps them only when the app accepts them.
 pub async fn remember(id: &str, user: &str, password: &str) -> Result<String, String> {
@@ -303,11 +342,12 @@ fn door_port(spec: &App, gate: bool) -> Result<(), String> {
     }
     let script = port_script(spec.port, spec.upstream, if gate { Some(spec.id) } else { None });
     let said = crate::storage::host_text("exec /bin/bash -s", &[], Some(&script));
-    match said.as_deref() {
-        Ok("ok") => Ok(()),
-        other => {
-            eprintln!("keel: open {}: the front door said {:?}", spec.id, other);
-            Err(format!("The front door did not open {}.", spec.title))
+    match said {
+        Ok(line) if line == "ok" => Ok(()),
+        Ok(line) => Err(format!("The front door did not open {}. {line}", spec.title)),
+        Err(reason) => {
+            eprintln!("keel: open {}: the front door said {reason}", spec.id);
+            Err(reason)
         }
     }
 }
@@ -315,20 +355,69 @@ fn door_port(spec: &App, gate: bool) -> Result<(), String> {
 /// `gate`: the app's id when the front door lets only Open's visitors in.
 pub(crate) fn port_script(port: u16, upstream: u16, gate: Option<&str>) -> String {
     let extra = gate.map(|id| format!(" gate {id}")).unwrap_or_default();
+    // The door's helper as this Keel writes it. The copy on the computer is
+    // only rewritten when an app's name is sent, so a computer updated from an
+    // older Keel still has a helper that does not know about ports.
+    let helper = crate::names::DOOR_HELPER;
     format!(
         r#"set -uo pipefail
 cfg=/var/lib/keel/caddy
-[ -x /var/lib/keel/caddy-reload.sh ] || {{ echo "The front door is not ready." >&2; exit 1; }}
+[ -x /usr/local/bin/caddy ] && [ -d "$cfg" ] || {{ echo "The front door is not installed yet. Open Names on Apps first." >&2; exit 1; }}
 install -d -m 0755 "$cfg/ports"
+cat > /var/lib/keel/caddy-reload.sh.new <<'KEEL_DOOR_HELPER_END'
+{helper}KEEL_DOOR_HELPER_END
+chmod 755 /var/lib/keel/caddy-reload.sh.new
+if ! cmp -s /var/lib/keel/caddy-reload.sh.new /var/lib/keel/caddy-reload.sh 2>/dev/null; then
+  mv /var/lib/keel/caddy-reload.sh.new /var/lib/keel/caddy-reload.sh
+  helper=new
+else
+  rm -f /var/lib/keel/caddy-reload.sh.new
+  helper=same
+fi
 want='127.0.0.1:{upstream}{extra}'
 have=$(cat "$cfg/ports/{port}" 2>/dev/null || true)
-away=$(ip -4 addr show tailscale0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -n 1)
+away=$(ip -4 addr show tailscale0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*//p' | head -n 1)
 reload=0
-[ "$have" = "$want" ] || {{ printf '%s\n' "$want" > "$cfg/ports/{port}"; reload=1; }}
+[ "$helper" = new ] && reload=1
+[ "$have" = "$want" ] || {{ printf '%s
+' "$want" > "$cfg/ports/{port}"; reload=1; }}
 grep -q '^http://:{port} {{' "$cfg/Caddyfile" 2>/dev/null || reload=1
 if [ -n "$away" ] && ! grep -q "bind .*$away" "$cfg/Caddyfile" 2>/dev/null; then reload=1; fi
-if [ "$reload" = 1 ]; then /var/lib/keel/caddy-reload.sh || {{ echo "The front door did not take the new port." >&2; exit 1; }}; fi
-echo ok
+if [ "$reload" = 1 ] && ! /var/lib/keel/caddy-reload.sh; then
+  tail -n 3 /var/lib/keel/door.log 2>/dev/null >&2
+  echo "The front door did not take the new port." >&2
+  exit 1
+fi
+# The door answers on the port: /keel-open/ goes to Keel, whatever the app is doing.
+i=0
+door_up=0
+while [ "$i" -lt 10 ]; do
+  code=$(curl -s -o /dev/null --max-time 2 -w '%{{http_code}}' "http://127.0.0.1:{port}/keel-open/check" || true)
+  case "$code" in ''|000) ;; *) door_up=1; break ;; esac
+  i=$((i + 1))
+  sleep 0.5
+done
+if [ "$door_up" != 1 ]; then
+  journalctl -u keel-door -n 3 --no-pager -o cat 2>/dev/null >&2
+  echo "The front door is not answering on port {port}." >&2
+  exit 1
+fi
+# Check the app behind the door too. The saved setup status can outlive a
+# stopped container; without this check the browser gets a blank 502 page.
+i=0
+code=000
+while [ "$i" -lt 10 ]; do
+  code=$(curl -s -o /dev/null --max-time 2 -w '%{{http_code}}' "http://127.0.0.1:{upstream}/" || true)
+  case "$code" in 2??|3??|4??) echo ok; exit 0 ;; esac
+  i=$((i + 1))
+  sleep 0.5
+done
+if [ "$code" = 000 ]; then
+  echo "The app page is not answering on this computer. Open tried to start it again; check Logs if it stays down." >&2
+else
+  echo "The app page returned HTTP $code. Check Logs to see why it is unavailable." >&2
+fi
+exit 1
 "#
     )
 }
@@ -813,6 +902,9 @@ mod tests {
         assert!(script.contains("want='127.0.0.1:2283'"));
         assert!(script.contains("\"$cfg/ports/9481\""));
         assert!(script.contains("grep -q '^http://:9481 {'"));
+        assert!(script.contains("cat > /var/lib/keel/caddy-reload.sh.new <<'KEEL_DOOR_HELPER_END'"));
+        assert!(script.contains("http://127.0.0.1:9481/keel-open/check"));
+        assert!(script.contains(crate::names::DOOR_HELPER.lines().next().unwrap()));
         assert!(!script.contains("9478"));
         assert!(!script.contains("0.0.0.0"));
     }

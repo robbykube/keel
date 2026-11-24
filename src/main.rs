@@ -405,6 +405,14 @@ async fn main() {
             post(app_remember).layer(axum::middleware::from_fn(auth::require_admin)),
         )
         .route(
+            "/api/apps/signins",
+            get(app_signins).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
+            "/api/apps/{id}/forget",
+            post(app_forget).layer(axum::middleware::from_fn(auth::require_admin)),
+        )
+        .route(
             "/api/apps/{id}/stop",
             post(app_stop).layer(axum::middleware::from_fn(auth::require_admin)),
         )
@@ -1907,6 +1915,17 @@ struct RememberAsk {
 /// "Sign in once": Keel keeps an app's sign-in when the app accepts it.
 async fn app_remember(Path(id): Path<String>, Json(ask): Json<RememberAsk>) -> (StatusCode, Json<serde_json::Value>) {
     match crate::launch::remember(&id, &ask.user, &ask.password).await {
+        Ok(message) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "message": message }))),
+        Err(message) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "ok": false, "message": message }))),
+    }
+}
+
+async fn app_signins() -> Json<Vec<crate::launch::RememberedSignIn>> {
+    Json(crate::launch::remembered_signins())
+}
+
+async fn app_forget(Path(id): Path<String>) -> (StatusCode, Json<serde_json::Value>) {
+    match crate::launch::forget_signin(&id) {
         Ok(message) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "message": message }))),
         Err(message) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "ok": false, "message": message }))),
     }

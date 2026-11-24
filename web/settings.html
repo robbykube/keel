@@ -81,6 +81,18 @@
         <div id="versions-list"><p class="meta">Checking this computer.</p></div>
         <p class="meta" id="versions-status"></p>
       </section>
+      <section class="settings-card" id="app-signins">
+        <h2>App sign-ins</h2>
+        <p>Keel can remember sign-ins for Photos, Papers, and Watch on this computer. Passwords are never shown here.</p>
+        <ul id="app-signins-list"><li>Checking saved sign-ins.</li></ul>
+        <form class="form" id="app-signin-form">
+          <label>App <select id="app-signin-app"><option value="photos">Photos</option><option value="papers">Papers</option><option value="watch">Watch</option></select></label>
+          <label>Account name <input id="app-signin-user" autocomplete="username" required /></label>
+          <label>Password <input id="app-signin-pass" type="password" autocomplete="new-password" required /></label>
+          <button type="submit">Check and save</button>
+        </form>
+        <p class="meta" id="app-signins-status">Keel checks the sign-in with the app before saving it.</p>
+      </section>
       <section class="settings-card" id="people">
         <h2>People <button type="button" class="help" data-tip="Each person signs in to this page with a name and password, so Keel knows who did what. Adding an existing name replaces its password. Opening folders in File Explorer uses the name set on the Files page." aria-label="What is this?" aria-expanded="false">?</button></h2>
         <ul id="people-list"></ul>

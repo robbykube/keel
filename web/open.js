@@ -6,6 +6,13 @@
 const $ = (id) => document.getElementById(id);
 const frame = $("frame");
 const full = $("full");
+const frameFailure = $("frame-failure");
+const frameFailureMessage = $("frame-failure-message");
+const FRAME_TIMEOUT_MS = 25_000;
+const REQUEST_TIMEOUT_MS = 15_000;
+let frameTimer = 0;
+let shownUrl = "";
+let shownPlain = "";
 
 // Same ids as the Apps page. `path` is the app's status; `/install` starts it.
 const APPS = {
@@ -49,14 +56,34 @@ document.addEventListener("fullscreenchange", paintFull);
 paintFull();
 
 const show = (url, plain) => {
+  window.clearTimeout(frameTimer);
+  shownUrl = url;
+  shownPlain = plain || url;
+  frameFailure.hidden = true;
   $("wait").hidden = true;
   frame.hidden = false;
   frame.src = url;
-  if (plain) {
-    $("newtab").href = plain;
-    $("newtab").hidden = false;
-  }
+  $("newtab").href = shownPlain;
+  $("newtab").hidden = !shownPlain;
+  frameTimer = window.setTimeout(() => showFrameFailure("The app page did not finish loading."), FRAME_TIMEOUT_MS);
 };
+
+const showFrameFailure = (message) => {
+  window.clearTimeout(frameTimer);
+  frame.hidden = true;
+  frameFailureMessage.textContent = message;
+  frameFailure.hidden = false;
+  $("frame-newtab").href = shownPlain || shownUrl;
+  $("frame-newtab").hidden = !(shownPlain || shownUrl);
+};
+
+frame.addEventListener("load", () => window.clearTimeout(frameTimer));
+frame.addEventListener("error", () => showFrameFailure("Keel could not load this app page."));
+$("frame-retry").addEventListener("click", () => {
+  frameFailure.hidden = true;
+  if (params.get("app")) openApp(params.get("app"));
+  else if (shownUrl) show(shownUrl, shownPlain);
+});
 
 // One sentence and a bar while the app starts (ui.md).
 let shown = 0;
@@ -75,6 +102,8 @@ const waitFor = (title, message, percent) => {
 };
 
 const failed = (title, said) => {
+  window.clearTimeout(frameTimer);
+  frameFailure.hidden = true;
   $("ask").hidden = true;
   $("wait").classList.remove("asking");
   $("wait").hidden = false;
@@ -87,9 +116,18 @@ const failed = (title, said) => {
 };
 
 const json = async (path, init) => {
-  const res = await fetch(path, { credentials: "same-origin", ...(init || {}) });
-  const data = await res.json().catch(() => ({}));
-  return { res, data };
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(path, { credentials: "same-origin", ...(init || {}), signal: controller.signal });
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  } catch (error) {
+    if (error && error.name === "AbortError") throw new Error("Keel took too long to answer. Check the connection and try again.");
+    throw new Error("Keel could not be reached. Check the connection and try again.");
+  } finally {
+    window.clearTimeout(timer);
+  }
 };
 
 const pause = (ms) => new Promise((done) => setTimeout(done, ms));
@@ -116,18 +154,23 @@ const askOnce = (id, spec, launch) => {
     event.preventDefault();
     $("ask-go").disabled = true;
     $("ask-status").textContent = "Checking with " + spec.title + ".";
-    const { data } = await json(`/api/apps/${id}/remember`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user: $("ask-user").value, password: $("ask-pass").value }),
-    });
-    $("ask-go").disabled = false;
-    if (!data.ok) {
-      $("ask-status").textContent = data.message || `${spec.title} did not accept that.`;
-      return;
+    try {
+      const { data } = await json(`/api/apps/${id}/remember`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: $("ask-user").value, password: $("ask-pass").value }),
+      });
+      if (!data.ok) {
+        $("ask-status").textContent = data.message || `${spec.title} did not accept that.`;
+        return;
+      }
+      $("ask-pass").value = "";
+      await openApp(id);
+    } catch (error) {
+      $("ask-status").textContent = String(error.message || error);
+    } finally {
+      $("ask-go").disabled = false;
     }
-    $("ask-pass").value = "";
-    openApp(id);
   };
   // On the Keel screen, focus would raise the keys over the sentence before
   // it is read; there the person taps the box.
@@ -164,76 +207,95 @@ async function openApp(id) {
   shown = 0;
   waitFor(spec.title, `Opening ${spec.title}.`, 4);
 
-  let { data: status } = await json(spec.path);
-  if (status.local) {
-    location.replace("/photos.html");
-    return;
-  }
-  if (!status.ready) {
-    if (status.state !== "running") {
-      const { res, data } = await json(`${spec.path}/install`, { method: "POST" });
-      if (res.status === 401) {
+  try {
+    let { data: status } = await json(spec.path);
+    if (status.local) {
+      location.replace("/photos.html");
+      return;
+    }
+    // The saved setup status can outlive a stopped or crashed app container.
+    // Check the live process list on an explicit Open, then start it again
+    // through the app's existing installer flow if it is no longer running.
+    if (status.ready) {
+      const { res: runningRes, data: running } = await json("/api/apps/running");
+      if (runningRes.status === 401) {
         location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.search)}`;
         return;
       }
-      if (!res.ok || data.ok === false) {
-        failed(spec.title, data.message || "");
-        return;
+      if (runningRes.ok && Array.isArray(running) && !running.includes(id)) {
+        status = { ...status, ready: false, state: "idle", message: `${spec.title} stopped. Starting it again.` };
       }
-    }
-    // Wait for it, up to ten minutes (the first time downloads the program).
-    const until = Date.now() + 10 * 60 * 1000;
-    while (Date.now() < until) {
-      ({ data: status } = await json(spec.path));
-      if (status.ready) break;
-      if (status.state === "error") {
-        failed(spec.title, status.message || "");
-        return;
-      }
-      if (status.state === "unavailable" || status.state === "refused" || status.allowed === false) {
-        failed(spec.title, status.message || "");
-        return;
-      }
-      waitFor(spec.title, status.message || `Opening ${spec.title}.`, status.percent || shown + 1);
-      await pause(900);
     }
     if (!status.ready) {
-      failed(spec.title, "It took longer than ten minutes.");
+      if (status.state !== "running") {
+        const { res, data } = await json(`${spec.path}/install`, { method: "POST" });
+        if (res.status === 401) {
+          location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.search)}`;
+          return;
+        }
+        if (!res.ok || data.ok === false) {
+          failed(spec.title, data.message || "");
+          return;
+        }
+      }
+
+      // First install can take several minutes; individual requests still time out.
+      const until = Date.now() + 10 * 60 * 1000;
+      while (Date.now() < until) {
+        ({ data: status } = await json(spec.path));
+        if (status.ready) break;
+        if (status.state === "error") {
+          failed(spec.title, status.message || "");
+          return;
+        }
+        if (status.state === "unavailable" || status.state === "refused" || status.allowed === false) {
+          failed(spec.title, status.message || "");
+          return;
+        }
+        waitFor(spec.title, status.message || `Opening ${spec.title}.`, status.percent || shown + 1);
+        await pause(900);
+      }
+      if (!status.ready) {
+        failed(spec.title, "It took longer than ten minutes.");
+        return;
+      }
+    }
+
+    waitFor(spec.title, `Opening ${spec.title}.`, 99);
+    const { res, data: launch } = await json(`/api/apps/${id}/launch`, { method: "POST" });
+    if (res.status === 401) {
+      location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.search)}`;
       return;
     }
-  }
 
-  waitFor(spec.title, `Opening ${spec.title}.`, 99);
-  const { res, data: launch } = await json(`/api/apps/${id}/launch`, { method: "POST" });
-  if (res.status === 401) {
-    location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.search)}`;
-    return;
+    if (launch.restart && !restarted) {
+      restarted = true;
+      waitFor(spec.title, launch.message || `${spec.title} is starting again.`, 10);
+      await json(`/api/apps/${id}/stop`, { method: "POST" });
+      shown = 0;
+      await openApp(id);
+      return;
+    }
+    if (launch.ask) {
+      askOnce(id, spec, launch);
+      return;
+    }
+    if (!res.ok || !launch.ok) {
+      failed(spec.title, launch.message || "");
+      return;
+    }
+    // A camera, a microphone, or the password vault need a locked page. A
+    // window inside a plain page cannot give them one, and a locked page
+    // cannot hold a plain one, so those open as the whole page instead.
+    const plainInLocked = location.protocol === "https:" && launch.url.startsWith("http:");
+    if ((launch.secure && !window.isSecureContext) || plainInLocked) {
+      location.href = launch.url;
+      return;
+    }
+    show(launch.url, launch.plain);
+  } catch (error) {
+    failed(spec.title, String(error.message || error));
   }
-  if (launch.restart && !restarted) {
-    restarted = true;
-    waitFor(spec.title, launch.message || `${spec.title} is starting again.`, 10);
-    await json(`/api/apps/${id}/stop`, { method: "POST" });
-    shown = 0;
-    openApp(id);
-    return;
-  }
-  if (launch.ask) {
-    askOnce(id, spec, launch);
-    return;
-  }
-  if (!res.ok || !launch.ok) {
-    failed(spec.title, launch.message || "");
-    return;
-  }
-  // A camera, a microphone, or the password vault need a locked page. A
-  // window inside a plain page cannot give them one, and a locked page
-  // cannot hold a plain one, so those open as the whole page instead.
-  const plainInLocked = location.protocol === "https:" && launch.url.startsWith("http:");
-  if ((launch.secure && !window.isSecureContext) || plainInLocked) {
-    location.href = launch.url;
-    return;
-  }
-  show(launch.url, launch.plain);
 }
 
 $("again").addEventListener("click", () => openApp(params.get("app") || ""));

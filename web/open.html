@@ -33,6 +33,15 @@
       <a class="button texty" href="/logs.html">Logs</a>
     </div>
   </section>
+  <section class="open-wait" id="frame-failure" hidden aria-live="polite">
+    <h1>The app page is taking too long</h1>
+    <p class="install-message" id="frame-failure-message"></p>
+    <div class="actions">
+      <button type="button" id="frame-retry">Try again</button>
+      <a class="button" id="frame-newtab" target="_blank" rel="noopener" hidden>Open in new tab</a>
+      <a class="button texty" href="/logs.html">Logs</a>
+    </div>
+  </section>
   <iframe id="frame" title="App" referrerpolicy="no-referrer" allow="camera; microphone; autoplay; display-capture; fullscreen; clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads" hidden></iframe>
   <script src="/chrome.js"></script>
   <script src="/open.js"></script>
