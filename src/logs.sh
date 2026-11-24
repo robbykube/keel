@@ -20,17 +20,27 @@ show "Names"
 podman logs --tail 80 keel-names 2>&1 | tail -n 80 || true
 show "Photos"
 if [ -f /var/lib/immich/setup.log ]; then
-  tail -n 20 /var/lib/immich/setup.log || true
+  tail -n 40 /var/lib/immich/setup.log || true
 fi
+printf 'Photos service: %s\n' "$(systemctl is-active keel-photos.service 2>/dev/null || true)"
+podman ps -a --filter name=keel-photos --format '{{.Names}}: {{.Status}}: {{.Ports}}' 2>&1 || true
+podman logs --tail 40 keel-photos-server 2>&1 | tail -n 40 || true
 show "Mail"
 if [ -f /var/lib/thunderbird/setup.log ]; then
-  tail -n 30 /var/lib/thunderbird/setup.log || true
+  tail -n 40 /var/lib/thunderbird/setup.log || true
 fi
+printf 'Mail service: %s\n' "$(systemctl is-active keel-mail.service 2>/dev/null || true)"
 podman ps -a --filter name=keel-mail --format '{{.Names}}: {{.Status}}: {{.Ports}}' 2>&1 | head -n 5 || true
+podman logs --tail 40 keel-mail 2>&1 | tail -n 40 || true
+show "Passwords and Papers"
+printf 'Passwords service: %s\n' "$(systemctl is-active keel-passwords.service 2>/dev/null || true)"
+printf 'Papers service: %s\n' "$(systemctl is-active keel-papers.service 2>/dev/null || true)"
+printf 'Watch service: %s\n' "$(systemctl is-active keel-watch.service 2>/dev/null || true)"
 df -Pk /run / 2>/dev/null | awk 'NR==1 || $6=="/run" || $6=="/" { print }'
 # What takes the temporary space, largest last.
 du -xsk /run/* 2>/dev/null | sort -n | tail -n 5 || true
 show "Video"
+printf 'Video service: %s\n' "$(systemctl is-active keel-jitsi.service 2>/dev/null || true)"
 if systemctl cat keel-galene.service >/dev/null 2>&1; then
   printf 'Light Video (Galene): %s\n' "$(systemctl is-active keel-galene.service 2>/dev/null)"
   journalctl -u keel-galene -n 20 --no-pager -o cat 2>/dev/null | tail -n 20 || true

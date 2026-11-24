@@ -90,8 +90,10 @@ ExecStop=/usr/bin/podman stop -t 20 keel-papers
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl daemon-reload >"$log" 2>&1 || true
-systemctl enable keel-papers.service >"$log" 2>&1 || true
+systemctl daemon-reload >>"$log" 2>&1 || fail "Keel could not load the Papers service."
+systemctl enable keel-papers.service >>"$log" 2>&1 || fail "Keel could not enable Papers to stay on."
+podman stop -t 20 keel-papers >>"$log" 2>&1 || true
+systemctl restart keel-papers.service >>"$log" 2>&1 || fail "Keel could not keep Papers running. Check Logs."
 if [ "$first" = yes ] && [ ! -f /var/lib/keel/signin/papers.json ]; then
   owned=${host#papers.}
   email="papers@$owned"

@@ -60,4 +60,21 @@ if [ ! -f "$signin" ] && curl -s --max-time 5 http://127.0.0.1:8096/System/Info/
       ;;
   esac
 fi
+cat > /etc/systemd/system/keel-watch.service <<'EOF'
+[Unit]
+Description=Keel Watch
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/podman start keel-jellyfin
+ExecStop=/usr/bin/podman stop -t 20 keel-jellyfin
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload >>"$log" 2>&1 || fail "Keel could not load the Watch service."
+systemctl enable keel-watch.service >>"$log" 2>&1 || fail "Keel could not enable Watch to stay on."
+podman stop -t 20 keel-jellyfin >>"$log" 2>&1 || true
+systemctl restart keel-watch.service >>"$log" 2>&1 || fail "Keel could not keep Watch running. Check Logs."
 touch "$cfg/installed"

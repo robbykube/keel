@@ -238,8 +238,12 @@ ExecStop=/usr/bin/podman stop -t 10 keel-photos-redis
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl daemon-reload >"$log" 2>&1 || true
-systemctl enable keel-photos.service >"$log" 2>&1 || true
+systemctl daemon-reload >>"$log" 2>&1 || fail "Keel could not load the Photos service."
+systemctl enable keel-photos.service >>"$log" 2>&1 || fail "Keel could not enable Photos to stay on."
+# Move the containers out of this temporary setup service's cgroup before
+# handing ownership to the persistent system service.
+podman stop -t 20 keel-photos-server keel-photos-ml keel-photos-db keel-photos-redis >>"$log" 2>&1 || true
+systemctl restart keel-photos.service >>"$log" 2>&1 || fail "Keel could not keep Photos running. Check Logs."
 touch "$cfg/installed"
 [ -n "$account" ] || fail "Keel could not make the Photos sign-in."
 included=no

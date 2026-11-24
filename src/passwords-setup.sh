@@ -82,8 +82,10 @@ ExecStop=/usr/bin/podman stop -t 10 keel-passwords
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl daemon-reload >"$log" 2>&1 || true
-systemctl enable keel-passwords.service >"$log" 2>&1 || true
+systemctl daemon-reload >>"$log" 2>&1 || fail "Keel could not load the Passwords service."
+systemctl enable keel-passwords.service >>"$log" 2>&1 || fail "Keel could not enable Passwords to stay on."
+podman stop -t 10 keel-passwords >>"$log" 2>&1 || true
+systemctl restart keel-passwords.service >>"$log" 2>&1 || fail "Keel could not keep Passwords running. Check Logs."
 touch "$cfg/installed"
 printf '%s\n' "$word"
 exit 0

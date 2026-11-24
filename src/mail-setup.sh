@@ -76,8 +76,10 @@ ExecStop=/usr/bin/podman stop -t 20 keel-mail
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl daemon-reload >"$log" 2>&1 || true
-systemctl enable keel-mail.service >"$log" 2>&1 || true
+systemctl daemon-reload >>"$log" 2>&1 || fail "Keel could not load the Mail service."
+systemctl enable keel-mail.service >>"$log" 2>&1 || fail "Keel could not enable Mail to stay on."
+podman stop -t 20 keel-mail >>"$log" 2>&1 || true
+systemctl restart keel-mail.service >>"$log" 2>&1 || fail "Keel could not keep Mail running. Check Logs."
 touch "$cfg/installed"
 printf 'ready|%s\n' "$pagepass"
 exit 0

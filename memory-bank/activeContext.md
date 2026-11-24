@@ -1,6 +1,6 @@
 # Active context
 
-What Keel is today, as of v0.1.98 (2026-11-24). History is in
+What Keel is today, as of v0.1.99 (2026-11-24). History is in
 [releases.md](releases.md).
 
 ## The app today
@@ -122,7 +122,11 @@ config are written from their documentation.
 - **This Windows PC**: development. `cargo run` serves the page with pretend
   disks. Files cannot be served from Windows.
 
-## Latest change (v0.1.98)
+## Latest change (v0.1.99)
+
+After Open finishes, each app is stopped and started again by its own service, so it stays on when the setup job ends. Close turns that service off. Logs names whether Photos, Mail, Passwords, Papers, Watch, and Video are on. Not yet installed.
+
+## Previous (v0.1.98)
 
 Open rewrites the front door's helper before it reloads, so a computer that already had its apps can answer on the app ports. Settings can check, save, and forget the Photos, Papers, and Watch sign-ins. Logs includes Mail. Not yet installed.
 
@@ -172,7 +176,7 @@ Linux build with pretend data. Not yet seen on the EliteDesk or the Pi.
 
 ## Next
 
-1. Install v0.1.98 on the EliteDesk from Settings. It is not on that computer until then.
+1. Install v0.1.99 on the EliteDesk from Settings. It is not on that computer until then.
 2. Core path before more apps: pick a disk for Files on the EliteDesk, open
    `\\ip\files` from Windows, connect Away, until Home shows no notice.
 3. `GET /api/shares` still returns the folder password without a session.

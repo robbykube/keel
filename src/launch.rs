@@ -427,7 +427,7 @@ exit 1
 fn stop_parts(id: &str) -> Option<(&'static str, &'static [&'static str], &'static str)> {
     Some(match id {
         "photos" => ("keel-photos.service", &["keel-photos-server", "keel-photos-ml", "keel-photos-db", "keel-photos-redis"], "/run/keel/photos.json"),
-        "watch" => ("", &["keel-jellyfin"], "/run/keel/jellyfin.json"),
+        "watch" => ("keel-watch.service", &["keel-jellyfin"], "/run/keel/jellyfin.json"),
         "papers" => ("keel-papers.service", &["keel-papers"], "/run/keel/papers.json"),
         "mail" => ("keel-mail.service", &["keel-mail"], "/run/keel/mail.json"),
         "passwords" => ("keel-passwords.service", &["keel-passwords"], "/run/keel/passwords.json"),

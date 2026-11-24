@@ -193,7 +193,7 @@ fn busy_from_stats(text: &str) -> Option<bool> {
 }
 
 pub fn close_script() -> &'static str {
-    "podman rm -f keel-jitsi-web keel-jitsi-jvb keel-jitsi-jicofo keel-jitsi-prosody >/dev/null 2>&1 || true\n"
+    "systemctl disable --now keel-jitsi.service >/dev/null 2>&1 || true\npodman rm -f keel-jitsi-web keel-jitsi-jvb keel-jitsi-jicofo keel-jitsi-prosody >/dev/null 2>&1 || true\n"
 }
 
 /// How large a call this computer can carry: the people in one call, and

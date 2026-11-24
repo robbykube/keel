@@ -202,6 +202,29 @@ if [ "$up" != "1" ]; then
   esac
 fi
 join_door
+cat > /etc/systemd/system/keel-jitsi.service <<'EOF'
+[Unit]
+Description=Keel Video
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/podman start keel-jitsi-prosody
+ExecStart=/usr/bin/podman start keel-jitsi-jicofo
+ExecStart=/usr/bin/podman start keel-jitsi-jvb
+ExecStart=/usr/bin/podman start keel-jitsi-web
+ExecStop=/usr/bin/podman stop -t 20 keel-jitsi-web
+ExecStop=/usr/bin/podman stop -t 20 keel-jitsi-jvb
+ExecStop=/usr/bin/podman stop -t 20 keel-jitsi-jicofo
+ExecStop=/usr/bin/podman stop -t 20 keel-jitsi-prosody
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload >>"$log" 2>&1 || fail "Keel could not load the Video service."
+systemctl enable keel-jitsi.service >>"$log" 2>&1 || fail "Keel could not enable Video to stay on."
+podman stop -t 20 keel-jitsi-web keel-jitsi-jvb keel-jitsi-jicofo keel-jitsi-prosody >>"$log" 2>&1 || true
+systemctl restart keel-jitsi.service >>"$log" 2>&1 || fail "Keel could not keep Video running. Check Logs."
 printf '%s\n' "$want" > "$cfg/stamp"
 touch "$cfg/installed"
 exit 0
